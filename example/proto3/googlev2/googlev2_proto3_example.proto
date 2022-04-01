@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+package crowdstrike.csproto.example.proto3.googlev2;
+
+option go_package = "github.com/CrowdStrike/csproto/example/proto3/googlev2";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/struct.proto";
+
+enum EventType {
+    EVENT_TYPE_UNDEFINED = 0;
+    EVENT_TYPE_ONE = 1;
+    EVENT_TYPE_TWO = 2;
+}
+
+message TestEvent {
+    string name = 1;
+    string info = 2;
+    bool isAwesome = 3;
+    
+    repeated string labels = 4;
+
+    EmbeddedEvent embedded = 5;
+
+    oneof path {
+        bool jedi = 6;
+        bool sith = 7;
+        string other = 8;
+    }
+
+    message NestedMsg {
+        string details = 1;
+    }
+    NestedMsg nested = 9;
+
+    google.protobuf.Timestamp ts = 10;
+    google.protobuf.NullValue nullVal = 11;
+}
+
+message EmbeddedEvent {
+    int32 ID = 1;
+    string stuff = 2;
+    repeated int32 favoriteNumbers = 3;
+    repeated bytes randomThings = 4;
+}
+
+message AllTheThings {
+    int32 ID = 1;
+    string theString = 2;
+    bool theBool = 3;
+    int32 theInt32 = 4;
+    int64 theInt64 = 5;
+    uint32 theUInt32 = 6;
+    uint64 theUInt64 = 7;
+    sint32 theSInt32 = 8;
+    sint64 theSInt64 = 9;
+    fixed32 theFixed32 = 10;
+    fixed64 theFixed64 = 11;
+    sfixed32 theSFixed32 = 12;
+    sfixed64 theSFixed64 = 13;
+    EventType theEventType = 14;
+    bytes theBytes = 15;
+    EmbeddedEvent theMessage = 16;
+}
+
+message RepeatAllTheThings {
+    int32 ID = 1;
+    repeated string theStrings = 2;
+    repeated bool theBools = 3;
+    repeated int32 theInt32s = 4;
+    repeated int64 theInt64s = 5;
+    repeated uint32 theUInt32s = 6;
+    repeated uint64 theUInt64s = 7;
+    repeated sint32 theSInt32s = 8;
+    repeated sint64 theSInt64s = 9;
+    repeated fixed32 theFixed32s = 10;
+    repeated fixed64 theFixed64s = 11;
+    repeated sfixed32 theSFixed32s = 12;
+    repeated sfixed64 theSFixed64s = 13;
+    repeated EventType theEventTypes = 14;
+    repeated bytes theBytes = 15;
+    repeated EmbeddedEvent theMessages = 16;
+}

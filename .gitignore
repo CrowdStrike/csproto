@@ -1,0 +1,7 @@
+# build/test outputs
+bin/
+*.test
+*profile.out
+
+# editor-related files
+.vscode/

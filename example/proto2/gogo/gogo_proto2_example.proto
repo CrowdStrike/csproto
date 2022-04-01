@@ -1,0 +1,89 @@
+syntax = "proto2";
+
+package crowdstrike.csproto.example.proto2.gogo;
+
+option go_package = "github.com/CrowdStrike/csproto/example/proto2/gogo";
+
+enum EventType {
+    EVENT_TYPE_UNDEFINED = 0;
+    EVENT_TYPE_ONE = 1;
+    EVENT_TYPE_TWO = 2;
+}
+
+message BaseEvent {
+    extensions 100 to max;
+
+    required string eventID = 1;
+    required string sourceID = 2;
+    required uint64 timestamp = 3;
+    required EventType eventType = 4;
+};
+
+message TestEvent {
+    extend BaseEvent {
+        optional TestEvent eventExt = 100;
+    }
+    optional string name = 1;
+    optional string info = 2;
+    optional bool isAwesome = 3;
+    
+    repeated string labels = 4;
+
+    required EmbeddedEvent embedded = 5;
+
+    oneof path {
+        bool jedi = 6;
+        bool sith = 7;
+        string other = 8;
+    }
+
+    message NestedMsg {
+        optional string details = 1;
+    }
+    optional NestedMsg nested = 9;
+}
+
+message EmbeddedEvent {
+    required int32 ID = 1;
+    optional string stuff = 2;
+    repeated int32 favoriteNumbers = 3;
+    repeated bytes randomThings = 4;
+}
+
+message AllTheThings {
+    required int32 ID = 1;
+    optional string theString = 2;
+    optional bool theBool = 3;
+    optional int32 theInt32 = 4;
+    optional int64 theInt64 = 5;
+    optional uint32 theUInt32 = 6;
+    optional uint64 theUInt64 = 7;
+    optional sint32 theSInt32 = 8;
+    optional sint64 theSInt64 = 9;
+    optional fixed32 theFixed32 = 10;
+    optional fixed64 theFixed64 = 11;
+    optional sfixed32 theSFixed32 = 12;
+    optional sfixed64 theSFixed64 = 13;
+    optional EventType theEventType = 14;
+    optional bytes theBytes = 15;
+    optional EmbeddedEvent theMessage = 16;
+}
+
+message RepeatAllTheThings {
+    required int32 ID = 1;
+    repeated string theStrings = 2;
+    repeated bool theBools = 3;
+    repeated int32 theInt32s = 4;
+    repeated int64 theInt64s = 5;
+    repeated uint32 theUInt32s = 6;
+    repeated uint64 theUInt64s = 7;
+    repeated sint32 theSInt32s = 8;
+    repeated sint64 theSInt64s = 9;
+    repeated fixed32 theFixed32s = 10;
+    repeated fixed64 theFixed64s = 11;
+    repeated sfixed32 theSFixed32s = 12;
+    repeated sfixed64 theSFixed64s = 13;
+    repeated EventType theEventTypes = 14;
+    repeated bytes theBytes = 15;
+    repeated EmbeddedEvent theMessages = 16;
+}
