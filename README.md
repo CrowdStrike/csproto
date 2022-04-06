@@ -6,7 +6,7 @@
 a `protoc` plug-in for generating optimized marshaling and unmarshaling code for those messages.
 
 Like many other companies, CrowdStrike extensively uses Protocol Buffers as an efficient wire format
-for communicating between disparate processes and services.  Protocol Bufffers' [compatibility guarantees](https://developers.google.com/protocol-buffers/docs/overview#updating)
+for communicating between disparate processes and services.  Protocol Buffers' [compatibility guarantees](https://developers.google.com/protocol-buffers/docs/overview#updating)
 and smaller, more efficient binary encoding made it a natural fit for the problems we needed to solve.
 
 As our data volume continued to grow, CrowdStrike started to run into performance limitations in
@@ -107,7 +107,8 @@ BenchmarkCustomEncodeGoogleV2-12         1306638               923.3 ns/op      
 And for proto3:
 
 ```bash
-$ go test -run='^$' -bench=. -benchmem                                                                                                                                                                    15:02:55  goos: darwin
+$ go test -run='^$' -bench=. -benchmem
+goos: darwin
 goarch: amd64
 pkg: github.com/CrowdStrike/csproto/example/proto3
 cpu: Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz
@@ -422,7 +423,8 @@ func (m *Example) Unmarshal(p []byte) error {
 After invoking `protoc-gen-fastmarshal`, the final benchmarks for our examples are:
 
 ```bash
-$ go test -run='^$' -bench=. -benchmem ./proto2 ./proto3                                                                                                                                                   15:26:51  goos: darwin
+$ go test -run='^$' -bench=. -benchmem ./proto2 ./proto3
+goos: darwin
 goarch: amd64
 pkg: github.com/CrowdStrike/csproto/example/proto2
 cpu: Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz
