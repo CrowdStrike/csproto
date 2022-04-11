@@ -278,7 +278,7 @@ func (m *AllTheThings) Unmarshal(p []byte) error {
 
 		case 16: // TheMessage (message,optional)
 			if wt != csproto.WireTypeLengthDelimited {
-				return fmt.Errorf("incorrect wire type %v for field 'theMessage' (tag=16), expected 5 (length-delimited)", wt)
+				return fmt.Errorf("incorrect wire type %v for field 'theMessage' (tag=16), expected 2 (length-delimited)", wt)
 			}
 			var mm EmbeddedEvent
 			if err = dec.DecodeNested(&mm); err != nil {

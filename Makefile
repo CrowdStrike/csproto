@@ -21,7 +21,7 @@ test:
 	$(info Running csproto library tests ...)
 	@go test ${TEST_OPTS} ./...
 	$(info Running example tests ...)
-	@cd ${PROJECT_BASE_DIR}/example && go test ${TEST_OPTS}
+	@cd ${PROJECT_BASE_DIR}/example && go test ${TEST_OPTS} ./...
 
 .PHONY: bench
 bench:

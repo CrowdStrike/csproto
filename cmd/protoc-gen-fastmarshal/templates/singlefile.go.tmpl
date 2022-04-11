@@ -62,7 +62,7 @@ func (m *{{ .GoIdent.GoName }}) MarshalTo(dest []byte) error {
 	_, _ = buf, err // ensure no unused variables
 {{ range .Fields }}
 {{- if eq .Desc.ContainingOneof nil }}
-    // {{ .GoName }} ({{.Desc.Number}},{{.Desc.Kind}},{{.Desc.Cardinality}}{{if .Desc.IsPacked }},packed{{ end }})
+    // {{ .GoName }} ({{.Desc.Number}},{{if .Desc.IsMap}}map{{else}}{{.Desc.Kind}},{{.Desc.Cardinality}}{{if .Desc.IsPacked }},packed{{ end }}{{end}})
     {{ template "MarshalField" . }}
 {{- end -}}
 {{ end }}
@@ -93,7 +93,7 @@ func (m *{{ .GoIdent.GoName}}) Unmarshal(p []byte) error {
 		}
 		switch tag {
         {{- range .Fields -}}
-        {{ if eq .Desc.ContainingOneof nil }}case {{ .Desc.Number }}: // {{ .GoName }} ({{.Desc.Kind}},{{.Desc.Cardinality}}{{if .Desc.IsPacked }},packed{{ end }})
+        {{ if eq .Desc.ContainingOneof nil }}case {{ .Desc.Number }}: // {{ .GoName }} ({{if .Desc.IsMap}}map{{else}}{{.Desc.Kind}},{{.Desc.Cardinality}}{{if .Desc.IsPacked }},packed{{ end }}{{end}})
         {{ template "UnmarshalField" . }}{{ end }}
         {{ end }}
         {{ range .Oneofs -}}

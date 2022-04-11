@@ -202,6 +202,7 @@ func addProtoFunctions(fm template.FuncMap, protoFile *protogen.File) template.F
 	fm["allMessages"] = allMessages(protoFile)
 	fm["getAdditionalImports"] = getAdditionalImports(protoFile)
 	fm["getImportPrefix"] = getImportPrefix(protoFile)
+	fm["mapFieldGoType"] = mapFieldGoType(protoFile)
 	return fm
 }
 
@@ -254,8 +255,15 @@ func allMessages(protoFile *protogen.File) func() []*protogen.Message {
 	queue = append(queue, protoFile.Messages...)
 	for len(queue) > 0 {
 		m := queue[0]
+		queue = queue[1:]
 		msgs = append(msgs, m)
-		queue = append(queue[1:], m.Messages...)
+		for _, mm := range m.Messages {
+			// skip "messgaes" that represent map fields
+			if mm.Desc.IsMapEntry() {
+				continue
+			}
+			queue = append(queue, mm)
+		}
 	}
 
 	return func() []*protogen.Message {
@@ -334,5 +342,66 @@ func getImportPrefix(protoFile *protogen.File) func(v interface{}) string {
 			return ""
 		}
 		return ""
+	}
+}
+
+// mapFieldGoType returns the Go type definition for a given field descriptor that represents a map entry
+func mapFieldGoType(protoFile *protogen.File) func(*protogen.Field) string {
+	return func(field *protogen.Field) string {
+		if !field.Desc.IsMap() {
+			return "<<invalid>> /* field is not a map entry */"
+		}
+		kd, vd := field.Desc.MapKey(), field.Desc.MapValue()
+		var ktype, vtype string
+		switch kd.Kind() {
+		case protoreflect.Int32Kind, protoreflect.Sint32Kind, protoreflect.Sfixed32Kind:
+			ktype = "int32"
+		case protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Sfixed64Kind:
+			ktype = "int64"
+		case protoreflect.Uint32Kind, protoreflect.Fixed32Kind:
+			ktype = "uint32"
+		case protoreflect.Uint64Kind, protoreflect.Fixed64Kind:
+			ktype = "uint64"
+		case protoreflect.StringKind:
+			ktype = "string"
+		default:
+			ktype = fmt.Sprintf("<<invalid>> /*%v*/", kd.Kind())
+		}
+
+		switch vd.Kind() {
+		case protoreflect.Int32Kind, protoreflect.Sint32Kind, protoreflect.Sfixed32Kind:
+			vtype = "int32"
+		case protoreflect.Int64Kind, protoreflect.Sint64Kind, protoreflect.Sfixed64Kind:
+			vtype = "int64"
+		case protoreflect.Uint32Kind, protoreflect.Fixed32Kind:
+			vtype = "uint32"
+		case protoreflect.Uint64Kind, protoreflect.Fixed64Kind:
+			vtype = "uint64"
+		case protoreflect.FloatKind:
+			vtype = "float32"
+		case protoreflect.DoubleKind:
+			vtype = "float64"
+		case protoreflect.StringKind:
+			vtype = "string"
+		case protoreflect.BytesKind:
+			vtype = "[]byte"
+		case protoreflect.BoolKind:
+			vtype = "bool"
+		case protoreflect.EnumKind:
+			// TODO: dbourque - 2022-04-08
+			// is the value field always the 2nd item?  or do we need to loop and check the
+			// number on the descriptor?
+			f := field.Message.Fields[1]
+			vtype = getImportPrefix(protoFile)(f.Enum) + f.Enum.GoIdent.GoName
+		case protoreflect.MessageKind:
+			// TODO: dbourque - 2022-04-08
+			// is the value field always the 2nd item?  or do we need to loop and check the
+			// number on the descriptor?
+			f := field.Message.Fields[1]
+			vtype = "*" + getImportPrefix(protoFile)(f.Message) + f.Message.GoIdent.GoName
+		default:
+			vtype = fmt.Sprintf("<<invalid>> /*%v*/", vd.Kind())
+		}
+		return fmt.Sprintf("map[%s]%s", ktype, vtype)
 	}
 }
