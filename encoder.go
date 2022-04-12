@@ -376,6 +376,13 @@ func (e *Encoder) EncodeRaw(d []byte) {
 	}
 }
 
+// EncodeMapEntryHeader writes a map entry header into the buffer, which consists of the specified
+// tag with a wire type of WireTypeLengthDelimited followed by the varint encoded entry size.
+func (e *Encoder) EncodeMapEntryHeader(tag int, size int) {
+	e.offset += EncodeTag(e.p[e.offset:], tag, WireTypeLengthDelimited)
+	e.offset += EncodeVarint(e.p[e.offset:], uint64(size))
+}
+
 // stringToBytes is an optimized convert from a string to a []byte using unsafe.Pointer
 // nolint:gosec,govet,unsafeptr
 func (e *Encoder) stringToBytes(s string) []byte {

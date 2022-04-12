@@ -194,7 +194,7 @@ func (m *TestEvent) Unmarshal(p []byte) error {
 
 		case 5: // Embedded (message,optional)
 			if wt != csproto.WireTypeLengthDelimited {
-				return fmt.Errorf("incorrect wire type %v for field 'embedded' (tag=5), expected 5 (length-delimited)", wt)
+				return fmt.Errorf("incorrect wire type %v for field 'embedded' (tag=5), expected 2 (length-delimited)", wt)
 			}
 			var mm EmbeddedEvent
 			if err = dec.DecodeNested(&mm); err != nil {
@@ -204,7 +204,7 @@ func (m *TestEvent) Unmarshal(p []byte) error {
 
 		case 9: // Nested (message,optional)
 			if wt != csproto.WireTypeLengthDelimited {
-				return fmt.Errorf("incorrect wire type %v for field 'nested' (tag=9), expected 5 (length-delimited)", wt)
+				return fmt.Errorf("incorrect wire type %v for field 'nested' (tag=9), expected 2 (length-delimited)", wt)
 			}
 			var mm TestEvent_NestedMsg
 			if err = dec.DecodeNested(&mm); err != nil {
@@ -213,7 +213,7 @@ func (m *TestEvent) Unmarshal(p []byte) error {
 			m.Nested = &mm
 		case 10: // Ts (message,optional)
 			if wt != csproto.WireTypeLengthDelimited {
-				return fmt.Errorf("incorrect wire type %v for field 'ts' (tag=10), expected 5 (length-delimited)", wt)
+				return fmt.Errorf("incorrect wire type %v for field 'ts' (tag=10), expected 2 (length-delimited)", wt)
 			}
 			var mm types.Timestamp
 			if err = dec.DecodeNested(&mm); err != nil {
@@ -686,7 +686,7 @@ func (m *AllTheThings) Unmarshal(p []byte) error {
 
 		case 16: // TheMessage (message,optional)
 			if wt != csproto.WireTypeLengthDelimited {
-				return fmt.Errorf("incorrect wire type %v for field 'theMessage' (tag=16), expected 5 (length-delimited)", wt)
+				return fmt.Errorf("incorrect wire type %v for field 'theMessage' (tag=16), expected 2 (length-delimited)", wt)
 			}
 			var mm EmbeddedEvent
 			if err = dec.DecodeNested(&mm); err != nil {
@@ -1149,7 +1149,7 @@ func (m *RepeatAllTheThings) Unmarshal(p []byte) error {
 
 		case 16: // TheMessages (message,repeated)
 			if wt != csproto.WireTypeLengthDelimited {
-				return fmt.Errorf("incorrect wire type %v for field 'theMessages' (tag=16), expected 5 (length-delimited)", wt)
+				return fmt.Errorf("incorrect wire type %v for field 'theMessages' (tag=16), expected 2 (length-delimited)", wt)
 			}
 			var mm EmbeddedEvent
 			if err = dec.DecodeNested(&mm); err != nil {
