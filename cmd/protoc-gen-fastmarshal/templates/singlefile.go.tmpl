@@ -7,7 +7,8 @@
 package {{ .ProtoDesc.GoPackageName }}
 
 import (
-    "fmt"
+    "fmt"{{if and (eq $protoSyntax "proto2") (hasRequiredFields nil)}}
+    "strings"{{end}}
     "github.com/CrowdStrike/csproto"
     {{range (allMessages | getAdditionalImports)}}{{.}}
     {{end}}
@@ -117,8 +118,40 @@ func (m *{{ .GoIdent.GoName}}) Unmarshal(p []byte) error {
             {{- end -}}
             }
         }
+    }{{if hasRequiredFields . }}
+    // verify required fields are assigned
+    if err := m.csprotoCheckRequiredFields(); err != nil {
+        return err
+    }
+    {{end}}
+    return nil
+}
+{{if hasRequiredFields .}}
+
+// csprotoCheckRequiredFields is called by Unmarshal() to ensure that all required fields have been
+// populated.
+func (m *{{.GoIdent.GoName}}) csprotoCheckRequiredFields() error {
+    var missingFields []string
+{{ range .Fields }}
+{{ if and (eq (.Desc.Cardinality | string) "required") (eq (.Desc.Syntax | string) "proto2") -}}
+    if m.{{.GoName}} == nil {
+        missingFields = append(missingFields, "{{.GoName}}")
+    }
+{{- end -}}
+{{ end }}
+    if len(missingFields) > 0 {
+        var sb strings.Builder
+        sb.WriteString("cannot unmarshal, one or more required fields missing: ")
+        for i, s := range missingFields {
+            if i > 0 {
+                sb.WriteRune(',')
+            }
+            sb.WriteString(s)
+        }
+        return fmt.Errorf(sb.String())
     }
     return nil
 }
+{{ end }}
 {{ end }}
 {{end}}

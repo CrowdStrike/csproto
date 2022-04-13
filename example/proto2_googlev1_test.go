@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/proto"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/CrowdStrike/csproto"
 	"github.com/CrowdStrike/csproto/example/proto2/googlev1"
@@ -42,6 +43,27 @@ func TestProto2GoogleV1Message(t *testing.T) {
 			t.Errorf("Mismatched data after unmarshal\n\tExpected: %s\n\t     Got: %s\n", msg.String(), msg2.String())
 		}
 	})
+}
+
+func TestMarshalFailsOnMissingRequiredFieldForGoogleV1Message(t *testing.T) {
+	msg := createTestProto2GoogleV1Message()
+	msg.EventID = nil
+
+	_, err := csproto.Marshal(msg)
+	assert.Error(t, err)
+}
+
+func TestUnmarshalFailsOnMissingRequiredFieldForGoogleV1Message(t *testing.T) {
+	// encoded contents of a minimal BaseEvent with EventID removed
+	data := []byte{
+		0x12, 0xb, 0x74, 0x65, 0x73, 0x74, 0x2d, 0x73, 0x6f, 0x75, 0x72, 0x63, 0x65, 0x18, 0xc3, 0xbc,
+		0xdc, 0x92, 0x6, 0x20, 0x1, 0xa2, 0x6, 0x4, 0x2a, 0x2, 0x8, 0x2a,
+	}
+	var msg googlev1.BaseEvent
+
+	err := csproto.Unmarshal(data, &msg)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "one or more required fields missing")
 }
 
 func createTestProto2GoogleV1Message() *googlev1.BaseEvent {
