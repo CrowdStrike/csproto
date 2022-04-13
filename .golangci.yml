@@ -5,6 +5,7 @@ run:
   timeout: 10m
   skip-files:
     - ".*\\.pb.*\\.go"
+    - ".*_test\\.go"
 
 # output configuration options
 output:

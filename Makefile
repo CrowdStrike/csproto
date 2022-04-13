@@ -137,7 +137,8 @@ clean-generated:
 
 .PHONY: lint
 lint: check-golangci-lint-install
-	@golangci-lint run
+	@golangci-lint run ./...
+	@cd example && golangci-lint run ./...
 
 .PHONY: check-golangci-lint-install
 check-golangci-lint-install:
