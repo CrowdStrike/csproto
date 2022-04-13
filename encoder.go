@@ -3,7 +3,6 @@ package csproto
 import (
 	"encoding/binary"
 	"math"
-	"reflect"
 	"unsafe"
 )
 
@@ -384,14 +383,13 @@ func (e *Encoder) EncodeMapEntryHeader(tag int, size int) {
 }
 
 // stringToBytes is an optimized convert from a string to a []byte using unsafe.Pointer
-// nolint:gosec,govet,unsafeptr
 func (e *Encoder) stringToBytes(s string) []byte {
-	strh := (*reflect.StringHeader)(unsafe.Pointer(&s))
-	var sh reflect.SliceHeader
-	sh.Data = strh.Data
-	sh.Len = strh.Len
-	sh.Cap = strh.Len
-	return *(*[]byte)(unsafe.Pointer(&sh))
+	return *(*[]byte)(unsafe.Pointer(
+		&struct {
+			string
+			Cap int
+		}{s, len(s)},
+	))
 }
 
 // EncodeTag combines tag and wireType then encodes the result into dest using the Protobuf
