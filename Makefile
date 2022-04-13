@@ -134,3 +134,13 @@ clean:
 clean-generated:
 	$(info Removing generated code ...)
 	@find ${PROJECT_BASE_DIR} \( -name "*.pb.go" -o -name "*.fm.go" \) -print -delete
+
+.PHONY: lint
+lint: check-golangci-lint-install
+	@golangci-lint run
+
+.PHONY: check-golangci-lint-install
+check-golangci-lint-install:
+ifeq ("$(shell command -v golangci-lint)", "")
+	$(error golangci-lint was not found.  Please install it using the method of your choice\n   https://golangci-lint.run/usage/install/#local-installation)
+endif
