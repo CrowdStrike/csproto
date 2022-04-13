@@ -1,0 +1,25 @@
+name: Go
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: 1.18
+
+    - name: Run golangci-lint
+      uses: golangci/golangci-lint-action@v3.1.0
+      with:
+        github-token: ${{ github.token }}
+        only-new-issues: true
