@@ -5,6 +5,7 @@ package googlev1
 
 import (
 	"fmt"
+	"strings"
 	"github.com/CrowdStrike/csproto"
 )
 
@@ -171,6 +172,42 @@ func (m *BaseEvent) Unmarshal(p []byte) error {
 				m.unknownFields = append(m.unknownFields, skipped...)
 			}
 		}
+	}
+	// verify required fields are assigned
+	if err := m.csprotoCheckRequiredFields(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// csprotoCheckRequiredFields is called by Unmarshal() to ensure that all required fields have been
+// populated.
+func (m *BaseEvent) csprotoCheckRequiredFields() error {
+	var missingFields []string
+
+	if m.EventID == nil {
+		missingFields = append(missingFields, "EventID")
+	}
+	if m.SourceID == nil {
+		missingFields = append(missingFields, "SourceID")
+	}
+	if m.Timestamp == nil {
+		missingFields = append(missingFields, "Timestamp")
+	}
+	if m.EventType == nil {
+		missingFields = append(missingFields, "EventType")
+	}
+	if len(missingFields) > 0 {
+		var sb strings.Builder
+		sb.WriteString("cannot unmarshal, one or more required fields missing: ")
+		for i, s := range missingFields {
+			if i > 0 {
+				sb.WriteRune(',')
+			}
+			sb.WriteString(s)
+		}
+		return fmt.Errorf(sb.String())
 	}
 	return nil
 }
@@ -413,6 +450,34 @@ func (m *TestEvent) Unmarshal(p []byte) error {
 			}
 		}
 	}
+	// verify required fields are assigned
+	if err := m.csprotoCheckRequiredFields(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// csprotoCheckRequiredFields is called by Unmarshal() to ensure that all required fields have been
+// populated.
+func (m *TestEvent) csprotoCheckRequiredFields() error {
+	var missingFields []string
+
+	if m.Embedded == nil {
+		missingFields = append(missingFields, "Embedded")
+	}
+
+	if len(missingFields) > 0 {
+		var sb strings.Builder
+		sb.WriteString("cannot unmarshal, one or more required fields missing: ")
+		for i, s := range missingFields {
+			if i > 0 {
+				sb.WriteRune(',')
+			}
+			sb.WriteString(s)
+		}
+		return fmt.Errorf(sb.String())
+	}
 	return nil
 }
 
@@ -556,6 +621,34 @@ func (m *EmbeddedEvent) Unmarshal(p []byte) error {
 				m.unknownFields = append(m.unknownFields, skipped...)
 			}
 		}
+	}
+	// verify required fields are assigned
+	if err := m.csprotoCheckRequiredFields(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// csprotoCheckRequiredFields is called by Unmarshal() to ensure that all required fields have been
+// populated.
+func (m *EmbeddedEvent) csprotoCheckRequiredFields() error {
+	var missingFields []string
+
+	if m.ID == nil {
+		missingFields = append(missingFields, "ID")
+	}
+
+	if len(missingFields) > 0 {
+		var sb strings.Builder
+		sb.WriteString("cannot unmarshal, one or more required fields missing: ")
+		for i, s := range missingFields {
+			if i > 0 {
+				sb.WriteRune(',')
+			}
+			sb.WriteString(s)
+		}
+		return fmt.Errorf(sb.String())
 	}
 	return nil
 }
@@ -903,6 +996,34 @@ func (m *AllTheThings) Unmarshal(p []byte) error {
 				m.unknownFields = append(m.unknownFields, skipped...)
 			}
 		}
+	}
+	// verify required fields are assigned
+	if err := m.csprotoCheckRequiredFields(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// csprotoCheckRequiredFields is called by Unmarshal() to ensure that all required fields have been
+// populated.
+func (m *AllTheThings) csprotoCheckRequiredFields() error {
+	var missingFields []string
+
+	if m.ID == nil {
+		missingFields = append(missingFields, "ID")
+	}
+
+	if len(missingFields) > 0 {
+		var sb strings.Builder
+		sb.WriteString("cannot unmarshal, one or more required fields missing: ")
+		for i, s := range missingFields {
+			if i > 0 {
+				sb.WriteRune(',')
+			}
+			sb.WriteString(s)
+		}
+		return fmt.Errorf(sb.String())
 	}
 	return nil
 }
@@ -1332,6 +1453,34 @@ func (m *RepeatAllTheThings) Unmarshal(p []byte) error {
 				m.unknownFields = append(m.unknownFields, skipped...)
 			}
 		}
+	}
+	// verify required fields are assigned
+	if err := m.csprotoCheckRequiredFields(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// csprotoCheckRequiredFields is called by Unmarshal() to ensure that all required fields have been
+// populated.
+func (m *RepeatAllTheThings) csprotoCheckRequiredFields() error {
+	var missingFields []string
+
+	if m.ID == nil {
+		missingFields = append(missingFields, "ID")
+	}
+
+	if len(missingFields) > 0 {
+		var sb strings.Builder
+		sb.WriteString("cannot unmarshal, one or more required fields missing: ")
+		for i, s := range missingFields {
+			if i > 0 {
+				sb.WriteRune(',')
+			}
+			sb.WriteString(s)
+		}
+		return fmt.Errorf(sb.String())
 	}
 	return nil
 }

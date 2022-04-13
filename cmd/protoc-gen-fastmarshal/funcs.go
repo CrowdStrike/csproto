@@ -203,6 +203,7 @@ func addProtoFunctions(fm template.FuncMap, protoFile *protogen.File) template.F
 	fm["getAdditionalImports"] = getAdditionalImports(protoFile)
 	fm["getImportPrefix"] = getImportPrefix(protoFile)
 	fm["mapFieldGoType"] = mapFieldGoType(protoFile)
+	fm["hasRequiredFields"] = hasRequiredFields(protoFile)
 	return fm
 }
 
@@ -403,5 +404,48 @@ func mapFieldGoType(protoFile *protogen.File) func(*protogen.Field) string {
 			vtype = fmt.Sprintf("<<invalid>> /*%v*/", vd.Kind())
 		}
 		return fmt.Sprintf("map[%s]%s", ktype, vtype)
+	}
+}
+
+// msgHasRequiredField returns true if the specified message has at least 1 field marked required and
+// false if not
+func msgHasRequiredField(m *protogen.Message) bool {
+	if m.Desc.Syntax() == protoreflect.Proto3 {
+		return false
+	}
+	for _, f := range m.Fields {
+		if f.Desc.Cardinality() == protoreflect.Required {
+			return true
+		}
+	}
+	return false
+}
+
+// hasRequiredFields returns true if at least one field in the specified message is marked required
+// and false if not.
+//
+// If m is nil, this function returns true if *any* message in the Protobuf file has a required field
+// and false if not.
+func hasRequiredFields(protoFile *protogen.File) func(*protogen.Message) bool {
+	anyMessageHasRequiredFields := false
+	if protoFile.Desc.Syntax() == protoreflect.Proto2 {
+		for _, m := range allMessages(protoFile)() {
+			anyMessageHasRequiredFields = anyMessageHasRequiredFields || msgHasRequiredField(m)
+		}
+	}
+
+	return func(m *protogen.Message) bool {
+		if m == nil {
+			return anyMessageHasRequiredFields
+		}
+		if m.Desc.Syntax() == protoreflect.Proto3 {
+			return false
+		}
+		for _, f := range m.Fields {
+			if f.Desc.Cardinality() == protoreflect.Required {
+				return true
+			}
+		}
+		return false
 	}
 }
