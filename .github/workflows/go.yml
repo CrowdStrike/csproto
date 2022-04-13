@@ -1,25 +1,38 @@
-name: Go
+name: csproto
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
 
 jobs:
-
-  build:
+  lint-and-test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-    - name: Set up Go
-      uses: actions/setup-go@v3
-      with:
-        go-version: 1.18
+      - uses: actions/setup-go@v3
+        with:
+          go-version: 1.18
 
-    - name: Run golangci-lint
-      uses: golangci/golangci-lint-action@v3.1.0
-      with:
-        github-token: ${{ github.token }}
-        only-new-issues: true
+      - name: lint
+        uses: golangci/golangci-lint-action@v3.1.0
+        with:
+          github-token: ${{ github.token }}
+          
+      - name: lint-example
+        uses: golangci/golangci-lint-action@v3.1.0
+        with:
+          github-token: ${{ github.token }}
+          working-directory: ./example
+
+      - name: test
+        run: go test -v ./...
+
+      - name: test-example
+        run: go test -v  ./...
+        working-directory: ./example
+
+      - name: build
+        run: go build ./cmd/protoc-gen-fastmarshal
