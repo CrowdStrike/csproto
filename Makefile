@@ -143,5 +143,15 @@ lint: check-golangci-lint-install
 .PHONY: check-golangci-lint-install
 check-golangci-lint-install:
 ifeq ("$(shell command -v golangci-lint)", "")
-	$(error golangci-lint was not found.  Please install it using the method of your choice\n   https://golangci-lint.run/usage/install/#local-installation)
+	$(error golangci-lint was not found.  Please install it using the method of your choice. (https://golangci-lint.run/usage/install/#local-installation))
+endif
+
+.PHONY: snapshot
+snapshot: check-goreleaser-install
+	@goreleaser release --snapshot --rm-dist
+
+.PHONY: check-goreleaser-install
+check-goreleaser-install:
+ifeq ("$(shell command -v goreleaser)", "")
+	$(error goreleaser was not found.  Please install it using the method of your choice. (https://goreleaser.com/install))
 endif
