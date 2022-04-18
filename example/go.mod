@@ -12,7 +12,7 @@ require (
 require (
 	github.com/golang/protobuf v1.5.2
 	github.com/google/go-cmp v0.5.5
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.7.1
 )
 
 require (
