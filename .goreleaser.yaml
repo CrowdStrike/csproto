@@ -1,0 +1,46 @@
+project_name: csproto
+before:
+  hooks:
+    - go mod tidy
+builds:
+  - id: protoc-gen-fastmarshal
+    main: ./cmd/protoc-gen-fastmarshal
+    binary: protoc-gen-fastmarshal
+    flags:
+      - -trimpath
+    env:
+      - CGO_ENABLED=0
+    goarch:
+      - '386'
+      - amd64
+      - arm
+      - arm64
+    goarm:
+      - '6'
+      - '7'
+    goos:
+      - linux
+      - darwin
+      - windows
+archives:
+  - replacements:
+      darwin: Darwin
+      linux: Linux
+      windows: Windows
+      386: i386
+      amd64: x86_64
+    format_overrides:
+      - goos: windows
+        format: zip
+checksum:
+  name_template: 'checksums.txt'
+snapshot:
+  name_template: "{{ incminor .Version }}-pre.{{.Timestamp}}.{{.ShortCommit}}"
+changelog:
+  use: github-native
+  filters:
+    exclude:
+      - '^(docs|test)(\\(.+\\))?:'
+release:
+  prerelease: auto
+  mode: append
