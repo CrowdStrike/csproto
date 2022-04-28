@@ -25,6 +25,8 @@ The solution we arrived at is this library.  It provides the "core" pieces of th
 Buffers API as used by consumers without having those consumers _directly_ depend on any particular
 runtime implementation.
 
+If you want to dive right in, there's a handy [migration guide](docs/migration_guide.md).  Otherwise, keep reading for all of the technical details.
+
 _Disclaimer: `csproto` is an open source project, not a CrowdStrike product. As such, it carries no
 formal support, expressed or implied.  The project is licensed under the MIT open source license._
 
