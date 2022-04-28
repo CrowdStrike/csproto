@@ -60,6 +60,8 @@ and writing Protocol Buffers messages that does not expose any dependence on the
   - Populate `msg` with the contents of the binary message in `p`
 - `HasExtension(msg interface{}, ext interface{}) bool`
   - Determine if `msg` contains a proto2 extension field
+- `ClearExtension(msg interface{}, ext interface{})`
+  - Clears a proto2 extension field from `msg`
 - `GetExtension(msg interface{}, ext interface{}) (interface{}, error)`
   - Return the value of a proto2 extension field from `msg`
 - `SetExtension(msg interface{}, ext interface{}, val interface{}) error`

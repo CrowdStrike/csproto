@@ -36,6 +36,36 @@ func HasExtension(msg interface{}, ext interface{}) bool {
 	}
 }
 
+// ClearExtension removes a proto2 extension field from msg, if it exists, delegating to the appropriate
+// underlying Protobuf API based on the concrete type of msg.
+//
+// This function panics if the provded parameters are invalid, rather than returning an error, to be
+// consistent with the signature of the ClearExtension() functions in the underlying Protobuf runtimes.
+func ClearExtension(msg interface{}, ext interface{}) {
+	switch MsgType(msg) {
+	case MessageTypeGoogleV1:
+		ed, ok := ext.(*google.ExtensionDesc)
+		if !ok {
+			google.ClearExtension(msg.(google.Message), ed)
+		}
+	case MessageTypeGoogle:
+		et, ok := ext.(protoreflect.ExtensionType)
+		if ok {
+			googlev2.ClearExtension(msg.(googlev2.Message), et)
+		}
+	case MessageTypeGogo:
+		ed, ok := ext.(*gogo.ExtensionDesc)
+		if ok {
+			gogo.ClearExtension(msg.(google.Message), ed)
+		}
+	default:
+		panic(fmt.Sprintf("unsupported message type %T", msg))
+	}
+	// mismatched message and extension defintion types
+	// - ex: a Google V2 message and a Gogo extension definition
+	panic(fmt.Sprintf("invalid proto2 extension definition type %T for a message of type %T", ext, msg))
+}
+
 // GetExtension returns a proto2 extension field from msg, delegating to the appropriate underlying
 // Protobuf API based on the concrete type of msg.
 func GetExtension(msg interface{}, ext interface{}) (interface{}, error) {
