@@ -60,7 +60,7 @@ func (m *{{ .GoIdent.GoName }}) MarshalTo(dest []byte) error {
 		buf []byte
 		err error
 	)
-	_, _ = buf, err // ensure no unused variables
+	_, _, _ = enc, buf, err // ensure no unused variables
 {{ range .Fields }}
 {{- if eq .Desc.ContainingOneof nil }}
     // {{ .GoName }} ({{.Desc.Number}},{{if .Desc.IsMap}}map{{else}}{{.Desc.Kind}},{{.Desc.Cardinality}}{{if .Desc.IsPacked }},packed{{ end }}{{end}})

@@ -1,6 +1,7 @@
 # build/test outputs
 bin/
 dist/
+.idea
 *.test
 *profile.out
 

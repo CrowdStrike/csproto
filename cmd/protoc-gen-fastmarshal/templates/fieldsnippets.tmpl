@@ -855,6 +855,62 @@
             m.{{.GoName}} = {{if eq $syntax "proto2"}}csproto.Int{{$bitSize}}(v){{else}}v{{end}}
         }
     {{- end -}}
+{{- else if eq $kind "float" -}}
+    {{- if eq $cardinality "repeated" -}}
+        switch wt {
+        case csproto.WireTypeVarint:
+            if v, err := dec.DecodeFloat32(); err != nil {
+                return fmt.Errorf("unable to decode float32 value for field '{{.Desc.Name}}' (tag={{.Desc.Number}}): %w", err)
+            } else {
+                m.{{.GoName}} = append(m.{{.GoName}}, v)
+            }
+        case csproto.WireTypeLengthDelimited:
+            if v, err := dec.DecodePackedFloat32(); err != nil {
+                return fmt.Errorf("unable to decode packed float32 values for field '{{.Desc.Name}}' (tag={{.Desc.Number}}): %w", err)
+            } else {
+                m.{{.GoName}} = append(m.{{.GoName}}, v...)
+            }
+        default:
+            return fmt.Errorf("incorrect wire type %v for repeated field '{{.Desc.Name}}' (tag={{.Desc.Number}}), expected 0 (varint) or 1 (length-delimited)", wt)
+        }
+    {{- else -}}
+        if wt != csproto.WireTypeVarint {
+            return fmt.Errorf("incorrect wire type %v for tag field '{{.Desc.Name}}' (tag={{.Desc.Number}}), expected 0 (varint)", wt)
+        }
+        if v, err := dec.DecodeFloat32(); err != nil {
+            return fmt.Errorf("unable to decode float32 value for field '{{.Desc.Name}}' (tag={{.Desc.Number}}): %w", err)
+        } else {
+            m.{{.GoName}} = {{if eq $syntax "proto2"}}csproto.Float32(v){{else}}v{{end}}
+        }
+    {{- end -}}
+{{- else if eq $kind "double" -}}
+    {{- if eq $cardinality "repeated" -}}
+        switch wt {
+        case csproto.WireTypeVarint:
+            if v, err := dec.DecodeFloat64(); err != nil {
+                return fmt.Errorf("unable to decode double} value for field '{{.Desc.Name}}' (tag={{.Desc.Number}}): %w", err)
+            } else {
+                m.{{.GoName}} = append(m.{{.GoName}}, v)
+            }
+        case csproto.WireTypeLengthDelimited:
+            if v, err := dec.DecodePackedFloat64(); err != nil {
+                return fmt.Errorf("unable to decode packed double values for field '{{.Desc.Name}}' (tag={{.Desc.Number}}): %w", err)
+            } else {
+                m.{{.GoName}} = append(m.{{.GoName}}, v...)
+            }
+        default:
+            return fmt.Errorf("incorrect wire type %v for repeated field '{{.Desc.Name}}' (tag={{.Desc.Number}}), expected 0 (varint) or 1 (length-delimited)", wt)
+        }
+    {{- else -}}
+        if wt != csproto.WireTypeFixed64 {
+            return fmt.Errorf("incorrect wire type %v for tag field '{{.Desc.Name}}' (tag={{.Desc.Number}}), expected 0 (varint)", wt)
+        }
+        if v, err := dec.DecodeFloat64(); err != nil {
+            return fmt.Errorf("unable to decode double value for field '{{.Desc.Name}}' (tag={{.Desc.Number}}): %w", err)
+        } else {
+            m.{{.GoName}} = {{if eq $syntax "proto2"}}csproto.Float64(v){{else}}v{{end}}
+        }
+    {{- end -}}
 {{- else -}}
         panic(fmt.Errorf("unsupported proto kind '{{$kind}}'"))
 {{- end -}}
