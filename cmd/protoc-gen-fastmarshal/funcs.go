@@ -204,6 +204,10 @@ func addProtoFunctions(fm template.FuncMap, protoFile *protogen.File) template.F
 	fm["getImportPrefix"] = getImportPrefix(protoFile)
 	fm["mapFieldGoType"] = mapFieldGoType(protoFile)
 	fm["hasRequiredFields"] = hasRequiredFields(protoFile)
+	fm["is_gogo_nullable"] = makeMapFieldOption(protoFile, "65001:1")
+	fm["is_gogo_stdtime"] = makeMapFieldOption(protoFile, "65010:1")
+	fm["is_gogo_stdduration"] = makeMapFieldOption(protoFile, "65011:1")
+	fm["is_gogo_embed"] = makeMapFieldOption(protoFile, "65002:1")
 	return fm
 }
 
@@ -247,6 +251,24 @@ func getExtensions(protoFile *protogen.File) func(*protogen.Message) []*protogen
 	return func(msg *protogen.Message) []*protogen.Field {
 		exts := extensionDict[msg.GoIdent]
 		return exts
+	}
+}
+
+// makeMapFieldOption returns a function that allows us to lookup custom tags
+func makeMapFieldOption(protoFile *protogen.File, tagName string) func(*protogen.Field) bool {
+	var opts = make(map[string]bool)
+	for _, mt := range protoFile.Proto.MessageType {
+		for _, f := range mt.Field {
+			var key = mt.GetName() + "." + f.GetName()
+			opts[key] = strings.Contains(f.Options.String(), tagName)
+		}
+	}
+	return func(f *protogen.Field) bool {
+		key := fmt.Sprintf("%s.%s", f.Desc.Parent().Name(), f.Desc.Name())
+		if v, ok := opts[key]; ok {
+			return v
+		}
+		return true
 	}
 }
 

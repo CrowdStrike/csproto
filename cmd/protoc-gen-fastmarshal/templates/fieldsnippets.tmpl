@@ -874,7 +874,7 @@
             return fmt.Errorf("incorrect wire type %v for repeated field '{{.Desc.Name}}' (tag={{.Desc.Number}}), expected 0 (varint) or 1 (length-delimited)", wt)
         }
     {{- else -}}
-        if wt != csproto.WireTypeVarint {
+        if wt != csproto.WireTypeFixed32 {
             return fmt.Errorf("incorrect wire type %v for tag field '{{.Desc.Name}}' (tag={{.Desc.Number}}), expected 0 (varint)", wt)
         }
         if v, err := dec.DecodeFloat32(); err != nil {

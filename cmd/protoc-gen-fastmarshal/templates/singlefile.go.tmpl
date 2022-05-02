@@ -57,8 +57,8 @@ func (m *{{ .GoIdent.GoName }}) Marshal() ([]byte, error) {
 func (m *{{ .GoIdent.GoName }}) MarshalTo(dest []byte) error {
 	var (
     	enc = csproto.NewEncoder(dest)
-		buf []byte
-		err error
+    	buf []byte
+    	err error
 	)
 	_, _, _ = enc, buf, err // ensure no unused variables
 {{ range .Fields }}
