@@ -38,11 +38,16 @@ func (m *TestEvent_NestedMsg) Marshal() ([]byte, error) {
 // MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
 func (m *TestEvent_NestedMsg) MarshalTo(dest []byte) error {
 	var (
-		enc = csproto.NewEncoder(dest)
-		buf []byte
-		err error
+		enc    = csproto.NewEncoder(dest)
+		buf    []byte
+		err    error
+		extVal interface{}
 	)
-	_, _ = buf, err // ensure no unused variables
+	// ensure no unused variables
+	_ = enc
+	_ = buf
+	_ = err
+	_ = extVal
 
 	// Details (1,string,optional)
 	if len(m.Details) > 0 {

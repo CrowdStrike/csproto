@@ -56,8 +56,13 @@ func (m *{{ .Message.GoIdent.GoName }}) MarshalTo(dest []byte) error {
     	enc = csproto.NewEncoder(dest)
 		buf []byte
 		err error
+        extVal interface{}
 	)
-	_, _ = buf, err // ensure no unused variables
+    // ensure no unused variables
+    _ = enc
+    _ = buf
+    _ = err
+    _ = extVal
 {{ range .Message.Fields }}
 {{- if eq .Desc.ContainingOneof nil }}
     // {{ .GoName }} ({{.Desc.Number}},{{if .Desc.IsMap}}map{{else}}{{.Desc.Kind}},{{.Desc.Cardinality}}{{if .Desc.IsPacked }},packed{{ end }}{{end}})
@@ -131,8 +136,8 @@ func (m *{{.Message.GoIdent.GoName}}) csprotoCheckRequiredFields() error {
     var missingFields []string
 {{ range .Message.Fields }}
 {{ if and (eq (.Desc.Cardinality | string) "required") (eq (.Desc.Syntax | string) "proto2") -}}
-    if m.{{.GoName}} == nil {
-        missingFields = append(missingFields, "{{.GoName}}")
+    if m.{{.GoName | getSafeFieldName}} == nil {
+        missingFields = append(missingFields, "{{.GoName | getSafeFieldName}}")
     }
 {{- end -}}
 {{ end }}

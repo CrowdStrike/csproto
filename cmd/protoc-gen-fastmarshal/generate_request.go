@@ -27,4 +27,5 @@ type generateRequest struct {
 	NameTemplate string
 	Funcs        template.FuncMap
 	APIVersion   string
+	SpecialNames specialNames
 }

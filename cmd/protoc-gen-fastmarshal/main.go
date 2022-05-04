@@ -15,12 +15,24 @@ var (
 
 	usageMsg = `This command is meant to be used as a plug-in to protoc, but supports minimal direct invocation.
 
-Plug-in	Usage: protoc --fastmarshal_out=dest=path/to/output.go:. ./example.proto
-	- Parses the Protobuf definition at ./example.proto then ....  The output of the template is written to path/to/output.go
+Usage: protoc --fastmarshal_out=paths=source_relative:. ./example.proto
 
-Direct Usage: protoc-gen-protomarshal [version|help]
-	- version: writes the version, commit hash, build date, and date/time when the binary was built to stdout
-	- help:    shows this help message
+Supported options (beyond those provided by google.golang.org/protobuf/compiler/protogen):
+  apiversion=v1|v2
+    - the Protobuf API version to use in the generated code
+    - default is v1
+  filepermessage=true|false
+    - if true, generate a file for each message rather than a single file
+    - default is false
+  specialname=[name]
+    - declare a field name as "special" so that it will be emitted into the generated code with
+      a trailing underscore
+    - can be specified multiple times for >1 name
+    - useful when using Gogo Protobuf and there are message fields called "Size"
+
+Direct Usage: protoc-gen-fastmarshal [version|help]
+  version: writes the version, commit hash, build info for the binary to stdout
+  help:    shows this help message
 
 Any other parameters passed to the command are invalid.
 `

@@ -169,11 +169,11 @@ var (
 //
 // This function is a shortcut for creating a template.FuncMap then calling AddStandardFunctions(),
 // AddSprigFunctions(), and AddProtoFunctions() sequentially.
-func codeGenFunctions(protoFile *protogen.File) template.FuncMap {
+func codeGenFunctions(protoFile *protogen.File, names specialNames) template.FuncMap {
 	fm := make(template.FuncMap)
 	fm = addStandardFunctions(fm)
 	fm = addSprigFunctions(fm)
-	fm = addProtoFunctions(fm, protoFile)
+	fm = addProtoFunctions(fm, protoFile, names)
 	return fm
 }
 
@@ -196,7 +196,7 @@ func addSprigFunctions(fm template.FuncMap) template.FuncMap {
 
 // addProtoFunctions extends the passed-in set of template functions by registering several common
 // functions for retrieving Protobuf definitions from the provided Protobuf descriptor.
-func addProtoFunctions(fm template.FuncMap, protoFile *protogen.File) template.FuncMap {
+func addProtoFunctions(fm template.FuncMap, protoFile *protogen.File, names specialNames) template.FuncMap {
 	fm["protoNumberEncodeMethod"] = protoNumberEncodeMethod
 	fm["getExtensions"] = getExtensions(protoFile)
 	fm["allMessages"] = allMessages(protoFile)
@@ -204,6 +204,7 @@ func addProtoFunctions(fm template.FuncMap, protoFile *protogen.File) template.F
 	fm["getImportPrefix"] = getImportPrefix(protoFile)
 	fm["mapFieldGoType"] = mapFieldGoType(protoFile)
 	fm["hasRequiredFields"] = hasRequiredFields(protoFile)
+	fm["getSafeFieldName"] = getSafeFieldName(names)
 	return fm
 }
 
@@ -447,5 +448,18 @@ func hasRequiredFields(protoFile *protogen.File) func(*protogen.Message) bool {
 			}
 		}
 		return false
+	}
+}
+
+// getSafeFieldName translates field names that will collide with standard Protobuf methods to a
+// corresponding "safe" name by appending an underscore.
+//
+// This translation is done to align with how Gogo Protobuf handles the same situation.
+func getSafeFieldName(names specialNames) func(string) string {
+	return func(name string) string {
+		if names.IsSpecial(name) {
+			return name + "_"
+		}
+		return name
 	}
 }
