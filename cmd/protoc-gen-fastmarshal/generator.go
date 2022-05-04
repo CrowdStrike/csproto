@@ -34,7 +34,7 @@ func generateSingle(plugin *protogen.Plugin, req generateRequest) error {
 		name, content string
 		err           error
 	)
-	funcs := codeGenFunctions(req.ProtoDesc)
+	funcs := codeGenFunctions(req.ProtoDesc, req.SpecialNames)
 	for k, v := range req.Funcs {
 		funcs[k] = v
 	}
@@ -64,14 +64,15 @@ func generateSingle(plugin *protogen.Plugin, req generateRequest) error {
 
 func generatePerMessage(plugin *protogen.Plugin, req generateRequest) error {
 	type genArgsPerFile struct {
-		Now        time.Time
-		Pwd        string
-		ProtoDesc  *protogen.File
-		Message    *protogen.Message
-		APIVersion string
+		Now          time.Time
+		Pwd          string
+		ProtoDesc    *protogen.File
+		Message      *protogen.Message
+		APIVersion   string
+		SpecialNames specialNames
 	}
 
-	funcs := codeGenFunctions(req.ProtoDesc)
+	funcs := codeGenFunctions(req.ProtoDesc, req.SpecialNames)
 	for k, v := range req.Funcs {
 		funcs[k] = v
 	}
@@ -80,17 +81,19 @@ func generatePerMessage(plugin *protogen.Plugin, req generateRequest) error {
 		now    = time.Now().UTC()
 		pwd, _ = os.Getwd()
 	)
+
 	tt, err := loadTemplateFromEmbedded(funcs)
 	if err != nil {
 		return fmt.Errorf("unable to load embedded content templates: %w", err)
 	}
 	for _, msg := range allMessages(req.ProtoDesc)() {
 		args := genArgsPerFile{
-			Now:        now,
-			Pwd:        pwd,
-			ProtoDesc:  req.ProtoDesc,
-			Message:    msg,
-			APIVersion: req.APIVersion,
+			Now:          now,
+			Pwd:          pwd,
+			ProtoDesc:    req.ProtoDesc,
+			Message:      msg,
+			APIVersion:   req.APIVersion,
+			SpecialNames: req.SpecialNames,
 		}
 		content, err := renderNamedTemplate(tt, "PerMessage", args)
 		if err != nil {

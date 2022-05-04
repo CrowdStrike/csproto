@@ -40,6 +40,12 @@ message EmbeddedEvent {
     string stuff = 2;
     repeated int32 favoriteNumbers = 3;
     repeated bytes randomThings = 4;
+
+    // SPECIAL CASE:
+    // - Size gets translated to Size_ in the Go code to avoid collisions with the Size() method
+    // - need to verify we're handling this correctly
+
+    int32 Size = 5;
 }
 
 message AllTheThings {
@@ -56,9 +62,11 @@ message AllTheThings {
     fixed64 theFixed64 = 11;
     sfixed32 theSFixed32 = 12;
     sfixed64 theSFixed64 = 13;
-    EventType theEventType = 14;
-    bytes theBytes = 15;
-    EmbeddedEvent theMessage = 16;
+    float theFloat = 14;
+    double theDouble = 15;
+    EventType theEventType = 16;
+    bytes theBytes = 17;
+    EmbeddedEvent theMessage = 18;
 }
 
 message RepeatAllTheThings {
@@ -75,9 +83,11 @@ message RepeatAllTheThings {
     repeated fixed64 theFixed64s = 11;
     repeated sfixed32 theSFixed32s = 12;
     repeated sfixed64 theSFixed64s = 13;
-    repeated EventType theEventTypes = 14;
-    repeated bytes theBytes = 15;
-    repeated EmbeddedEvent theMessages = 16;
+    repeated float theFloats = 14;
+    repeated double theDoubles = 15;
+    repeated EventType theEventTypes = 16;
+    repeated bytes theBytes = 17;
+    repeated EmbeddedEvent theMessages = 18;
 }
 
 message AllTheMaps {

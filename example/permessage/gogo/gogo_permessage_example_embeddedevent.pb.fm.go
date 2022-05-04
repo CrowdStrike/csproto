@@ -41,6 +41,8 @@ func (m *EmbeddedEvent) Size() int {
 			sz += csproto.SizeOfTagKey(4) + csproto.SizeOfVarint(uint64(l)) + l
 		}
 	}
+	// Size (int32,optional)
+	sz += csproto.SizeOfTagKey(5) + csproto.SizeOfVarint(uint64(m.Size_))
 	return sz
 }
 
@@ -55,11 +57,16 @@ func (m *EmbeddedEvent) Marshal() ([]byte, error) {
 // MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
 func (m *EmbeddedEvent) MarshalTo(dest []byte) error {
 	var (
-		enc = csproto.NewEncoder(dest)
-		buf []byte
-		err error
+		enc    = csproto.NewEncoder(dest)
+		buf    []byte
+		err    error
+		extVal interface{}
 	)
-	_, _ = buf, err // ensure no unused variables
+	// ensure no unused variables
+	_ = enc
+	_ = buf
+	_ = err
+	_ = extVal
 
 	// ID (1,int32,optional)
 	enc.EncodeInt32(1, m.ID)
@@ -75,6 +82,8 @@ func (m *EmbeddedEvent) MarshalTo(dest []byte) error {
 	for _, val := range m.RandomThings {
 		enc.EncodeBytes(4, val)
 	}
+	// Size (5,int32,optional)
+	enc.EncodeInt32(5, m.Size_)
 	return nil
 }
 
@@ -137,6 +146,16 @@ func (m *EmbeddedEvent) Unmarshal(p []byte) error {
 				return fmt.Errorf("unable to decode bytes value for field 'randomThings' (tag=4): %w", err)
 			} else {
 				m.RandomThings = append(m.RandomThings, b)
+			}
+
+		case 5: // Size (int32,optional)
+			if wt != csproto.WireTypeVarint {
+				return fmt.Errorf("incorrect wire type %v for tag field 'Size' (tag=5), expected 0 (varint)", wt)
+			}
+			if v, err := dec.DecodeInt32(); err != nil {
+				return fmt.Errorf("unable to decode int32 value for field 'Size' (tag=5): %w", err)
+			} else {
+				m.Size_ = v
 			}
 
 		default:

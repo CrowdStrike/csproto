@@ -102,9 +102,17 @@ func (m *RepeatAllTheThings) Size() int {
 	if l = len(m.TheSFixed64S); l > 0 {
 		sz += csproto.SizeOfTagKey(13) + csproto.SizeOfVarint(uint64(l)) + (l * 8)
 	}
+	// TheFloats (float,repeated,packed)
+	if l = len(m.TheFloats); l > 0 {
+		sz += csproto.SizeOfTagKey(14) + csproto.SizeOfVarint(uint64(l)) + (l * 4)
+	}
+	// TheDoubles (double,repeated,packed)
+	if l = len(m.TheDoubles); l > 0 {
+		sz += csproto.SizeOfTagKey(15) + csproto.SizeOfVarint(uint64(l)) + (l * 8)
+	}
 	// TheEventTypes (enum,repeated,packed)
 	if len(m.TheEventTypes) > 0 {
-		sz += csproto.SizeOfTagKey(14)
+		sz += csproto.SizeOfTagKey(16)
 		l = 0
 		for _, iv := range m.TheEventTypes {
 			l += csproto.SizeOfVarint(uint64(iv))
@@ -114,13 +122,13 @@ func (m *RepeatAllTheThings) Size() int {
 	// TheBytes (bytes,repeated)
 	for _, bv := range m.TheBytes {
 		if l = len(bv); l > 0 {
-			sz += csproto.SizeOfTagKey(15) + csproto.SizeOfVarint(uint64(l)) + l
+			sz += csproto.SizeOfTagKey(17) + csproto.SizeOfVarint(uint64(l)) + l
 		}
 	}
 	// TheMessages (message,repeated)
 	for _, val := range m.TheMessages {
 		if l = csproto.Size(val); l > 0 {
-			sz += csproto.SizeOfTagKey(16) + csproto.SizeOfVarint(uint64(l)) + l
+			sz += csproto.SizeOfTagKey(18) + csproto.SizeOfVarint(uint64(l)) + l
 		}
 	}
 	return sz
@@ -137,11 +145,16 @@ func (m *RepeatAllTheThings) Marshal() ([]byte, error) {
 // MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
 func (m *RepeatAllTheThings) MarshalTo(dest []byte) error {
 	var (
-		enc = csproto.NewEncoder(dest)
-		buf []byte
-		err error
+		enc    = csproto.NewEncoder(dest)
+		buf    []byte
+		err    error
+		extVal interface{}
 	)
-	_, _ = buf, err // ensure no unused variables
+	// ensure no unused variables
+	_ = enc
+	_ = buf
+	_ = err
+	_ = extVal
 
 	// ID (1,int32,optional)
 	enc.EncodeInt32(1, m.ID)
@@ -193,22 +206,30 @@ func (m *RepeatAllTheThings) MarshalTo(dest []byte) error {
 	if len(m.TheSFixed64S) > 0 {
 		enc.EncodePackedSFixed64(13, m.TheSFixed64S)
 	}
-	// TheEventTypes (14,enum,repeated,packed)
+	// TheFloats (14,float,repeated,packed)
+	if len(m.TheFloats) > 0 {
+		enc.EncodePackedFloat32(14, m.TheFloats)
+	}
+	// TheDoubles (15,double,repeated,packed)
+	if len(m.TheDoubles) > 0 {
+		enc.EncodePackedFloat64(15, m.TheDoubles)
+	}
+	// TheEventTypes (16,enum,repeated,packed)
 	if l := len(m.TheEventTypes); l > 0 {
 		ivs := make([]int32, l)
 		for i, v := range m.TheEventTypes {
 			ivs[i] = int32(v)
 		}
-		enc.EncodePackedInt32(14, ivs)
+		enc.EncodePackedInt32(16, ivs)
 	}
-	// TheBytes (15,bytes,repeated)
+	// TheBytes (17,bytes,repeated)
 	for _, val := range m.TheBytes {
-		enc.EncodeBytes(15, val)
+		enc.EncodeBytes(17, val)
 	}
-	// TheMessages (16,message,repeated)
+	// TheMessages (18,message,repeated)
 	for _, mm := range m.TheMessages {
-		if err = enc.EncodeNested(16, mm); err != nil {
-			return fmt.Errorf("unable to encode message data for field 'theMessages' (tag=16): %w", err)
+		if err = enc.EncodeNested(18, mm); err != nil {
+			return fmt.Errorf("unable to encode message data for field 'theMessages' (tag=18): %w", err)
 		}
 	}
 	return nil
@@ -420,43 +441,77 @@ func (m *RepeatAllTheThings) Unmarshal(p []byte) error {
 				m.TheSFixed64S = append(m.TheSFixed64S, int64(v))
 			}
 
-		case 14: // TheEventTypes (enum,repeated,packed)
+		case 14: // TheFloats (float,repeated,packed)
+			switch wt {
+			case csproto.WireTypeFixed32:
+				if v, err := dec.DecodeFloat32(); err != nil {
+					return fmt.Errorf("unable to decode float value for field 'theFloats' (tag=14): %w", err)
+				} else {
+					m.TheFloats = append(m.TheFloats, v)
+				}
+			case csproto.WireTypeLengthDelimited:
+				if v, err := dec.DecodePackedFloat32(); err != nil {
+					return fmt.Errorf("unable to decode packed float values for field 'theFloats' (tag=14): %w", err)
+				} else {
+					m.TheFloats = append(m.TheFloats, v...)
+				}
+			default:
+				return fmt.Errorf("incorrect wire type %v for repeated field 'theFloats' (tag=14), expected 5 (32-bit) or 1 (length-delimited)", wt)
+			}
+		case 15: // TheDoubles (double,repeated,packed)
+			switch wt {
+			case csproto.WireTypeFixed64:
+				if v, err := dec.DecodeFloat64(); err != nil {
+					return fmt.Errorf("unable to decode double value for field 'theDoubles' (tag=15): %w", err)
+				} else {
+					m.TheDoubles = append(m.TheDoubles, v)
+				}
+			case csproto.WireTypeLengthDelimited:
+				if v, err := dec.DecodePackedFloat64(); err != nil {
+					return fmt.Errorf("unable to decode packed double values for field 'theDoubles' (tag=15): %w", err)
+				} else {
+					m.TheDoubles = append(m.TheDoubles, v...)
+				}
+			default:
+				return fmt.Errorf("incorrect wire type %v for repeated field 'theDoubles' (tag=15), expected 1 (64-bit) or 1 (length-delimited)", wt)
+			}
+		case 16: // TheEventTypes (enum,repeated,packed)
 			switch wt {
 			case csproto.WireTypeVarint:
 				if v, err := dec.DecodeInt32(); err != nil {
-					return fmt.Errorf("unable to decode int32 enum value for field 'theEventTypes' (tag=14): %w", err)
+					return fmt.Errorf("unable to decode int32 enum value for field 'theEventTypes' (tag=16): %w", err)
 				} else {
 					m.TheEventTypes = append(m.TheEventTypes, EventType(v))
 				}
 			case csproto.WireTypeLengthDelimited:
 				if v, err := dec.DecodePackedInt32(); err != nil {
-					return fmt.Errorf("unable to decode packed int32 enum values for field 'theEventTypes' (tag=14): %w", err)
+					return fmt.Errorf("unable to decode packed int32 enum values for field 'theEventTypes' (tag=16): %w", err)
 				} else {
 					for _, elem := range v {
 						m.TheEventTypes = append(m.TheEventTypes, EventType(elem))
 					}
 				}
 			default:
-				return fmt.Errorf("incorrect wire type %v for repeated field 'theEventTypes' (tag=14), expected 0 (varint) or 1 (length-delimited)", wt)
+				return fmt.Errorf("incorrect wire type %v for repeated field 'theEventTypes' (tag=16), expected 0 (varint) or 1 (length-delimited)", wt)
 			}
-		case 15: // TheBytes (bytes,repeated)
+		case 17: // TheBytes (bytes,repeated)
 
 			if wt != csproto.WireTypeLengthDelimited {
-				return fmt.Errorf("incorrect wire type %v for field 'theBytes' (tag=15), expected 2 (length-delimited)", wt)
+				return fmt.Errorf("incorrect wire type %v for field 'theBytes' (tag=17), expected 2 (length-delimited)", wt)
 			}
 			if b, err := dec.DecodeBytes(); err != nil {
-				return fmt.Errorf("unable to decode bytes value for field 'theBytes' (tag=15): %w", err)
+				return fmt.Errorf("unable to decode bytes value for field 'theBytes' (tag=17): %w", err)
 			} else {
 				m.TheBytes = append(m.TheBytes, b)
 			}
 
-		case 16: // TheMessages (message,repeated)
+		case 18: // TheMessages (message,repeated)
 			if wt != csproto.WireTypeLengthDelimited {
-				return fmt.Errorf("incorrect wire type %v for field 'theMessages' (tag=16), expected 2 (length-delimited)", wt)
+				return fmt.Errorf("incorrect wire type %v for field 'theMessages' (tag=18), expected 2 (length-delimited)", wt)
 			}
 			var mm EmbeddedEvent
 			if err = dec.DecodeNested(&mm); err != nil {
-				return fmt.Errorf("unable to decode message value for field 'theMessages' (tag=16): %w", err)
+				return fmt.Errorf("unable to decode message value for field 'theMessages' (tag=18): %w", err)
 			}
 			m.TheMessages = append(m.TheMessages, &mm)
 

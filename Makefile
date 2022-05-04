@@ -43,7 +43,7 @@ regenerate: clean clean-generated generate
 example-proto2-gogo: install-protoc-gen-gogo protoc-gen-fastmarshal
 	$(info Generating Protobuf code for example/proto2/gogo ...)
 	@cd ${PROJECT_BASE_DIR}/example/proto2/gogo &&\
-		protoc -I . --gogo_out=paths=source_relative${GOGO_WKT_OPTIONS}:. --fastmarshal_out=paths=source_relative${FASTMARSHAL_WKT_OPTIONS}:. *.proto
+		protoc -I . --gogo_out=paths=source_relative${GOGO_WKT_OPTIONS}:. --fastmarshal_out=paths=source_relative${FASTMARSHAL_WKT_OPTIONS},specialname=Size:. *.proto
 
 .PHONY: example-proto3-gogo
 example-proto3-gogo: install-protoc-gen-gogo protoc-gen-fastmarshal
@@ -79,7 +79,7 @@ example-proto3-googlev2: install-protoc-gen-go-v2 protoc-gen-fastmarshal
 example-permessage-gogo: install-protoc-gen-gogo protoc-gen-fastmarshal
 	$(info Generating Protobuf code for example/permessage/gogo ...)
 	@cd ${PROJECT_BASE_DIR}/example/permessage/gogo &&\
-		protoc -I . --gogo_out=paths=source_relative${GOGO_WKT_OPTIONS}:. --fastmarshal_out=filepermessage=true,paths=source_relative${FASTMARSHAL_WKT_OPTIONS}:. *.proto
+		protoc -I . --gogo_out=paths=source_relative${GOGO_WKT_OPTIONS}:. --fastmarshal_out=filepermessage=true,paths=source_relative${FASTMARSHAL_WKT_OPTIONS},specialname=Size:. *.proto
 
 .PHONY: example-permessage-googlev1
 example-permessage-googlev1: install-protoc-gen-go-v1 protoc-gen-fastmarshal
