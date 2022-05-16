@@ -362,9 +362,6 @@ func (d *Decoder) DecodePackedUint64() ([]uint64, error) {
 		if n == 0 {
 			return nil, ErrInvalidVarintData
 		}
-		if v > math.MaxUint64 {
-			return nil, ErrValueOverflow
-		}
 		nRead += uint64(n)
 		d.offset += n
 		res = append(res, v)
@@ -392,9 +389,6 @@ func (d *Decoder) DecodePackedSint32() ([]int32, error) {
 		v, n := decodeZigZag32(d.p[d.offset:])
 		if n == 0 {
 			return nil, ErrInvalidVarintData
-		}
-		if v > math.MaxInt32 {
-			return nil, ErrValueOverflow
 		}
 		nRead += uint64(n)
 		d.offset += n
@@ -424,9 +418,6 @@ func (d *Decoder) DecodePackedSint64() ([]int64, error) {
 		if n == 0 {
 			return nil, ErrInvalidVarintData
 		}
-		if v > math.MaxInt64 {
-			return nil, ErrValueOverflow
-		}
 		nRead += uint64(n)
 		d.offset += n
 		res = append(res, v)
@@ -455,9 +446,6 @@ func (d *Decoder) DecodePackedFixed32() ([]uint32, error) {
 		if n == 0 {
 			return nil, ErrInvalidVarintData
 		}
-		if v > math.MaxUint32 {
-			return nil, ErrValueOverflow
-		}
 		nRead += uint64(n)
 		d.offset += n
 		res = append(res, v)
@@ -485,9 +473,6 @@ func (d *Decoder) DecodePackedFixed64() ([]uint64, error) {
 		v, n := decodeFixed64(d.p[d.offset:])
 		if n == 0 {
 			return nil, ErrInvalidVarintData
-		}
-		if v > math.MaxUint64 {
-			return nil, ErrValueOverflow
 		}
 		nRead += uint64(n)
 		d.offset += n
