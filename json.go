@@ -8,8 +8,8 @@ import (
 
 	gogojson "github.com/gogo/protobuf/jsonpb"
 	gogo "github.com/gogo/protobuf/proto"
-	"github.com/golang/protobuf/jsonpb"
-	protov1 "github.com/golang/protobuf/proto"
+	"github.com/golang/protobuf/jsonpb"        //nolint: staticcheck // using this deprecated package intentionally as this is a compatibility shim
+	protov1 "github.com/golang/protobuf/proto" //nolint: staticcheck // using this deprecated package intentionally as this is a compatibility shim
 	"google.golang.org/protobuf/encoding/protojson"
 	protov2 "google.golang.org/protobuf/proto"
 )
