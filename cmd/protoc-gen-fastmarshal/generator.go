@@ -18,16 +18,20 @@ func generate(plugin *protogen.Plugin, req generateRequest) error {
 
 func generateSingle(plugin *protogen.Plugin, req generateRequest) error {
 	type genArgsSingle struct {
-		Now        time.Time
-		Pwd        string
-		ProtoDesc  *protogen.File
-		APIVersion string
+		Now                time.Time
+		Pwd                string
+		ProtoDesc          *protogen.File
+		APIVersion         string
+		SpecialNames       specialNames
+		EnableUnsafeDecode bool
 	}
 	args := genArgsSingle{
-		Now:        time.Now().UTC(),
-		Pwd:        func() string { p, _ := os.Getwd(); return p }(),
-		ProtoDesc:  req.ProtoDesc,
-		APIVersion: req.APIVersion,
+		Now:                time.Now().UTC(),
+		Pwd:                func() string { p, _ := os.Getwd(); return p }(),
+		ProtoDesc:          req.ProtoDesc,
+		APIVersion:         req.APIVersion,
+		SpecialNames:       req.SpecialNames,
+		EnableUnsafeDecode: req.EnableUnsafeDecode,
 	}
 
 	var (
@@ -64,12 +68,13 @@ func generateSingle(plugin *protogen.Plugin, req generateRequest) error {
 
 func generatePerMessage(plugin *protogen.Plugin, req generateRequest) error {
 	type genArgsPerFile struct {
-		Now          time.Time
-		Pwd          string
-		ProtoDesc    *protogen.File
-		Message      *protogen.Message
-		APIVersion   string
-		SpecialNames specialNames
+		Now                time.Time
+		Pwd                string
+		ProtoDesc          *protogen.File
+		Message            *protogen.Message
+		APIVersion         string
+		SpecialNames       specialNames
+		EnableUnsafeDecode bool
 	}
 
 	funcs := codeGenFunctions(req.ProtoDesc, req.SpecialNames)
@@ -88,12 +93,13 @@ func generatePerMessage(plugin *protogen.Plugin, req generateRequest) error {
 	}
 	for _, msg := range allMessages(req.ProtoDesc)() {
 		args := genArgsPerFile{
-			Now:          now,
-			Pwd:          pwd,
-			ProtoDesc:    req.ProtoDesc,
-			Message:      msg,
-			APIVersion:   req.APIVersion,
-			SpecialNames: req.SpecialNames,
+			Now:                now,
+			Pwd:                pwd,
+			ProtoDesc:          req.ProtoDesc,
+			Message:            msg,
+			APIVersion:         req.APIVersion,
+			SpecialNames:       req.SpecialNames,
+			EnableUnsafeDecode: req.EnableUnsafeDecode,
 		}
 		content, err := renderNamedTemplate(tt, "PerMessage", args)
 		if err != nil {
