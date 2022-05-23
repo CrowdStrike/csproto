@@ -21,9 +21,8 @@ func (m *TestEvent_NestedMsg) Size() int {
 	_ = l // avoid unused variable
 
 	// Details (string,optional)
-	if l = len(m.Details); l > 0 {
-		sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(l)) + l
-	}
+	l = len(m.Details)
+	sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(l)) + l
 	return sz
 }
 
@@ -50,9 +49,7 @@ func (m *TestEvent_NestedMsg) MarshalTo(dest []byte) error {
 	_ = extVal
 
 	// Details (1,string,optional)
-	if len(m.Details) > 0 {
-		enc.EncodeString(1, m.Details)
-	}
+	enc.EncodeString(1, m.Details)
 	return nil
 }
 

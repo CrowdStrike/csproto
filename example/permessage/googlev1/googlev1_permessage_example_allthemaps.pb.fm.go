@@ -66,10 +66,9 @@ func (m *AllTheMaps) Size() int {
 		l = len(k)
 		keySize := 1 + csproto.SizeOfVarint(uint64(l)) + l
 		// size of value (always has an internal tag of 2)
-		if l = len(v); l > 0 {
-			valueSize := 1 + csproto.SizeOfVarint(uint64(l)) + l
-			sz += csproto.SizeOfTagKey(5) + csproto.SizeOfVarint(uint64(keySize+valueSize)) + keySize + valueSize
-		}
+		l = len(v)
+		valueSize := 1 + csproto.SizeOfVarint(uint64(l)) + l
+		sz += csproto.SizeOfTagKey(5) + csproto.SizeOfVarint(uint64(keySize+valueSize)) + keySize + valueSize
 	}
 
 	// ToBytes (message,repeated)
@@ -78,10 +77,9 @@ func (m *AllTheMaps) Size() int {
 		l = len(k)
 		keySize := 1 + csproto.SizeOfVarint(uint64(l)) + l
 		// size of value (always has an internal tag of 2)
-		if l = len(v); l > 0 {
-			valueSize := 1 + csproto.SizeOfVarint(uint64(l)) + l
-			sz += csproto.SizeOfTagKey(6) + csproto.SizeOfVarint(uint64(keySize+valueSize)) + keySize + valueSize
-		}
+		l = len(v)
+		valueSize := 1 + csproto.SizeOfVarint(uint64(l)) + l
+		sz += csproto.SizeOfTagKey(6) + csproto.SizeOfVarint(uint64(keySize+valueSize)) + keySize + valueSize
 	}
 
 	// ToSInt32 (message,repeated)
@@ -259,9 +257,7 @@ func (m *AllTheMaps) MarshalTo(dest []byte) error {
 	// ToString (5,map)
 	for k, v := range m.ToString {
 		var l int
-		if l = len(v); l == 0 {
-			continue
-		}
+		l = len(v)
 		itemSize := 1 + csproto.SizeOfVarint(uint64(l)) + l
 		l = len(k)
 		itemSize += 1 + csproto.SizeOfVarint(uint64(l)) + l
@@ -273,9 +269,7 @@ func (m *AllTheMaps) MarshalTo(dest []byte) error {
 	// ToBytes (6,map)
 	for k, v := range m.ToBytes {
 		var l int
-		if l = len(v); l == 0 {
-			continue
-		}
+		l = len(v)
 		itemSize := 1 + csproto.SizeOfVarint(uint64(l)) + l
 		l = len(k)
 		itemSize += 1 + csproto.SizeOfVarint(uint64(l)) + l

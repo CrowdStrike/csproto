@@ -3,14 +3,12 @@
 {{- if ne (.Desc.Cardinality | string) "repeated" -}}
     {{- if eq (.Desc.Syntax | string) "proto2" -}}
     if m.{{ .GoName | getSafeFieldName }} != nil {
-        if l = len(*m.{{ .GoName | getSafeFieldName }}); l > 0 {
-            sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(l)) + l
-        }
-    }
-    {{- else -}}
-    if l = len(m.{{ .GoName | getSafeFieldName }}); l > 0 {
+        l = len(*m.{{ .GoName | getSafeFieldName }})
         sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(l)) + l
     }
+    {{- else -}}
+    l = len(m.{{ .GoName | getSafeFieldName }})
+    sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(l)) + l
     {{- end -}}
 {{- else -}}
     for _, sv := range m.{{ .GoName | getSafeFieldName }} {
@@ -23,9 +21,8 @@
 {{/* SizeOfBytes - calculate the encoded size of a bytes field */}}
 {{ define "SizeOfBytes" }}
 {{- if ne (.Desc.Cardinality | string) "repeated" -}}
-    if l = len(m.{{ .GoName | getSafeFieldName }}); l > 0 {
-        sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(l)) + l
-    }
+    l = len(m.{{ .GoName | getSafeFieldName }})
+    sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(l)) + l
 {{- else -}}
     for _, bv := range m.{{ .GoName | getSafeFieldName }} {
         if l = len(bv); l > 0 {
@@ -154,10 +151,9 @@
         valueSize := 1 + csproto.SizeOfVarint(uint64(v))
         sz += csproto.SizeOfTagKey({{$mapDesc.Number}}) + csproto.SizeOfVarint(uint64(keySize + valueSize)) + keySize + valueSize
     {{- else if eq (.Kind | string) "string" "bytes" -}}
-        if l = len(v); l > 0 {
-            valueSize := 1 + csproto.SizeOfVarint(uint64(l)) + l
-            sz += csproto.SizeOfTagKey({{$mapDesc.Number}}) + csproto.SizeOfVarint(uint64(keySize + valueSize)) + keySize + valueSize
-        }
+        l = len(v)
+        valueSize := 1 + csproto.SizeOfVarint(uint64(l)) + l
+        sz += csproto.SizeOfTagKey({{$mapDesc.Number}}) + csproto.SizeOfVarint(uint64(keySize + valueSize)) + keySize + valueSize
     {{- else if eq (.Kind | string) "sint32" "sint64" -}}
         valueSize := 1 + csproto.SizeOfZigZag(uint64(v))
         sz += csproto.SizeOfTagKey({{$mapDesc.Number}}) + csproto.SizeOfVarint(uint64(keySize + valueSize)) + keySize + valueSize
@@ -271,12 +267,10 @@
         {{- else if eq $kind "enum" -}}
         sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(extVal.({{.Enum.GoIdent}})))
         {{- else if eq $kind "string" -}}
-        s := extVal.(string)
-        l = len(s)
+        l = len(extVal.(string))
         sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(l)) + l
         {{- else if eq $kind "bytes" -}}
-        b := extVal.([]byte)
-        l = len(b)
+        l = len(extVal.([]byte))
         sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(l)) + l
         {{- else if eq $kind "message" -}}
         l = csproto.Size(extVal)
@@ -328,19 +322,17 @@
 {{- else -}}
     {{- if eq (.Desc.Syntax | string) "proto2" -}}
         {{- if eq $cardinality "required" -}}
-    if m.{{.GoName | getSafeFieldName}} == nil || len(*m.{{.GoName | getSafeFieldName}}) == 0 {
+    if m.{{.GoName | getSafeFieldName}} == nil {
         return fmt.Errorf("required field '{{.GoName | getSafeFieldName}}' has no value")
     }
     enc.EncodeString({{.Desc.Number}}, *m.{{.GoName | getSafeFieldName}})
         {{- else -}}
-    if m.{{ .GoName | getSafeFieldName }} != nil && len(*m.{{.GoName | getSafeFieldName}}) > 0 {
+    if m.{{ .GoName | getSafeFieldName }} != nil {
         enc.EncodeString({{.Desc.Number}}, *m.{{.GoName | getSafeFieldName}})
     }
         {{- end -}}
     {{- else -}}
-    if len(m.{{.GoName | getSafeFieldName}}) > 0 {
-        enc.EncodeString({{.Desc.Number}}, m.{{.GoName | getSafeFieldName}})
-    }
+    enc.EncodeString({{.Desc.Number}}, m.{{.GoName | getSafeFieldName}})
     {{- end -}}
 {{- end -}}
 {{ end }}
@@ -352,14 +344,12 @@
         enc.EncodeBytes({{.Desc.Number}}, val)
     }
 {{- else if eq $cardinality "required" -}}{{/* only valid for proto2 */}}
-    if len(m.{{.GoName | getSafeFieldName}}) == 0 {
+    if m.{{.GoName | getSafeFieldName}} == nil {
         return fmt.Errorf("required field '{{.GoName | getSafeFieldName}}' has no value")
     }
     enc.EncodeBytes({{.Desc.Number}}, m.{{.GoName | getSafeFieldName}})
 {{- else -}}
-    if len(m.{{.GoName | getSafeFieldName}}) > 0 {
-        enc.EncodeBytes({{.Desc.Number}}, m.{{.GoName | getSafeFieldName}})
-    }
+    enc.EncodeBytes({{.Desc.Number}}, m.{{.GoName | getSafeFieldName}})
 {{- end -}}
 {{ end }}
 {{/* MarshalSFixed - generates the snippet to marshal a fixed-size signed integer (sfixed32, sfixed64) */}}
@@ -447,9 +437,7 @@
         {{ if eq $mapValueKind "int32" "int64" "uint32" "uint64" "enum" -}}
         itemSize := 1 + csproto.SizeOfVarint(uint64(v))
         {{- else if eq $mapValueKind "string" "bytes" -}}
-        if l = len(v); l == 0 {
-            continue
-        }
+        l = len(v)
         itemSize := 1 + csproto.SizeOfVarint(uint64(l)) + l
         {{- else if eq $mapValueKind "sint32" "sint64" -}}
         itemSize := 1 + csproto.SizeOfZigZag(uint64(v))
@@ -896,11 +884,11 @@
                 return fmt.Errorf("unable to decode string value for field '{{.Desc.Name}}' (tag={{.Desc.Number}}): %w", err)
             } else {
     {{- if eq $cardinality "repeated" -}}
-            m.{{.GoName | getSafeFieldName}}= append(m.{{.GoName | getSafeFieldName}}, s)
+            m.{{.GoName | getSafeFieldName}} = append(m.{{.GoName | getSafeFieldName}}, s)
     {{- else if eq $syntax "proto2" -}}
-            m.{{.GoName | getSafeFieldName}}= csproto.String(s)
+            m.{{.GoName | getSafeFieldName}} = csproto.String(s)
     {{- else -}}
-            m.{{.GoName | getSafeFieldName}}= s
+            m.{{.GoName | getSafeFieldName}} = s
     {{- end -}}
             }
 {{ end }}
@@ -1267,7 +1255,7 @@
             if s, err := dec.DecodeString(); err != nil {
                 return fmt.Errorf("unable to decode string value for field '{{.Desc.Name}}' (tag={{.Desc.Number}}): %w", err)
             } else {
-                ov.{{.GoName | getSafeFieldName}}= s
+                ov.{{.GoName | getSafeFieldName}} = s
             }
         {{- else if eq $kind "bytes" -}}
             if wt != csproto.WireTypeLengthDelimited {

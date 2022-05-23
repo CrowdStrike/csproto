@@ -47,6 +47,7 @@ func TestProto3GoogleV1Message(t *testing.T) {
 func createTestProto3GoogleV1Message() *googlev1.TestEvent {
 	event := googlev1.TestEvent{
 		Name:   "test",
+		Info:   "",
 		Labels: []string{"one", "two", "three"},
 		Embedded: &googlev1.EmbeddedEvent{
 			ID:              42,

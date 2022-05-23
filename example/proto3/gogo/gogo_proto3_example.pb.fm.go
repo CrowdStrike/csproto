@@ -22,13 +22,11 @@ func (m *TestEvent) Size() int {
 	_ = l // avoid unused variable
 
 	// Name (string,optional)
-	if l = len(m.Name); l > 0 {
-		sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(l)) + l
-	}
+	l = len(m.Name)
+	sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(l)) + l
 	// Info (string,optional)
-	if l = len(m.Info); l > 0 {
-		sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
-	}
+	l = len(m.Info)
+	sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
 	// IsAwesome (bool,optional)
 	sz += csproto.SizeOfTagKey(3) + 1
 	// Labels (string,repeated)
@@ -95,13 +93,9 @@ func (m *TestEvent) MarshalTo(dest []byte) error {
 	_ = extVal
 
 	// Name (1,string,optional)
-	if len(m.Name) > 0 {
-		enc.EncodeString(1, m.Name)
-	}
+	enc.EncodeString(1, m.Name)
 	// Info (2,string,optional)
-	if len(m.Info) > 0 {
-		enc.EncodeString(2, m.Info)
-	}
+	enc.EncodeString(2, m.Info)
 	// IsAwesome (3,bool,optional)
 	enc.EncodeBool(3, m.IsAwesome)
 	// Labels (4,string,repeated)
@@ -294,9 +288,8 @@ func (m *EmbeddedEvent) Size() int {
 	// ID (int32,optional)
 	sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(m.ID))
 	// Stuff (string,optional)
-	if l = len(m.Stuff); l > 0 {
-		sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
-	}
+	l = len(m.Stuff)
+	sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
 	// FavoriteNumbers (int32,repeated,packed)
 	if len(m.FavoriteNumbers) > 0 {
 		sz += csproto.SizeOfTagKey(3)
@@ -340,9 +333,7 @@ func (m *EmbeddedEvent) MarshalTo(dest []byte) error {
 	// ID (1,int32,optional)
 	enc.EncodeInt32(1, m.ID)
 	// Stuff (2,string,optional)
-	if len(m.Stuff) > 0 {
-		enc.EncodeString(2, m.Stuff)
-	}
+	enc.EncodeString(2, m.Stuff)
 	// FavoriteNumbers (3,int32,repeated,packed)
 	if len(m.FavoriteNumbers) > 0 {
 		enc.EncodePackedInt32(3, m.FavoriteNumbers)
@@ -441,9 +432,8 @@ func (m *AllTheThings) Size() int {
 	// ID (int32,optional)
 	sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(m.ID))
 	// TheString (string,optional)
-	if l = len(m.TheString); l > 0 {
-		sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
-	}
+	l = len(m.TheString)
+	sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
 	// TheBool (bool,optional)
 	sz += csproto.SizeOfTagKey(3) + 1
 	// TheInt32 (int32,optional)
@@ -473,9 +463,8 @@ func (m *AllTheThings) Size() int {
 	// TheEventType (enum,optional)
 	sz += csproto.SizeOfTagKey(16) + csproto.SizeOfVarint(uint64(m.TheEventType))
 	// TheBytes (bytes,optional)
-	if l = len(m.TheBytes); l > 0 {
-		sz += csproto.SizeOfTagKey(17) + csproto.SizeOfVarint(uint64(l)) + l
-	}
+	l = len(m.TheBytes)
+	sz += csproto.SizeOfTagKey(17) + csproto.SizeOfVarint(uint64(l)) + l
 	// TheMessage (message,optional)
 	if m.TheMessage != nil {
 		l = csproto.Size(m.TheMessage)
@@ -509,9 +498,7 @@ func (m *AllTheThings) MarshalTo(dest []byte) error {
 	// ID (1,int32,optional)
 	enc.EncodeInt32(1, m.ID)
 	// TheString (2,string,optional)
-	if len(m.TheString) > 0 {
-		enc.EncodeString(2, m.TheString)
-	}
+	enc.EncodeString(2, m.TheString)
 	// TheBool (3,bool,optional)
 	enc.EncodeBool(3, m.TheBool)
 	// TheInt32 (4,int32,optional)
@@ -541,9 +528,7 @@ func (m *AllTheThings) MarshalTo(dest []byte) error {
 	// TheEventType (16,enum,optional)
 	enc.EncodeInt32(16, int32(m.TheEventType))
 	// TheBytes (17,bytes,optional)
-	if len(m.TheBytes) > 0 {
-		enc.EncodeBytes(17, m.TheBytes)
-	}
+	enc.EncodeBytes(17, m.TheBytes)
 	// TheMessage (18,message,optional)
 	if m.TheMessage != nil {
 		if err = enc.EncodeNested(18, m.TheMessage); err != nil {
@@ -1277,9 +1262,8 @@ func (m *TestEvent_NestedMsg) Size() int {
 	_ = l // avoid unused variable
 
 	// Details (string,optional)
-	if l = len(m.Details); l > 0 {
-		sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(l)) + l
-	}
+	l = len(m.Details)
+	sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(l)) + l
 	return sz
 }
 
@@ -1306,9 +1290,7 @@ func (m *TestEvent_NestedMsg) MarshalTo(dest []byte) error {
 	_ = extVal
 
 	// Details (1,string,optional)
-	if len(m.Details) > 0 {
-		enc.EncodeString(1, m.Details)
-	}
+	enc.EncodeString(1, m.Details)
 	return nil
 }
 

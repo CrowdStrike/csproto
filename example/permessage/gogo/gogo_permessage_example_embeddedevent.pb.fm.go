@@ -23,9 +23,8 @@ func (m *EmbeddedEvent) Size() int {
 	// ID (int32,optional)
 	sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(m.ID))
 	// Stuff (string,optional)
-	if l = len(m.Stuff); l > 0 {
-		sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
-	}
+	l = len(m.Stuff)
+	sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
 	// FavoriteNumbers (int32,repeated,packed)
 	if len(m.FavoriteNumbers) > 0 {
 		sz += csproto.SizeOfTagKey(3)
@@ -71,9 +70,7 @@ func (m *EmbeddedEvent) MarshalTo(dest []byte) error {
 	// ID (1,int32,optional)
 	enc.EncodeInt32(1, m.ID)
 	// Stuff (2,string,optional)
-	if len(m.Stuff) > 0 {
-		enc.EncodeString(2, m.Stuff)
-	}
+	enc.EncodeString(2, m.Stuff)
 	// FavoriteNumbers (3,int32,repeated,packed)
 	if len(m.FavoriteNumbers) > 0 {
 		enc.EncodePackedInt32(3, m.FavoriteNumbers)
