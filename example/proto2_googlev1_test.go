@@ -74,9 +74,11 @@ func createTestProto2GoogleV1Message() *googlev1.BaseEvent {
 		SourceID:  proto.String("test-source"),
 		Timestamp: proto.Uint64(now),
 		EventType: &et,
+		Data:      []byte{},
 	}
 	testEvent := googlev1.TestEvent{
 		Name:   proto.String("test"),
+		Info:   proto.String(""),
 		Labels: []string{"one", "two", "three"},
 		Embedded: &googlev1.EmbeddedEvent{
 			ID:              proto.Int32(42),

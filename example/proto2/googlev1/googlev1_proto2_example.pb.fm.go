@@ -23,15 +23,13 @@ func (m *BaseEvent) Size() int {
 
 	// EventID (string,required)
 	if m.EventID != nil {
-		if l = len(*m.EventID); l > 0 {
-			sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(l)) + l
-		}
+		l = len(*m.EventID)
+		sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(l)) + l
 	}
 	// SourceID (string,required)
 	if m.SourceID != nil {
-		if l = len(*m.SourceID); l > 0 {
-			sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
-		}
+		l = len(*m.SourceID)
+		sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
 	}
 	// Timestamp (uint64,required)
 	if m.Timestamp != nil {
@@ -41,6 +39,9 @@ func (m *BaseEvent) Size() int {
 	if m.EventType != nil {
 		sz += csproto.SizeOfTagKey(4) + csproto.SizeOfVarint(uint64(*m.EventType))
 	}
+	// Data (bytes,optional)
+	l = len(m.Data)
+	sz += csproto.SizeOfTagKey(5) + csproto.SizeOfVarint(uint64(l)) + l
 	// extension field - eventExt (message,optional)
 	if extVal, _ := csproto.GetExtension(m, E_TestEvent_EventExt); extVal != nil {
 		l = csproto.Size(extVal)
@@ -73,12 +74,12 @@ func (m *BaseEvent) MarshalTo(dest []byte) error {
 	_ = extVal
 
 	// EventID (1,string,required)
-	if m.EventID == nil || len(*m.EventID) == 0 {
+	if m.EventID == nil {
 		return fmt.Errorf("required field 'EventID' has no value")
 	}
 	enc.EncodeString(1, *m.EventID)
 	// SourceID (2,string,required)
-	if m.SourceID == nil || len(*m.SourceID) == 0 {
+	if m.SourceID == nil {
 		return fmt.Errorf("required field 'SourceID' has no value")
 	}
 	enc.EncodeString(2, *m.SourceID)
@@ -92,6 +93,8 @@ func (m *BaseEvent) MarshalTo(dest []byte) error {
 		return fmt.Errorf("required field 'EventType' has no value")
 	}
 	enc.EncodeInt32(4, int32(*m.EventType))
+	// Data (5,bytes,optional)
+	enc.EncodeBytes(5, m.Data)
 
 	// extension field - eventExt (message,optional)
 	if extVal, _ = csproto.GetExtension(m, E_TestEvent_EventExt); extVal != nil {
@@ -156,6 +159,16 @@ func (m *BaseEvent) Unmarshal(p []byte) error {
 				ev := EventType(v)
 				m.EventType = &ev
 			}
+		case 5: // Data (bytes,optional)
+
+			if wt != csproto.WireTypeLengthDelimited {
+				return fmt.Errorf("incorrect wire type %v for field 'data' (tag=5), expected 2 (length-delimited)", wt)
+			}
+			if b, err := dec.DecodeBytes(); err != nil {
+				return fmt.Errorf("unable to decode bytes value for field 'data' (tag=5): %w", err)
+			} else {
+				m.Data = b
+			}
 
 		case 100: // eventExt (extension,message)
 			var mm_eventExt TestEvent
@@ -199,6 +212,7 @@ func (m *BaseEvent) csprotoCheckRequiredFields() error {
 	if m.EventType == nil {
 		missingFields = append(missingFields, "EventType")
 	}
+
 	if len(missingFields) > 0 {
 		var sb strings.Builder
 		sb.WriteString("cannot unmarshal, one or more required fields missing: ")
@@ -227,15 +241,13 @@ func (m *TestEvent) Size() int {
 
 	// Name (string,optional)
 	if m.Name != nil {
-		if l = len(*m.Name); l > 0 {
-			sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(l)) + l
-		}
+		l = len(*m.Name)
+		sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(l)) + l
 	}
 	// Info (string,optional)
 	if m.Info != nil {
-		if l = len(*m.Info); l > 0 {
-			sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
-		}
+		l = len(*m.Info)
+		sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
 	}
 	// IsAwesome (bool,optional)
 	if m.IsAwesome != nil {
@@ -298,11 +310,11 @@ func (m *TestEvent) MarshalTo(dest []byte) error {
 	_ = extVal
 
 	// Name (1,string,optional)
-	if m.Name != nil && len(*m.Name) > 0 {
+	if m.Name != nil {
 		enc.EncodeString(1, *m.Name)
 	}
 	// Info (2,string,optional)
-	if m.Info != nil && len(*m.Info) > 0 {
+	if m.Info != nil {
 		enc.EncodeString(2, *m.Info)
 	}
 	// IsAwesome (3,bool,optional)
@@ -505,9 +517,8 @@ func (m *EmbeddedEvent) Size() int {
 	}
 	// Stuff (string,optional)
 	if m.Stuff != nil {
-		if l = len(*m.Stuff); l > 0 {
-			sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
-		}
+		l = len(*m.Stuff)
+		sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
 	}
 	// FavoriteNumbers (int32,repeated)
 	for _, iv := range m.FavoriteNumbers {
@@ -550,7 +561,7 @@ func (m *EmbeddedEvent) MarshalTo(dest []byte) error {
 	}
 	enc.EncodeInt32(1, *m.ID)
 	// Stuff (2,string,optional)
-	if m.Stuff != nil && len(*m.Stuff) > 0 {
+	if m.Stuff != nil {
 		enc.EncodeString(2, *m.Stuff)
 	}
 	// FavoriteNumbers (3,int32,repeated)
@@ -682,9 +693,8 @@ func (m *AllTheThings) Size() int {
 	}
 	// TheString (string,optional)
 	if m.TheString != nil {
-		if l = len(*m.TheString); l > 0 {
-			sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
-		}
+		l = len(*m.TheString)
+		sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
 	}
 	// TheBool (bool,optional)
 	if m.TheBool != nil {
@@ -743,9 +753,8 @@ func (m *AllTheThings) Size() int {
 		sz += csproto.SizeOfTagKey(16) + csproto.SizeOfVarint(uint64(*m.TheEventType))
 	}
 	// TheBytes (bytes,optional)
-	if l = len(m.TheBytes); l > 0 {
-		sz += csproto.SizeOfTagKey(17) + csproto.SizeOfVarint(uint64(l)) + l
-	}
+	l = len(m.TheBytes)
+	sz += csproto.SizeOfTagKey(17) + csproto.SizeOfVarint(uint64(l)) + l
 	// TheMessage (message,optional)
 	if m.TheMessage != nil {
 		l = csproto.Size(m.TheMessage)
@@ -782,7 +791,7 @@ func (m *AllTheThings) MarshalTo(dest []byte) error {
 	}
 	enc.EncodeInt32(1, *m.ID)
 	// TheString (2,string,optional)
-	if m.TheString != nil && len(*m.TheString) > 0 {
+	if m.TheString != nil {
 		enc.EncodeString(2, *m.TheString)
 	}
 	// TheBool (3,bool,optional)
@@ -842,9 +851,7 @@ func (m *AllTheThings) MarshalTo(dest []byte) error {
 		enc.EncodeInt32(16, int32(*m.TheEventType))
 	}
 	// TheBytes (17,bytes,optional)
-	if len(m.TheBytes) > 0 {
-		enc.EncodeBytes(17, m.TheBytes)
-	}
+	enc.EncodeBytes(17, m.TheBytes)
 	// TheMessage (18,message,optional)
 	if m.TheMessage != nil {
 		if err = enc.EncodeNested(18, m.TheMessage); err != nil {
@@ -1604,9 +1611,8 @@ func (m *TestEvent_NestedMsg) Size() int {
 
 	// Details (string,optional)
 	if m.Details != nil {
-		if l = len(*m.Details); l > 0 {
-			sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(l)) + l
-		}
+		l = len(*m.Details)
+		sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(l)) + l
 	}
 	return sz
 }
@@ -1634,7 +1640,7 @@ func (m *TestEvent_NestedMsg) MarshalTo(dest []byte) error {
 	_ = extVal
 
 	// Details (1,string,optional)
-	if m.Details != nil && len(*m.Details) > 0 {
+	if m.Details != nil {
 		enc.EncodeString(1, *m.Details)
 	}
 	return nil

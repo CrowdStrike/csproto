@@ -23,9 +23,8 @@ func (m *AllTheThings) Size() int {
 	// ID (int32,optional)
 	sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(m.ID))
 	// TheString (string,optional)
-	if l = len(m.TheString); l > 0 {
-		sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
-	}
+	l = len(m.TheString)
+	sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
 	// TheBool (bool,optional)
 	sz += csproto.SizeOfTagKey(3) + 1
 	// TheInt32 (int32,optional)
@@ -55,9 +54,8 @@ func (m *AllTheThings) Size() int {
 	// TheEventType (enum,optional)
 	sz += csproto.SizeOfTagKey(16) + csproto.SizeOfVarint(uint64(m.TheEventType))
 	// TheBytes (bytes,optional)
-	if l = len(m.TheBytes); l > 0 {
-		sz += csproto.SizeOfTagKey(17) + csproto.SizeOfVarint(uint64(l)) + l
-	}
+	l = len(m.TheBytes)
+	sz += csproto.SizeOfTagKey(17) + csproto.SizeOfVarint(uint64(l)) + l
 	// TheMessage (message,optional)
 	if m.TheMessage != nil {
 		l = csproto.Size(m.TheMessage)
@@ -91,9 +89,7 @@ func (m *AllTheThings) MarshalTo(dest []byte) error {
 	// ID (1,int32,optional)
 	enc.EncodeInt32(1, m.ID)
 	// TheString (2,string,optional)
-	if len(m.TheString) > 0 {
-		enc.EncodeString(2, m.TheString)
-	}
+	enc.EncodeString(2, m.TheString)
 	// TheBool (3,bool,optional)
 	enc.EncodeBool(3, m.TheBool)
 	// TheInt32 (4,int32,optional)
@@ -123,9 +119,7 @@ func (m *AllTheThings) MarshalTo(dest []byte) error {
 	// TheEventType (16,enum,optional)
 	enc.EncodeInt32(16, int32(m.TheEventType))
 	// TheBytes (17,bytes,optional)
-	if len(m.TheBytes) > 0 {
-		enc.EncodeBytes(17, m.TheBytes)
-	}
+	enc.EncodeBytes(17, m.TheBytes)
 	// TheMessage (18,message,optional)
 	if m.TheMessage != nil {
 		if err = enc.EncodeNested(18, m.TheMessage); err != nil {

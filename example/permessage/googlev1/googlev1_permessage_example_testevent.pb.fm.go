@@ -21,13 +21,11 @@ func (m *TestEvent) Size() int {
 	_ = l // avoid unused variable
 
 	// Name (string,optional)
-	if l = len(m.Name); l > 0 {
-		sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(l)) + l
-	}
+	l = len(m.Name)
+	sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(l)) + l
 	// Info (string,optional)
-	if l = len(m.Info); l > 0 {
-		sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
-	}
+	l = len(m.Info)
+	sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
 	// IsAwesome (bool,optional)
 	sz += csproto.SizeOfTagKey(3) + 1
 	// Labels (string,repeated)
@@ -87,13 +85,9 @@ func (m *TestEvent) MarshalTo(dest []byte) error {
 	_ = extVal
 
 	// Name (1,string,optional)
-	if len(m.Name) > 0 {
-		enc.EncodeString(1, m.Name)
-	}
+	enc.EncodeString(1, m.Name)
 	// Info (2,string,optional)
-	if len(m.Info) > 0 {
-		enc.EncodeString(2, m.Info)
-	}
+	enc.EncodeString(2, m.Info)
 	// IsAwesome (3,bool,optional)
 	enc.EncodeBool(3, m.IsAwesome)
 	// Labels (4,string,repeated)

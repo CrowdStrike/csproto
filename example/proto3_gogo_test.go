@@ -47,6 +47,7 @@ func TestProto3GogoMessage(t *testing.T) {
 func createTestProto3GogoMessage() *gogo.TestEvent {
 	event := gogo.TestEvent{
 		Name:   "test",
+		Info:   "",
 		Labels: []string{"one", "two", "three"},
 		Embedded: &gogo.EmbeddedEvent{
 			ID:              42,

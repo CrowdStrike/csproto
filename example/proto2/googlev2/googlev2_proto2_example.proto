@@ -17,6 +17,8 @@ message BaseEvent {
     required string sourceID = 2;
     required uint64 timestamp = 3;
     required EventType eventType = 4;
+
+    optional bytes data = 5;
 };
 
 message TestEvent {
