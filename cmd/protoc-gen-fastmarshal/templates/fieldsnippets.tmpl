@@ -12,9 +12,8 @@
     {{- end -}}
 {{- else -}}
     for _, sv := range m.{{ .GoName | getSafeFieldName }} {
-        if l = len(sv); l > 0 {
-            sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(l)) + l
-        }
+        l = len(sv)
+        sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(l)) + l
     }
 {{- end -}}
 {{ end }}
@@ -25,9 +24,8 @@
     sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(l)) + l
 {{- else -}}
     for _, bv := range m.{{ .GoName | getSafeFieldName }} {
-        if l = len(bv); l > 0 {
-            sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(l)) + l
-        }
+        l = len(bv)
+        sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(l)) + l
     }
 {{- end -}}
 {{ end }}

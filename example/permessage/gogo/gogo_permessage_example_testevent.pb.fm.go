@@ -31,9 +31,8 @@ func (m *TestEvent) Size() int {
 	sz += csproto.SizeOfTagKey(3) + 1
 	// Labels (string,repeated)
 	for _, sv := range m.Labels {
-		if l = len(sv); l > 0 {
-			sz += csproto.SizeOfTagKey(4) + csproto.SizeOfVarint(uint64(l)) + l
-		}
+		l = len(sv)
+		sz += csproto.SizeOfTagKey(4) + csproto.SizeOfVarint(uint64(l)) + l
 	}
 	// Embedded (message,optional)
 	if m.Embedded != nil {
