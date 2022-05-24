@@ -44,19 +44,19 @@ func HasExtension(msg interface{}, ext interface{}) bool {
 func ClearExtension(msg interface{}, ext interface{}) {
 	switch MsgType(msg) {
 	case MessageTypeGoogleV1:
-		ed, ok := ext.(*google.ExtensionDesc)
-		if !ok {
+		if ed, ok := ext.(*google.ExtensionDesc); ok {
 			google.ClearExtension(msg.(google.Message), ed)
+			return
 		}
 	case MessageTypeGoogle:
-		et, ok := ext.(protoreflect.ExtensionType)
-		if ok {
+		if et, ok := ext.(protoreflect.ExtensionType); ok {
 			googlev2.ClearExtension(msg.(googlev2.Message), et)
+			return
 		}
 	case MessageTypeGogo:
-		ed, ok := ext.(*gogo.ExtensionDesc)
-		if ok {
-			gogo.ClearExtension(msg.(google.Message), ed)
+		if ed, ok := ext.(*gogo.ExtensionDesc); ok {
+			gogo.ClearExtension(msg.(gogo.Message), ed)
+			return
 		}
 	default:
 		panic(fmt.Sprintf("unsupported message type %T", msg))
