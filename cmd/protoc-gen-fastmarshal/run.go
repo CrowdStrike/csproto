@@ -18,9 +18,10 @@ type options struct {
 	ContentTemplate string
 	GetFuncMap      func(*protogen.File, bool) template.FuncMap
 
-	apiVersion     protoAPIVersion
-	filePerMessage bool
-	specialNames   specialNames
+	apiVersion         protoAPIVersion
+	filePerMessage     bool
+	specialNames       specialNames
+	enableUnsafeDecode bool
 }
 
 // protoAPIVersion defines a string flag that can contain either "v1" or "v2"
@@ -100,6 +101,7 @@ func run() {
 	flags.BoolVar(&runOptions.Debug, "debug", false, "if true, enable verbose debugging output to stderr")
 	flags.BoolVar(&runOptions.filePerMessage, "filepermessage", false, "if true, outputs a separate file for each message")
 	flags.Var(&runOptions.specialNames, "specialname", "if set, specifies field names to be munged in the generated code")
+	flags.BoolVar(&runOptions.enableUnsafeDecode, "enableunsafedecode", false, "if true, enables using unsafe code to decode strings for better perf")
 
 	// load and run the generator
 	genOptions := protogen.Options{
@@ -132,11 +134,12 @@ func doGenerate(opts *options) func(*protogen.Plugin) error {
 			}
 
 			req := generateRequest{
-				Mode:         outputModeSingleFile,
-				ProtoDesc:    protoFile,
-				NameTemplate: nameTemplate,
-				APIVersion:   opts.apiVersion.String(),
-				SpecialNames: opts.specialNames,
+				Mode:               outputModeSingleFile,
+				ProtoDesc:          protoFile,
+				NameTemplate:       nameTemplate,
+				APIVersion:         opts.apiVersion.String(),
+				SpecialNames:       opts.specialNames,
+				EnableUnsafeDecode: opts.enableUnsafeDecode,
 			}
 			if opts.filePerMessage {
 				req.Mode = outputModeFilePerMessage

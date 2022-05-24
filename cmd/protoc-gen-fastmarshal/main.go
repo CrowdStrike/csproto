@@ -29,6 +29,9 @@ Supported options (beyond those provided by google.golang.org/protobuf/compiler/
       a trailing underscore
     - can be specified multiple times for >1 name
     - useful when using Gogo Protobuf and there are message fields called "Size"
+  enableunsafedecode=true|false
+	- enable using unsafe code to decode string values without making copies for better performance
+	- default is false
 
 Direct Usage: protoc-gen-fastmarshal [version|help]
   version: writes the version, commit hash, build info for the binary to stdout

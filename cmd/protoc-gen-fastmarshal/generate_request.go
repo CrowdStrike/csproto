@@ -22,10 +22,11 @@ const (
 // generateRequest defines the various inputs and configuration options used by the template based
 // Protobuf code generator
 type generateRequest struct {
-	ProtoDesc    *protogen.File
-	Mode         outputMode
-	NameTemplate string
-	Funcs        template.FuncMap
-	APIVersion   string
-	SpecialNames specialNames
+	ProtoDesc          *protogen.File
+	Mode               outputMode
+	NameTemplate       string
+	Funcs              template.FuncMap
+	APIVersion         string
+	SpecialNames       specialNames
+	EnableUnsafeDecode bool
 }
