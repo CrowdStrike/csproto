@@ -31,9 +31,8 @@ func (m *TestEvent) Size() int {
 	sz += csproto.SizeOfTagKey(3) + 1
 	// Labels (string,repeated)
 	for _, sv := range m.Labels {
-		if l = len(sv); l > 0 {
-			sz += csproto.SizeOfTagKey(4) + csproto.SizeOfVarint(uint64(l)) + l
-		}
+		l = len(sv)
+		sz += csproto.SizeOfTagKey(4) + csproto.SizeOfVarint(uint64(l)) + l
 	}
 	// Embedded (message,optional)
 	if m.Embedded != nil {
@@ -747,9 +746,8 @@ func (m *RepeatAllTheThings) Size() int {
 	sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(m.ID))
 	// TheStrings (string,repeated)
 	for _, sv := range m.TheStrings {
-		if l = len(sv); l > 0 {
-			sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
-		}
+		l = len(sv)
+		sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
 	}
 	// TheBools (bool,repeated,packed)
 	if l = len(m.TheBools); l > 0 {
