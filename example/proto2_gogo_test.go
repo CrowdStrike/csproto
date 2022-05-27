@@ -12,37 +12,31 @@ import (
 )
 
 func TestProto2GogoMessage(t *testing.T) {
-	msg := createTestProto2GogoMessage()
-	t.Run("gogo_marshal/csproto_unmarshal", func(t *testing.T) {
-		data, err := proto.Marshal(msg)
-		if err != nil {
-			t.Errorf("Error marshaling data using gogo/protobuf: %v", err)
-			t.FailNow()
-		}
+	msgs := []*gogo.BaseEvent{
+		createTestProto2GogoAllOptionalMessage(),
+		createTestProto2GogoMessage(),
+		createTestProto2GogoEmptyExtensionMessage(),
+	}
+	wrap := func(msg *gogo.BaseEvent) func(t *testing.T) {
+		return func(t *testing.T) {
+			data, err := proto.Marshal(msg)
+			if err != nil {
+				t.Errorf("Error marshaling data using gogo/protobuf: %v", err)
+				t.FailNow()
+			}
 
-		var msg2 gogo.BaseEvent
-		err = csproto.Unmarshal(data, &msg2)
-		if err != nil {
-			t.Errorf("Expected no error, got %v", err)
-		} else if !proto.Equal(msg, &msg2) {
-			t.Errorf("Mismatched data after unmarshal\n\tExpected: %s\n\t     Got: %s\n", msg.String(), msg2.String())
+			var msg2 gogo.BaseEvent
+			err = csproto.Unmarshal(data, &msg2)
+			if err != nil {
+				t.Errorf("Expected no error, got %v", err)
+			} else if !proto.Equal(msg, &msg2) {
+				t.Errorf("Mismatched data after unmarshal\n\tExpected: %s\n\t     Got: %s\n", msg.String(), msg2.String())
+			}
 		}
-	})
-	t.Run("csproto_marshal/gogo_unmarshal", func(t *testing.T) {
-		data, err := csproto.Marshal(msg)
-		if err != nil {
-			t.Errorf("Error marshaling data using csproto: %v", err)
-			t.FailNow()
-		}
-
-		var msg2 gogo.BaseEvent
-		err = proto.Unmarshal(data, &msg2)
-		if err != nil {
-			t.Errorf("Expected no error, got %v", err)
-		} else if !proto.Equal(msg, &msg2) {
-			t.Errorf("Mismatched data after unmarshal\n\tExpected: %s\n\t     Got: %s\n", msg.String(), msg2.String())
-		}
-	})
+	}
+	for _, msg := range msgs {
+		t.Run("gogo_marshal/csproto_unmarshal", wrap(msg))
+	}
 }
 
 func TestMarshalFailsOnMissingRequiredFieldForGogoMessage(t *testing.T) {
@@ -91,5 +85,39 @@ func createTestProto2GogoMessage() *gogo.BaseEvent {
 		},
 	}
 	_ = proto.SetExtension(&baseEvent, gogo.E_TestEvent_EventExt, &testEvent)
+	return &baseEvent
+}
+
+func createTestProto2GogoAllOptionalMessage() *gogo.BaseEvent {
+	now := uint64(time.Now().UTC().Unix())
+	et := gogo.EventType_EVENT_TYPE_ONE
+	baseEvent := gogo.BaseEvent{
+		EventID:   proto.String("test-event"),
+		SourceID:  proto.String("test-source"),
+		Timestamp: proto.Uint64(now),
+		EventType: &et,
+		Data:      []byte{},
+	}
+	testEvent := gogo.AllOptionalFields{}
+	_ = proto.SetExtension(&baseEvent, gogo.E_AllOptionalFields_EventExt, &testEvent)
+	return &baseEvent
+}
+
+func createTestProto2GogoEmptyExtensionMessage() *gogo.BaseEvent {
+	now := uint64(time.Now().UTC().Unix())
+	et := gogo.EventType_EVENT_TYPE_ONE
+	baseEvent := gogo.BaseEvent{
+		EventID:   proto.String("test-event"),
+		SourceID:  proto.String("test-source"),
+		Timestamp: proto.Uint64(now),
+		EventType: &et,
+		Data:      []byte{},
+	}
+	testEvent := gogo.AllOptionalFields{
+		Field1: proto.String("test"),
+	}
+	emptyEventExt := gogo.EmptyExtension{}
+	_ = proto.SetExtension(&testEvent, gogo.E_EmptyExtension_EventExt, &emptyEventExt)
+	_ = proto.SetExtension(&baseEvent, gogo.E_AllOptionalFields_EventExt, &testEvent)
 	return &baseEvent
 }
