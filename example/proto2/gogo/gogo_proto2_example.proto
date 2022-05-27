@@ -93,3 +93,20 @@ message RepeatAllTheThings {
     repeated bytes theBytes = 17;
     repeated EmbeddedEvent theMessages = 18;
 }
+
+message AllOptionalFields {
+    extensions 100 to max;
+    extend BaseEvent {
+        optional AllOptionalFields eventExt = 101;
+    }
+    optional string field1 = 1;
+    optional uint64 field2 = 2;
+}
+
+message EmptyExtension {
+    extend AllOptionalFields {
+        optional EmptyExtension eventExt = 101;
+    }
+}
+
+

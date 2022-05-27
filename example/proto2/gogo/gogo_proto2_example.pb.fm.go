@@ -48,6 +48,12 @@ func (m *BaseEvent) Size() int {
 		sz += csproto.SizeOfTagKey(100) + csproto.SizeOfVarint(uint64(l)) + l
 	}
 
+	// extension field - eventExt (message,optional)
+	if extVal, _ := csproto.GetExtension(m, E_AllOptionalFields_EventExt); extVal != nil {
+		l = csproto.Size(extVal)
+		sz += csproto.SizeOfTagKey(101) + csproto.SizeOfVarint(uint64(l)) + l
+	}
+
 	return sz
 }
 
@@ -100,6 +106,13 @@ func (m *BaseEvent) MarshalTo(dest []byte) error {
 	if extVal, _ = csproto.GetExtension(m, E_TestEvent_EventExt); extVal != nil {
 		if err = enc.EncodeNested(100, extVal); err != nil {
 			return fmt.Errorf("unable to encode message data for extension field 'eventExt' (tag=100): %w", err)
+		}
+	}
+
+	// extension field - eventExt (message,optional)
+	if extVal, _ = csproto.GetExtension(m, E_AllOptionalFields_EventExt); extVal != nil {
+		if err = enc.EncodeNested(101, extVal); err != nil {
+			return fmt.Errorf("unable to encode message data for extension field 'eventExt' (tag=101): %w", err)
 		}
 	}
 
@@ -177,6 +190,16 @@ func (m *BaseEvent) Unmarshal(p []byte) error {
 			} else {
 				if err = csproto.SetExtension(m, E_TestEvent_EventExt, &mm_eventExt); err != nil {
 					return fmt.Errorf("unable to set extension field 'eventExt' (tag=100): %w", err)
+				}
+			}
+
+		case 101: // eventExt (extension,message)
+			var mm_eventExt AllOptionalFields
+			if err := dec.DecodeNested(&mm_eventExt); err != nil {
+				return fmt.Errorf("unable to decode message field 'eventExt' (tag=101): %w", err)
+			} else {
+				if err = csproto.SetExtension(m, E_AllOptionalFields_EventExt, &mm_eventExt); err != nil {
+					return fmt.Errorf("unable to set extension field 'eventExt' (tag=101): %w", err)
 				}
 			}
 		default:
@@ -525,9 +548,8 @@ func (m *EmbeddedEvent) Size() int {
 	}
 	// RandomThings (bytes,repeated)
 	for _, bv := range m.RandomThings {
-		if l = len(bv); l > 0 {
-			sz += csproto.SizeOfTagKey(4) + csproto.SizeOfVarint(uint64(l)) + l
-		}
+		l = len(bv)
+		sz += csproto.SizeOfTagKey(4) + csproto.SizeOfVarint(uint64(l)) + l
 	}
 	return sz
 }
@@ -1163,9 +1185,8 @@ func (m *RepeatAllTheThings) Size() int {
 	}
 	// TheBytes (bytes,repeated)
 	for _, bv := range m.TheBytes {
-		if l = len(bv); l > 0 {
-			sz += csproto.SizeOfTagKey(17) + csproto.SizeOfVarint(uint64(l)) + l
-		}
+		l = len(bv)
+		sz += csproto.SizeOfTagKey(17) + csproto.SizeOfVarint(uint64(l)) + l
 	}
 	// TheMessages (message,repeated)
 	for _, val := range m.TheMessages {
@@ -1591,6 +1612,196 @@ func (m *RepeatAllTheThings) csprotoCheckRequiredFields() error {
 			sb.WriteString(s)
 		}
 		return fmt.Errorf(sb.String())
+	}
+	return nil
+}
+
+//------------------------------------------------------------------------------
+// Custom Protobuf size/marshal/unmarshal code for AllOptionalFields
+
+// Size calculates and returns the size, in bytes, required to hold the contents of m using the Protobuf
+// binary encoding.
+func (m *AllOptionalFields) Size() int {
+	if m == nil {
+		return 0
+	}
+	var sz, l int
+	_ = l // avoid unused variable
+
+	// Field1 (string,optional)
+	if m.Field1 != nil {
+		l = len(*m.Field1)
+		sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(l)) + l
+	}
+	// Field2 (uint64,optional)
+	if m.Field2 != nil {
+		sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(*m.Field2))
+	}
+	// extension field - eventExt (message,optional)
+	if extVal, _ := csproto.GetExtension(m, E_EmptyExtension_EventExt); extVal != nil {
+		l = csproto.Size(extVal)
+		sz += csproto.SizeOfTagKey(101) + csproto.SizeOfVarint(uint64(l)) + l
+	}
+
+	return sz
+}
+
+// Marshal converts the contents of m to the Protobuf binary encoding and returns the result or an error.
+func (m *AllOptionalFields) Marshal() ([]byte, error) {
+	siz := m.Size()
+	buf := make([]byte, siz)
+	err := m.MarshalTo(buf)
+	return buf, err
+}
+
+// MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
+func (m *AllOptionalFields) MarshalTo(dest []byte) error {
+	var (
+		enc    = csproto.NewEncoder(dest)
+		buf    []byte
+		err    error
+		extVal interface{}
+	)
+	// ensure no unused variables
+	_ = enc
+	_ = buf
+	_ = err
+	_ = extVal
+
+	// Field1 (1,string,optional)
+	if m.Field1 != nil {
+		enc.EncodeString(1, *m.Field1)
+	}
+	// Field2 (2,uint64,optional)
+	if m.Field2 != nil {
+		enc.EncodeUInt64(2, *m.Field2)
+	}
+
+	// extension field - eventExt (message,optional)
+	if extVal, _ = csproto.GetExtension(m, E_EmptyExtension_EventExt); extVal != nil {
+		if err = enc.EncodeNested(101, extVal); err != nil {
+			return fmt.Errorf("unable to encode message data for extension field 'eventExt' (tag=101): %w", err)
+		}
+	}
+
+	return nil
+}
+
+// Unmarshal decodes a binary encoded Protobuf message from p and populates m with the result.
+func (m *AllOptionalFields) Unmarshal(p []byte) error {
+	if len(p) == 0 {
+		return fmt.Errorf("cannot unmarshal from an empty buffer")
+	}
+	// clear any existing data
+	m.Reset()
+	dec := csproto.NewDecoder(p)
+	for dec.More() {
+		tag, wt, err := dec.DecodeTag()
+		if err != nil {
+			return err
+		}
+		switch tag {
+		case 1: // Field1 (string,optional)
+			if wt != csproto.WireTypeLengthDelimited {
+				return fmt.Errorf("incorrect wire type %v for field 'field1' (tag=1), expected 2 (length-delimited)", wt)
+			}
+			if s, err := dec.DecodeString(); err != nil {
+				return fmt.Errorf("unable to decode string value for field 'field1' (tag=1): %w", err)
+			} else {
+				m.Field1 = csproto.String(s)
+			}
+
+		case 2: // Field2 (uint64,optional)
+			if wt != csproto.WireTypeVarint {
+				return fmt.Errorf("incorrect wire type %v for tag field 'field2' (tag=2), expected 0 (varint)", wt)
+			}
+			if v, err := dec.DecodeUInt64(); err != nil {
+				return fmt.Errorf("unable to decode uint64 value for field 'field2' (tag=2): %w", err)
+			} else {
+				m.Field2 = csproto.Uint64(v)
+			}
+
+		case 101: // eventExt (extension,message)
+			var mm_eventExt EmptyExtension
+			if err := dec.DecodeNested(&mm_eventExt); err != nil {
+				return fmt.Errorf("unable to decode message field 'eventExt' (tag=101): %w", err)
+			} else {
+				if err = csproto.SetExtension(m, E_EmptyExtension_EventExt, &mm_eventExt); err != nil {
+					return fmt.Errorf("unable to set extension field 'eventExt' (tag=101): %w", err)
+				}
+			}
+		default:
+			if skipped, err := dec.Skip(tag, wt); err != nil {
+				return fmt.Errorf("invalid operation skipping tag %v: %w", tag, err)
+			} else {
+				m.XXX_unrecognized = append(m.XXX_unrecognized, skipped...)
+			}
+		}
+	}
+	return nil
+}
+
+//------------------------------------------------------------------------------
+// Custom Protobuf size/marshal/unmarshal code for EmptyExtension
+
+// Size calculates and returns the size, in bytes, required to hold the contents of m using the Protobuf
+// binary encoding.
+func (m *EmptyExtension) Size() int {
+	if m == nil {
+		return 0
+	}
+	var sz, l int
+	_ = l // avoid unused variable
+
+	return sz
+}
+
+// Marshal converts the contents of m to the Protobuf binary encoding and returns the result or an error.
+func (m *EmptyExtension) Marshal() ([]byte, error) {
+	siz := m.Size()
+	buf := make([]byte, siz)
+	err := m.MarshalTo(buf)
+	return buf, err
+}
+
+// MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
+func (m *EmptyExtension) MarshalTo(dest []byte) error {
+	var (
+		enc    = csproto.NewEncoder(dest)
+		buf    []byte
+		err    error
+		extVal interface{}
+	)
+	// ensure no unused variables
+	_ = enc
+	_ = buf
+	_ = err
+	_ = extVal
+
+	return nil
+}
+
+// Unmarshal decodes a binary encoded Protobuf message from p and populates m with the result.
+func (m *EmptyExtension) Unmarshal(p []byte) error {
+	if len(p) == 0 {
+		return fmt.Errorf("cannot unmarshal from an empty buffer")
+	}
+	// clear any existing data
+	m.Reset()
+	dec := csproto.NewDecoder(p)
+	for dec.More() {
+		tag, wt, err := dec.DecodeTag()
+		if err != nil {
+			return err
+		}
+		switch tag {
+		default:
+			if skipped, err := dec.Skip(tag, wt); err != nil {
+				return fmt.Errorf("invalid operation skipping tag %v: %w", tag, err)
+			} else {
+				m.XXX_unrecognized = append(m.XXX_unrecognized, skipped...)
+			}
+		}
 	}
 	return nil
 }

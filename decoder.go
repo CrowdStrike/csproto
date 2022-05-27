@@ -542,6 +542,10 @@ func (d *Decoder) DecodeNested(m interface{}) error {
 	if n == 0 {
 		return ErrInvalidVarintData
 	}
+	if l == 0 {
+		d.offset += n
+		return nil
+	}
 	switch tv := m.(type) {
 	case Unmarshaler:
 		if err := tv.Unmarshal(d.p[d.offset+n : d.offset+n+int(l)]); err != nil {
