@@ -5,6 +5,7 @@ package gogo
 
 import (
 	"fmt"
+	"sync/atomic"
 	"github.com/CrowdStrike/csproto"
 )
 
@@ -14,53 +15,93 @@ import (
 // Size calculates and returns the size, in bytes, required to hold the contents of m using the Protobuf
 // binary encoding.
 func (m *AllTheThings) Size() int {
+	// nil message is always 0 bytes
 	if m == nil {
 		return 0
 	}
+	// return cached size, if present
+	if csz := int(atomic.LoadInt32(&m.XXX_sizecache)); csz > 0 {
+		return csz
+	}
+	// calculate and cache
 	var sz, l int
 	_ = l // avoid unused variable
 
 	// ID (int32,optional)
-	sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(m.ID))
+	if m.ID != 0 {
+		sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(m.ID))
+	}
 	// TheString (string,optional)
-	l = len(m.TheString)
-	sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
+	if l = len(m.TheString); l > 0 {
+		sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
+	}
 	// TheBool (bool,optional)
-	sz += csproto.SizeOfTagKey(3) + 1
+	if m.TheBool {
+		sz += csproto.SizeOfTagKey(3) + 1
+	}
 	// TheInt32 (int32,optional)
-	sz += csproto.SizeOfTagKey(4) + csproto.SizeOfVarint(uint64(m.TheInt32))
+	if m.TheInt32 != 0 {
+		sz += csproto.SizeOfTagKey(4) + csproto.SizeOfVarint(uint64(m.TheInt32))
+	}
 	// TheInt64 (int64,optional)
-	sz += csproto.SizeOfTagKey(5) + csproto.SizeOfVarint(uint64(m.TheInt64))
+	if m.TheInt64 != 0 {
+		sz += csproto.SizeOfTagKey(5) + csproto.SizeOfVarint(uint64(m.TheInt64))
+	}
 	// TheUInt32 (uint32,optional)
-	sz += csproto.SizeOfTagKey(6) + csproto.SizeOfVarint(uint64(m.TheUInt32))
+	if m.TheUInt32 != 0 {
+		sz += csproto.SizeOfTagKey(6) + csproto.SizeOfVarint(uint64(m.TheUInt32))
+	}
 	// TheUInt64 (uint64,optional)
-	sz += csproto.SizeOfTagKey(7) + csproto.SizeOfVarint(uint64(m.TheUInt64))
+	if m.TheUInt64 != 0 {
+		sz += csproto.SizeOfTagKey(7) + csproto.SizeOfVarint(uint64(m.TheUInt64))
+	}
 	// TheSInt32 (sint32,optional)
-	sz += csproto.SizeOfTagKey(8) + csproto.SizeOfZigZag(uint64(m.TheSInt32))
+	if m.TheSInt32 != 0 {
+		sz += csproto.SizeOfTagKey(8) + csproto.SizeOfZigZag(uint64(m.TheSInt32))
+	}
 	// TheSInt64 (sint64,optional)
-	sz += csproto.SizeOfTagKey(9) + csproto.SizeOfZigZag(uint64(m.TheSInt64))
+	if m.TheSInt64 != 0 {
+		sz += csproto.SizeOfTagKey(9) + csproto.SizeOfZigZag(uint64(m.TheSInt64))
+	}
 	// TheFixed32 (fixed32,optional)
-	sz += csproto.SizeOfTagKey(10) + 4
+	if m.TheFixed32 != 0 {
+		sz += csproto.SizeOfTagKey(10) + 4
+	}
 	// TheFixed64 (fixed64,optional)
-	sz += csproto.SizeOfTagKey(11) + 8
+	if m.TheFixed64 != 0 {
+		sz += csproto.SizeOfTagKey(11) + 8
+	}
 	// TheSFixed32 (sfixed32,optional)
-	sz += csproto.SizeOfTagKey(12) + 4
+	if m.TheSFixed32 != 0 {
+		sz += csproto.SizeOfTagKey(12) + 4
+	}
 	// TheSFixed64 (sfixed64,optional)
-	sz += csproto.SizeOfTagKey(13) + 8
+	if m.TheSFixed64 != 0 {
+		sz += csproto.SizeOfTagKey(13) + 8
+	}
 	// TheFloat (float,optional)
-	sz += csproto.SizeOfTagKey(14) + 4
+	if m.TheFloat != 0 {
+		sz += csproto.SizeOfTagKey(14) + 4
+	}
 	// TheDouble (double,optional)
-	sz += csproto.SizeOfTagKey(15) + 8
+	if m.TheDouble != 0 {
+		sz += csproto.SizeOfTagKey(15) + 8
+	}
 	// TheEventType (enum,optional)
-	sz += csproto.SizeOfTagKey(16) + csproto.SizeOfVarint(uint64(m.TheEventType))
+	if m.TheEventType != 0 {
+		sz += csproto.SizeOfTagKey(16) + csproto.SizeOfVarint(uint64(m.TheEventType))
+	}
 	// TheBytes (bytes,optional)
-	l = len(m.TheBytes)
-	sz += csproto.SizeOfTagKey(17) + csproto.SizeOfVarint(uint64(l)) + l
+	if l = len(m.TheBytes); l > 0 {
+		sz += csproto.SizeOfTagKey(17) + csproto.SizeOfVarint(uint64(l)) + l
+	}
 	// TheMessage (message,optional)
 	if m.TheMessage != nil {
 		l = csproto.Size(m.TheMessage)
 		sz += csproto.SizeOfTagKey(18) + csproto.SizeOfVarint(uint64(l)) + l
 	}
+	// cache the size so it can be re-used in Marshal()/MarshalTo()
+	atomic.StoreInt32(&m.XXX_sizecache, int32(sz))
 	return sz
 }
 
@@ -87,39 +128,69 @@ func (m *AllTheThings) MarshalTo(dest []byte) error {
 	_ = extVal
 
 	// ID (1,int32,optional)
-	enc.EncodeInt32(1, m.ID)
+	if m.ID != 0 {
+		enc.EncodeInt32(1, m.ID)
+	}
 	// TheString (2,string,optional)
-	enc.EncodeString(2, m.TheString)
+	if len(m.TheString) > 0 {
+		enc.EncodeString(2, m.TheString)
+	}
 	// TheBool (3,bool,optional)
-	enc.EncodeBool(3, m.TheBool)
+	if m.TheBool {
+		enc.EncodeBool(3, m.TheBool)
+	}
 	// TheInt32 (4,int32,optional)
-	enc.EncodeInt32(4, m.TheInt32)
+	if m.TheInt32 != 0 {
+		enc.EncodeInt32(4, m.TheInt32)
+	}
 	// TheInt64 (5,int64,optional)
-	enc.EncodeInt64(5, m.TheInt64)
+	if m.TheInt64 != 0 {
+		enc.EncodeInt64(5, m.TheInt64)
+	}
 	// TheUInt32 (6,uint32,optional)
-	enc.EncodeUInt32(6, m.TheUInt32)
+	if m.TheUInt32 != 0 {
+		enc.EncodeUInt32(6, m.TheUInt32)
+	}
 	// TheUInt64 (7,uint64,optional)
-	enc.EncodeUInt64(7, m.TheUInt64)
+	if m.TheUInt64 != 0 {
+		enc.EncodeUInt64(7, m.TheUInt64)
+	}
 	// TheSInt32 (8,sint32,optional)
-	enc.EncodeSInt32(8, m.TheSInt32)
+	if m.TheSInt32 != 0 {
+		enc.EncodeSInt32(8, m.TheSInt32)
+	}
 	// TheSInt64 (9,sint64,optional)
-	enc.EncodeSInt64(9, m.TheSInt64)
+	if m.TheSInt64 != 0 {
+		enc.EncodeSInt64(9, m.TheSInt64)
+	}
 	// TheFixed32 (10,fixed32,optional)
-	enc.EncodeFixed32(10, m.TheFixed32)
+	if m.TheFixed32 != 0 {
+		enc.EncodeFixed32(10, m.TheFixed32)
+	}
 	// TheFixed64 (11,fixed64,optional)
-	enc.EncodeFixed64(11, m.TheFixed64)
+	if m.TheFixed64 != 0 {
+		enc.EncodeFixed64(11, m.TheFixed64)
+	}
 	// TheSFixed32 (12,sfixed32,optional)
 	enc.EncodeFixed32(12, uint32(m.TheSFixed32))
 	// TheSFixed64 (13,sfixed64,optional)
 	enc.EncodeFixed64(13, uint64(m.TheSFixed64))
 	// TheFloat (14,float,optional)
-	enc.EncodeFloat32(14, m.TheFloat)
+	if m.TheFloat != 0 {
+		enc.EncodeFloat32(14, m.TheFloat)
+	}
 	// TheDouble (15,double,optional)
-	enc.EncodeFloat64(15, m.TheDouble)
+	if m.TheDouble != 0 {
+		enc.EncodeFloat64(15, m.TheDouble)
+	}
 	// TheEventType (16,enum,optional)
-	enc.EncodeInt32(16, int32(m.TheEventType))
+	if m.TheEventType != 0 {
+		enc.EncodeInt32(16, int32(m.TheEventType))
+	}
 	// TheBytes (17,bytes,optional)
-	enc.EncodeBytes(17, m.TheBytes)
+	if len(m.TheBytes) > 0 {
+		enc.EncodeBytes(17, m.TheBytes)
+	}
 	// TheMessage (18,message,optional)
 	if m.TheMessage != nil {
 		if err = enc.EncodeNested(18, m.TheMessage); err != nil {
