@@ -432,12 +432,18 @@ goos: darwin
 goarch: amd64
 pkg: github.com/CrowdStrike/csproto/example/proto2
 cpu: Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz
-BenchmarkEncodeGogo-12                   1357027               858.9 ns/op           352 B/op          2 allocs/op
-BenchmarkCustomEncodeGogo-12             2116568               570.4 ns/op           176 B/op          1 allocs/op
-BenchmarkEncodeGoogleV1-12               1267740               934.6 ns/op           176 B/op          1 allocs/op
-BenchmarkCustomEncodeGoogleV1-12         1576399               762.9 ns/op           176 B/op          1 allocs/op
-BenchmarkEncodeGoogleV2-12               1308109               913.9 ns/op           176 B/op          1 allocs/op
-BenchmarkCustomEncodeGoogleV2-12         1641061               738.2 ns/op           176 B/op          1 allocs/op
+BenchmarkEncodeGogo-12                   1932699               597.6 ns/op           352 B/op          2 allocs/op
+BenchmarkCustomEncodeGogo-12             2458599               482.3 ns/op           176 B/op          1 allocs/op
+BenchmarkDecodeGogo-12                    622585              1887 ns/op            1376 B/op         34 allocs/op
+BenchmarkCustomDecodeGogo-12              798523              1390 ns/op            1144 B/op         27 allocs/op
+BenchmarkEncodeGoogleV1-12               1298185               925.5 ns/op           176 B/op          1 allocs/op
+BenchmarkCustomEncodeGoogleV1-12         2701975               432.4 ns/op           176 B/op          1 allocs/op
+BenchmarkDecodeGoogleV1-12                616106              1662 ns/op            1176 B/op         28 allocs/op
+BenchmarkCustomDecodeGoogleV1-12          776244              1471 ns/op            1160 B/op         26 allocs/op
+BenchmarkEncodeGoogleV2-12               1331971               911.3 ns/op           176 B/op          1 allocs/op
+BenchmarkCustomEncodeGoogleV2-12         2817786               426.1 ns/op           176 B/op          1 allocs/op
+BenchmarkDecodeGoogleV2-12                671048              1739 ns/op            1176 B/op         28 allocs/op
+BenchmarkCustomDecodeGoogleV2-12          755186              1530 ns/op            1160 B/op         26 allocs/op
 PASS
 ok      github.com/CrowdStrike/csproto/example/proto2   12.247s
 
@@ -445,27 +451,33 @@ goos: darwin
 goarch: amd64
 pkg: github.com/CrowdStrike/csproto/example/proto3
 cpu: Intel(R) Core(TM) i7-9750H CPU @ 2.60GHz
-BenchmarkEncodeGogo-12                   3349590               352.8 ns/op           160 B/op          2 allocs/op
-BenchmarkCustomEncodeGogo-12             5543668               221.5 ns/op            80 B/op          1 allocs/op
-BenchmarkEncodeGoogleV1-12               3090246               389.5 ns/op            80 B/op          1 allocs/op
-BenchmarkCustomEncodeGoogleV1-12         5504506               215.4 ns/op            80 B/op          1 allocs/op
-BenchmarkEncodeGoogleV2-12               3222398               367.3 ns/op            80 B/op          1 allocs/op
-BenchmarkCustomEncodeGoogleV2-12         5384648               218.6 ns/op            80 B/op          1 allocs/op
+BenchmarkEncodeGogo-12                   3479755               341.0 ns/op           208 B/op          3 allocs/op
+BenchmarkCustomEncodeGogo-12             4824855               248.1 ns/op           112 B/op          2 allocs/op
+BenchmarkDecodeGogo-12                   1328734               909.9 ns/op           424 B/op         16 allocs/op
+BenchmarkCustomDecodeGogo-12             1604020               753.5 ns/op           408 B/op         15 allocs/op
+BenchmarkEncodeGoogleV1-12               2599558               450.6 ns/op            96 B/op          1 allocs/op
+BenchmarkCustomEncodeGoogleV1-12         3452514               348.4 ns/op           112 B/op          2 allocs/op
+BenchmarkDecodeGoogleV1-12                962179              1076 ns/op             440 B/op         16 allocs/op
+BenchmarkCustomDecodeGoogleV1-12         1337054               904.2 ns/op           424 B/op         15 allocs/op
+BenchmarkEncodeGoogleV2-12               2741904               433.4 ns/op            96 B/op          1 allocs/op
+BenchmarkCustomEncodeGoogleV2-12         3337425               356.1 ns/op           112 B/op          2 allocs/op
+BenchmarkDecodeGoogleV2-12               1000000              1077 ns/op             440 B/op         16 allocs/op
+BenchmarkCustomDecodeGoogleV2-12         1327365               913.4 ns/op           424 B/op         15 allocs/op
 PASS
 ok      github.com/CrowdStrike/csproto/example/proto3   9.186s
 ```
 
 As you can see in the table below, the optimized code is faster across the board.
 
-Cost      | proto2  | proto3
---------- | ------- | ------
-Gogo      | -33.6%  | -37.2%
-Google V1 | -18.4%  | -45.0%
-Google V2 | -19.2%  | -40.5%
+Cost      | proto2 (encode)  | proto3 (encode) | proto2 (decode) | proto3 (decode)
+--------- | ---------------- | --------------- | --------------- | ---------------
+Gogo      | -19.3%           | -27.2%          | -26.3%          | -17.2%
+Google V1 | -53.3%           | -22.7%          | -11.5%          | -16.0%
+Google V2 | -53.3%           | -17.8%          | -12.0%          | -15.2%
 
 ## gRPC
 
-To use with gRPC you will need to register csproto as the encoder.
+To use with gRPC you will need to register `csproto` as the encoder.
 **NOTE:** If messages do not implement `Marshaler` or `Unmarshaler` then an error will be returned.
 An example is below.
 

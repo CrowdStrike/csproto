@@ -6,6 +6,7 @@ package googlev2
 import (
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"github.com/CrowdStrike/csproto"
 )
 
@@ -15,9 +16,15 @@ import (
 // Size calculates and returns the size, in bytes, required to hold the contents of m using the Protobuf
 // binary encoding.
 func (m *BaseEvent) Size() int {
+	// nil message is always 0 bytes
 	if m == nil {
 		return 0
 	}
+	// return cached size, if present
+	if csz := int(atomic.LoadInt32(&m.sizeCache)); csz > 0 {
+		return csz
+	}
+	// calculate and cache
 	var sz, l int
 	_ = l // avoid unused variable
 
@@ -48,6 +55,8 @@ func (m *BaseEvent) Size() int {
 		sz += csproto.SizeOfTagKey(100) + csproto.SizeOfVarint(uint64(l)) + l
 	}
 
+	// cache the size so it can be re-used in Marshal()/MarshalTo()
+	atomic.StoreInt32(&m.sizeCache, int32(sz))
 	return sz
 }
 
@@ -233,9 +242,15 @@ func (m *BaseEvent) csprotoCheckRequiredFields() error {
 // Size calculates and returns the size, in bytes, required to hold the contents of m using the Protobuf
 // binary encoding.
 func (m *TestEvent) Size() int {
+	// nil message is always 0 bytes
 	if m == nil {
 		return 0
 	}
+	// return cached size, if present
+	if csz := int(atomic.LoadInt32(&m.sizeCache)); csz > 0 {
+		return csz
+	}
+	// calculate and cache
 	var sz, l int
 	_ = l // avoid unused variable
 
@@ -283,6 +298,8 @@ func (m *TestEvent) Size() int {
 		}
 	}
 
+	// cache the size so it can be re-used in Marshal()/MarshalTo()
+	atomic.StoreInt32(&m.sizeCache, int32(sz))
 	return sz
 }
 
@@ -504,9 +521,15 @@ func (m *TestEvent) csprotoCheckRequiredFields() error {
 // Size calculates and returns the size, in bytes, required to hold the contents of m using the Protobuf
 // binary encoding.
 func (m *EmbeddedEvent) Size() int {
+	// nil message is always 0 bytes
 	if m == nil {
 		return 0
 	}
+	// return cached size, if present
+	if csz := int(atomic.LoadInt32(&m.sizeCache)); csz > 0 {
+		return csz
+	}
+	// calculate and cache
 	var sz, l int
 	_ = l // avoid unused variable
 
@@ -525,10 +548,11 @@ func (m *EmbeddedEvent) Size() int {
 	}
 	// RandomThings (bytes,repeated)
 	for _, bv := range m.RandomThings {
-		if l = len(bv); l > 0 {
-			sz += csproto.SizeOfTagKey(4) + csproto.SizeOfVarint(uint64(l)) + l
-		}
+		l = len(bv)
+		sz += csproto.SizeOfTagKey(4) + csproto.SizeOfVarint(uint64(l)) + l
 	}
+	// cache the size so it can be re-used in Marshal()/MarshalTo()
+	atomic.StoreInt32(&m.sizeCache, int32(sz))
 	return sz
 }
 
@@ -680,9 +704,15 @@ func (m *EmbeddedEvent) csprotoCheckRequiredFields() error {
 // Size calculates and returns the size, in bytes, required to hold the contents of m using the Protobuf
 // binary encoding.
 func (m *AllTheThings) Size() int {
+	// nil message is always 0 bytes
 	if m == nil {
 		return 0
 	}
+	// return cached size, if present
+	if csz := int(atomic.LoadInt32(&m.sizeCache)); csz > 0 {
+		return csz
+	}
+	// calculate and cache
 	var sz, l int
 	_ = l // avoid unused variable
 
@@ -759,6 +789,8 @@ func (m *AllTheThings) Size() int {
 		l = csproto.Size(m.TheMessage)
 		sz += csproto.SizeOfTagKey(18) + csproto.SizeOfVarint(uint64(l)) + l
 	}
+	// cache the size so it can be re-used in Marshal()/MarshalTo()
+	atomic.StoreInt32(&m.sizeCache, int32(sz))
 	return sz
 }
 
@@ -1090,9 +1122,15 @@ func (m *AllTheThings) csprotoCheckRequiredFields() error {
 // Size calculates and returns the size, in bytes, required to hold the contents of m using the Protobuf
 // binary encoding.
 func (m *RepeatAllTheThings) Size() int {
+	// nil message is always 0 bytes
 	if m == nil {
 		return 0
 	}
+	// return cached size, if present
+	if csz := int(atomic.LoadInt32(&m.sizeCache)); csz > 0 {
+		return csz
+	}
+	// calculate and cache
 	var sz, l int
 	_ = l // avoid unused variable
 
@@ -1163,9 +1201,8 @@ func (m *RepeatAllTheThings) Size() int {
 	}
 	// TheBytes (bytes,repeated)
 	for _, bv := range m.TheBytes {
-		if l = len(bv); l > 0 {
-			sz += csproto.SizeOfTagKey(17) + csproto.SizeOfVarint(uint64(l)) + l
-		}
+		l = len(bv)
+		sz += csproto.SizeOfTagKey(17) + csproto.SizeOfVarint(uint64(l)) + l
 	}
 	// TheMessages (message,repeated)
 	for _, val := range m.TheMessages {
@@ -1173,6 +1210,8 @@ func (m *RepeatAllTheThings) Size() int {
 			sz += csproto.SizeOfTagKey(18) + csproto.SizeOfVarint(uint64(l)) + l
 		}
 	}
+	// cache the size so it can be re-used in Marshal()/MarshalTo()
+	atomic.StoreInt32(&m.sizeCache, int32(sz))
 	return sz
 }
 
@@ -1601,9 +1640,15 @@ func (m *RepeatAllTheThings) csprotoCheckRequiredFields() error {
 // Size calculates and returns the size, in bytes, required to hold the contents of m using the Protobuf
 // binary encoding.
 func (m *TestEvent_NestedMsg) Size() int {
+	// nil message is always 0 bytes
 	if m == nil {
 		return 0
 	}
+	// return cached size, if present
+	if csz := int(atomic.LoadInt32(&m.sizeCache)); csz > 0 {
+		return csz
+	}
+	// calculate and cache
 	var sz, l int
 	_ = l // avoid unused variable
 
@@ -1612,6 +1657,8 @@ func (m *TestEvent_NestedMsg) Size() int {
 		l = len(*m.Details)
 		sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(l)) + l
 	}
+	// cache the size so it can be re-used in Marshal()/MarshalTo()
+	atomic.StoreInt32(&m.sizeCache, int32(sz))
 	return sz
 }
 

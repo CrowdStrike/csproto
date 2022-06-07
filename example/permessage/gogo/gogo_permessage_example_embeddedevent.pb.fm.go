@@ -5,6 +5,7 @@ package gogo
 
 import (
 	"fmt"
+	"sync/atomic"
 	"github.com/CrowdStrike/csproto"
 )
 
@@ -14,17 +15,26 @@ import (
 // Size calculates and returns the size, in bytes, required to hold the contents of m using the Protobuf
 // binary encoding.
 func (m *EmbeddedEvent) Size() int {
+	// nil message is always 0 bytes
 	if m == nil {
 		return 0
 	}
+	// return cached size, if present
+	if csz := int(atomic.LoadInt32(&m.XXX_sizecache)); csz > 0 {
+		return csz
+	}
+	// calculate and cache
 	var sz, l int
 	_ = l // avoid unused variable
 
 	// ID (int32,optional)
-	sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(m.ID))
+	if m.ID != 0 {
+		sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(m.ID))
+	}
 	// Stuff (string,optional)
-	l = len(m.Stuff)
-	sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
+	if l = len(m.Stuff); l > 0 {
+		sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
+	}
 	// FavoriteNumbers (int32,repeated,packed)
 	if len(m.FavoriteNumbers) > 0 {
 		sz += csproto.SizeOfTagKey(3)
@@ -36,12 +46,15 @@ func (m *EmbeddedEvent) Size() int {
 	}
 	// RandomThings (bytes,repeated)
 	for _, bv := range m.RandomThings {
-		if l = len(bv); l > 0 {
-			sz += csproto.SizeOfTagKey(4) + csproto.SizeOfVarint(uint64(l)) + l
-		}
+		l = len(bv)
+		sz += csproto.SizeOfTagKey(4) + csproto.SizeOfVarint(uint64(l)) + l
 	}
 	// Size (int32,optional)
-	sz += csproto.SizeOfTagKey(5) + csproto.SizeOfVarint(uint64(m.Size_))
+	if m.Size_ != 0 {
+		sz += csproto.SizeOfTagKey(5) + csproto.SizeOfVarint(uint64(m.Size_))
+	}
+	// cache the size so it can be re-used in Marshal()/MarshalTo()
+	atomic.StoreInt32(&m.XXX_sizecache, int32(sz))
 	return sz
 }
 
@@ -68,9 +81,13 @@ func (m *EmbeddedEvent) MarshalTo(dest []byte) error {
 	_ = extVal
 
 	// ID (1,int32,optional)
-	enc.EncodeInt32(1, m.ID)
+	if m.ID != 0 {
+		enc.EncodeInt32(1, m.ID)
+	}
 	// Stuff (2,string,optional)
-	enc.EncodeString(2, m.Stuff)
+	if len(m.Stuff) > 0 {
+		enc.EncodeString(2, m.Stuff)
+	}
 	// FavoriteNumbers (3,int32,repeated,packed)
 	if len(m.FavoriteNumbers) > 0 {
 		enc.EncodePackedInt32(3, m.FavoriteNumbers)
@@ -80,7 +97,9 @@ func (m *EmbeddedEvent) MarshalTo(dest []byte) error {
 		enc.EncodeBytes(4, val)
 	}
 	// Size (5,int32,optional)
-	enc.EncodeInt32(5, m.Size_)
+	if m.Size_ != 0 {
+		enc.EncodeInt32(5, m.Size_)
+	}
 	return nil
 }
 
