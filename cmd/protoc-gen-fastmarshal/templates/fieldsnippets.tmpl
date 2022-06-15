@@ -7,8 +7,9 @@
         sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(l)) + l
     }
     {{- else -}}
-    l = len(m.{{ .GoName | getSafeFieldName }})
-    sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(l)) + l
+    if l = len(m.{{ .GoName | getSafeFieldName }}); l > 0 {
+        sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(l)) + l
+    }
     {{- end -}}
 {{- else -}}
     for _, sv := range m.{{ .GoName | getSafeFieldName }} {
@@ -20,8 +21,14 @@
 {{/* SizeOfBytes - calculate the encoded size of a bytes field */}}
 {{ define "SizeOfBytes" }}
 {{- if ne (.Desc.Cardinality | string) "repeated" -}}
+    {{- if eq (.Desc.Syntax | string) "proto2" -}}
     l = len(m.{{ .GoName | getSafeFieldName }})
     sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(l)) + l
+    {{- else -}}
+    if l = len(m.{{ .GoName | getSafeFieldName }}); l > 0 {
+        sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(l)) + l
+    }
+    {{- end -}}
 {{- else -}}
     for _, bv := range m.{{ .GoName | getSafeFieldName }} {
         l = len(bv)
@@ -37,7 +44,9 @@
         sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(*m.{{.GoName | getSafeFieldName}}))
     }
     {{- else -}}
-    sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(m.{{.GoName | getSafeFieldName}}))
+    if m.{{.GoName | getSafeFieldName}} != 0 {
+        sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(m.{{.GoName | getSafeFieldName}}))
+    }
     {{- end -}}
 {{- else if .Desc.IsPacked -}}
     if len(m.{{.GoName | getSafeFieldName}}) > 0 {
@@ -62,7 +71,9 @@
         sz += csproto.SizeOfTagKey({{.Desc.Number}}) + 1
     }
     {{- else -}}
-    sz += csproto.SizeOfTagKey({{.Desc.Number}}) + 1
+    if m.{{.GoName | getSafeFieldName}} {
+        sz += csproto.SizeOfTagKey({{.Desc.Number}}) + 1
+    }
     {{- end -}}
 {{- else if .Desc.IsPacked -}}
     if l = len(m.{{.GoName | getSafeFieldName}}); l > 0 {
@@ -82,7 +93,9 @@
         sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfZigZag(uint64(*m.{{.GoName | getSafeFieldName}}))
     }
     {{- else -}}
-    sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfZigZag(uint64(m.{{.GoName | getSafeFieldName}}))
+    if m.{{.GoName | getSafeFieldName}} != 0 {
+        sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfZigZag(uint64(m.{{.GoName | getSafeFieldName}}))
+    }
     {{- end -}}
 {{- else if .Desc.IsPacked -}}
     if len(m.{{.GoName | getSafeFieldName}}) > 0 {
@@ -107,7 +120,9 @@
         sz += csproto.SizeOfTagKey({{.Desc.Number}}) + {{if eq (.Desc.Kind | string) "fixed32" "sfixed32" "float"}}4{{else}}8{{end}}
     }
     {{- else -}}
-    sz += csproto.SizeOfTagKey({{.Desc.Number}}) + {{if eq (.Desc.Kind | string) "fixed32" "sfixed32" "float"}}4{{else}}8{{end}}
+    if m.{{.GoName | getSafeFieldName}} != 0 {
+        sz += csproto.SizeOfTagKey({{.Desc.Number}}) + {{if eq (.Desc.Kind | string) "fixed32" "sfixed32" "float"}}4{{else}}8{{end}}
+    }
     {{- end -}}
 {{- else if .Desc.IsPacked -}}
     if l = len(m.{{.GoName | getSafeFieldName}}); l > 0 {
@@ -306,7 +321,41 @@
     }
         {{- end -}}
     {{- else -}}
-    enc.{{$method}}({{.Desc.Number}}, m.{{.GoName | getSafeFieldName}})
+    if m.{{.GoName | getSafeFieldName }} != 0 {
+        enc.{{$method}}({{.Desc.Number}}, m.{{.GoName | getSafeFieldName}})
+    }
+    {{- end -}}
+{{- end -}}
+{{ end }}
+{{/* MarshalBool - ... */}}
+{{ define "MarshalBool" }}
+{{- $cardinality := (.Desc.Cardinality | string) -}}
+{{- if eq $cardinality "repeated" -}}
+    {{- if .Desc.IsPacked -}}
+    if len(m.{{.GoName | getSafeFieldName}}) > 0 {
+        enc.EncodePackedBool({{.Desc.Number}}, m.{{.GoName | getSafeFieldName}})
+    }
+    {{- else -}}
+    for _, val := range m.{{.GoName | getSafeFieldName}} {
+        enc.EncodeBool({{.Desc.Number}}, val)
+    }
+    {{- end -}}
+{{- else -}}
+    {{- if eq (.Desc.Syntax | string) "proto2" }}
+        {{- if eq $cardinality "required" -}}
+    if m.{{.GoName | getSafeFieldName}} == nil {
+        return fmt.Errorf("required field '{{.GoName | getSafeFieldName}}' has no value")
+    }
+    enc.EncodeBool({{.Desc.Number}}, *m.{{.GoName | getSafeFieldName}})
+        {{- else -}}
+    if m.{{.GoName | getSafeFieldName}} != nil {
+        enc.EncodeBool({{.Desc.Number}}, *m.{{.GoName | getSafeFieldName}})
+    }
+        {{- end -}}
+    {{- else -}}
+    if m.{{.GoName | getSafeFieldName}} {
+        enc.EncodeBool({{.Desc.Number}}, m.{{.GoName | getSafeFieldName}})
+    }
     {{- end -}}
 {{- end -}}
 {{ end }}
@@ -330,7 +379,9 @@
     }
         {{- end -}}
     {{- else -}}
-    enc.EncodeString({{.Desc.Number}}, m.{{.GoName | getSafeFieldName}})
+    if len(m.{{.GoName | getSafeFieldName }}) > 0 {
+        enc.EncodeString({{.Desc.Number}}, m.{{.GoName | getSafeFieldName}})
+    }
     {{- end -}}
 {{- end -}}
 {{ end }}
@@ -346,6 +397,10 @@
         return fmt.Errorf("required field '{{.GoName | getSafeFieldName}}' has no value")
     }
     enc.EncodeBytes({{.Desc.Number}}, m.{{.GoName | getSafeFieldName}})
+{{- else if eq (.Desc.Syntax | string) "proto3" -}}
+    if len(m.{{.GoName | getSafeFieldName}}) > 0 {
+        enc.EncodeBytes({{.Desc.Number}}, m.{{.GoName | getSafeFieldName}})
+    }
 {{- else -}}
     enc.EncodeBytes({{.Desc.Number}}, m.{{.GoName | getSafeFieldName}})
 {{- end -}}
@@ -421,7 +476,9 @@
     }
         {{- end -}}
     {{- else -}}
-    enc.EncodeInt32({{.Desc.Number}}, int32(m.{{.GoName | getSafeFieldName}}))
+    if m.{{.GoName | getSafeFieldName}} != 0 {
+        enc.EncodeInt32({{.Desc.Number}}, int32(m.{{.GoName | getSafeFieldName}}))
+    }
     {{- end -}}
 {{- end -}}
 {{ end }}
@@ -521,7 +578,8 @@
 {{ define "MarshalField" }}
 {{- with $field := . -}}
 {{- with $kind := ($field.Desc.Kind | string) -}}
-    {{- if eq $kind "bool" "int32" "int64" "uint32" "uint64" "sint32" "sint64" "fixed32" "float" "fixed64" "double" -}}{{template "MarshalNumber" $field}}{{- end -}}
+    {{- if eq $kind "int32" "int64" "uint32" "uint64" "sint32" "sint64" "fixed32" "float" "fixed64" "double" -}}{{template "MarshalNumber" $field}}{{- end -}}
+    {{- if eq $kind "bool" -}}{{template "MarshalBool" $field}}{{- end -}}
     {{- if eq $kind "enum" -}}{{template "MarshalEnum" $field}}{{- end -}}
     {{- if eq $kind "string" -}}{{template "MarshalString" $field}}{{- end -}}
     {{- if eq $kind "bytes" -}}{{template "MarshalBytes" $field}}{{- end -}}

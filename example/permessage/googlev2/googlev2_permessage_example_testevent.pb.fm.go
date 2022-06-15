@@ -5,6 +5,7 @@ package googlev2
 
 import (
 	"fmt"
+	"sync/atomic"
 	"github.com/CrowdStrike/csproto"
 )
 
@@ -14,20 +15,30 @@ import (
 // Size calculates and returns the size, in bytes, required to hold the contents of m using the Protobuf
 // binary encoding.
 func (m *TestEvent) Size() int {
+	// nil message is always 0 bytes
 	if m == nil {
 		return 0
 	}
+	// return cached size, if present
+	if csz := int(atomic.LoadInt32(&m.sizeCache)); csz > 0 {
+		return csz
+	}
+	// calculate and cache
 	var sz, l int
 	_ = l // avoid unused variable
 
 	// Name (string,optional)
-	l = len(m.Name)
-	sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(l)) + l
+	if l = len(m.Name); l > 0 {
+		sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(l)) + l
+	}
 	// Info (string,optional)
-	l = len(m.Info)
-	sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
+	if l = len(m.Info); l > 0 {
+		sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
+	}
 	// IsAwesome (bool,optional)
-	sz += csproto.SizeOfTagKey(3) + 1
+	if m.IsAwesome {
+		sz += csproto.SizeOfTagKey(3) + 1
+	}
 	// Labels (string,repeated)
 	for _, sv := range m.Labels {
 		l = len(sv)
@@ -58,6 +69,8 @@ func (m *TestEvent) Size() int {
 		}
 	}
 
+	// cache the size so it can be re-used in Marshal()/MarshalTo()
+	atomic.StoreInt32(&m.sizeCache, int32(sz))
 	return sz
 }
 
@@ -84,11 +97,17 @@ func (m *TestEvent) MarshalTo(dest []byte) error {
 	_ = extVal
 
 	// Name (1,string,optional)
-	enc.EncodeString(1, m.Name)
+	if len(m.Name) > 0 {
+		enc.EncodeString(1, m.Name)
+	}
 	// Info (2,string,optional)
-	enc.EncodeString(2, m.Info)
+	if len(m.Info) > 0 {
+		enc.EncodeString(2, m.Info)
+	}
 	// IsAwesome (3,bool,optional)
-	enc.EncodeBool(3, m.IsAwesome)
+	if m.IsAwesome {
+		enc.EncodeBool(3, m.IsAwesome)
+	}
 	// Labels (4,string,repeated)
 	for _, val := range m.Labels {
 		enc.EncodeString(4, val)

@@ -10,6 +10,7 @@ package {{ .ProtoDesc.GoPackageName }}
 import (
     "fmt"{{if and (eq $protoSyntax "proto2") (hasRequiredFields nil)}}
     "strings"{{end}}
+    "sync/atomic"
     "github.com/CrowdStrike/csproto"
     {{range (.Message | getAdditionalImports)}}{{.}}
     {{end}}
@@ -21,9 +22,19 @@ import (
 // Size calculates and returns the size, in bytes, required to hold the contents of m using the Protobuf
 // binary encoding.
 func (m *{{ .Message.GoIdent.GoName }}) Size() int {
+    // nil message is always 0 bytes
     if m == nil {
         return 0
     }
+    // return cached size, if present
+{{ if eq $protoAPIVersion "v1" -}}
+    if csz := int(atomic.LoadInt32(&m.XXX_sizecache)); csz > 0 {
+{{- else -}}
+    if csz := int(atomic.LoadInt32(&m.sizeCache)); csz > 0 {
+{{- end }}
+        return csz
+    }
+    // calculate and cache
     var sz, l int
     _ = l // avoid unused variable
 {{ range .Message.Fields }}
@@ -40,6 +51,12 @@ func (m *{{ .Message.GoIdent.GoName }}) Size() int {
     {{- template "SizeOfExtension" . }}
 {{ end }}
 {{- end -}}
+    // cache the size so it can be re-used in Marshal()/MarshalTo()
+{{ if eq $protoAPIVersion "v1" -}}
+    atomic.StoreInt32(&m.XXX_sizecache, int32(sz))
+{{- else -}}
+    atomic.StoreInt32(&m.sizeCache, int32(sz))
+{{- end }}
     return sz
 }
 
