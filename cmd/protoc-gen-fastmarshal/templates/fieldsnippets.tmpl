@@ -1280,7 +1280,7 @@
             if wt != csproto.WireTypeFixed{{$bitSize}} {
                 return fmt.Errorf("incorrect wire type %v for tag field '{{.Desc.Name}}' (tag={{.Desc.Number}}), expected {{if eq $bitSize "32"}}5 (32-bit){{else}}1 (64-bit){{end}}", wt)
             }
-            if v, err := dec.DecodeFixed{{$bitSize}}(); err != nil {
+            if v, err := dec.DecodeFloat{{$bitSize}}(); err != nil {
                 return fmt.Errorf("unable to decode {{$kind}} value for field '{{.Desc.Name}}' (tag={{.Desc.Number}}): %w", err)
             } else {
                 ov.{{.GoName | getSafeFieldName}}= v
