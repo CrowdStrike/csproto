@@ -87,7 +87,7 @@ func GetExtension(msg interface{}, ext interface{}) (interface{}, error) {
 		if !ok {
 			return nil, fmt.Errorf("invalid extension description type %T", ext)
 		}
-		return gogo.GetExtension(msg.(google.Message), ed)
+		return gogo.GetExtension(msg.(gogo.Message), ed)
 	default:
 		return nil, fmt.Errorf("unsupported message type %T", ext)
 	}
@@ -115,7 +115,7 @@ func SetExtension(msg interface{}, ext interface{}, val interface{}) error {
 		if !ok {
 			return fmt.Errorf("invalid extension description type %T", ext)
 		}
-		return gogo.SetExtension(msg.(google.Message), ed, val)
+		return gogo.SetExtension(msg.(gogo.Message), ed, val)
 	default:
 		return fmt.Errorf("unsupported message type %T", ext)
 	}
