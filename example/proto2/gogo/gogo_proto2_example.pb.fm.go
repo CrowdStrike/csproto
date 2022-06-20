@@ -50,17 +50,22 @@ func (m *BaseEvent) Size() int {
 	l = len(m.Data)
 	sz += csproto.SizeOfTagKey(5) + csproto.SizeOfVarint(uint64(l)) + l
 	// extension field - eventExt (message,optional)
-	if extVal, _ := csproto.GetExtension(m, E_TestEvent_EventExt); extVal != nil {
-		l = csproto.Size(extVal)
-		sz += csproto.SizeOfTagKey(100) + csproto.SizeOfVarint(uint64(l)) + l
+	if csproto.HasExtension(m, E_TestEvent_EventExt) {
+		if extVal, _ := csproto.GetExtension(m, E_TestEvent_EventExt); extVal != nil {
+			l = csproto.Size(extVal)
+			sz += csproto.SizeOfTagKey(100) + csproto.SizeOfVarint(uint64(l)) + l
+		}
 	}
 
 	// extension field - eventExt (message,optional)
-	if extVal, _ := csproto.GetExtension(m, E_AllOptionalFields_EventExt); extVal != nil {
-		l = csproto.Size(extVal)
-		sz += csproto.SizeOfTagKey(101) + csproto.SizeOfVarint(uint64(l)) + l
+	if csproto.HasExtension(m, E_AllOptionalFields_EventExt) {
+		if extVal, _ := csproto.GetExtension(m, E_AllOptionalFields_EventExt); extVal != nil {
+			l = csproto.Size(extVal)
+			sz += csproto.SizeOfTagKey(101) + csproto.SizeOfVarint(uint64(l)) + l
+		}
 	}
 
+	sz += len(m.XXX_unrecognized)
 	// cache the size so it can be re-used in Marshal()/MarshalTo()
 	atomic.StoreInt32(&m.XXX_sizecache, int32(sz))
 	return sz
@@ -112,19 +117,26 @@ func (m *BaseEvent) MarshalTo(dest []byte) error {
 	enc.EncodeBytes(5, m.Data)
 
 	// extension field - eventExt (message,optional)
-	if extVal, _ = csproto.GetExtension(m, E_TestEvent_EventExt); extVal != nil {
-		if err = enc.EncodeNested(100, extVal); err != nil {
-			return fmt.Errorf("unable to encode message data for extension field 'eventExt' (tag=100): %w", err)
+	if csproto.HasExtension(m, E_TestEvent_EventExt) {
+		if extVal, _ = csproto.GetExtension(m, E_TestEvent_EventExt); extVal != nil {
+			if err = enc.EncodeNested(100, extVal); err != nil {
+				return fmt.Errorf("unable to encode message data for extension field 'eventExt' (tag=100): %w", err)
+			}
 		}
 	}
 
 	// extension field - eventExt (message,optional)
-	if extVal, _ = csproto.GetExtension(m, E_AllOptionalFields_EventExt); extVal != nil {
-		if err = enc.EncodeNested(101, extVal); err != nil {
-			return fmt.Errorf("unable to encode message data for extension field 'eventExt' (tag=101): %w", err)
+	if csproto.HasExtension(m, E_AllOptionalFields_EventExt) {
+		if extVal, _ = csproto.GetExtension(m, E_AllOptionalFields_EventExt); extVal != nil {
+			if err = enc.EncodeNested(101, extVal); err != nil {
+				return fmt.Errorf("unable to encode message data for extension field 'eventExt' (tag=101): %w", err)
+			}
 		}
 	}
 
+	if len(m.XXX_unrecognized) > 0 {
+		enc.EncodeRaw(m.XXX_unrecognized)
+	}
 	return nil
 }
 
@@ -193,23 +205,16 @@ func (m *BaseEvent) Unmarshal(p []byte) error {
 			}
 
 		case 100: // eventExt (extension,message)
-			var mm_eventExt TestEvent
-			if err := dec.DecodeNested(&mm_eventExt); err != nil {
-				return fmt.Errorf("unable to decode message field 'eventExt' (tag=100): %w", err)
-			} else {
-				if err = csproto.SetExtension(m, E_TestEvent_EventExt, &mm_eventExt); err != nil {
-					return fmt.Errorf("unable to set extension field 'eventExt' (tag=100): %w", err)
-				}
+			if extdata, err := dec.Skip(tag, wt); err != nil {
+				return fmt.Errorf("invalid operation skipping extension data for tag %v: %w", tag, err)
+			} else if err := csproto.SetExtensionData(m, E_TestEvent_EventExt, extdata); err != nil {
+				return fmt.Errorf("unable to parse extension data for tag %v: %w", tag, err)
 			}
-
 		case 101: // eventExt (extension,message)
-			var mm_eventExt AllOptionalFields
-			if err := dec.DecodeNested(&mm_eventExt); err != nil {
-				return fmt.Errorf("unable to decode message field 'eventExt' (tag=101): %w", err)
-			} else {
-				if err = csproto.SetExtension(m, E_AllOptionalFields_EventExt, &mm_eventExt); err != nil {
-					return fmt.Errorf("unable to set extension field 'eventExt' (tag=101): %w", err)
-				}
+			if extdata, err := dec.Skip(tag, wt); err != nil {
+				return fmt.Errorf("invalid operation skipping extension data for tag %v: %w", tag, err)
+			} else if err := csproto.SetExtensionData(m, E_AllOptionalFields_EventExt, extdata); err != nil {
+				return fmt.Errorf("unable to parse extension data for tag %v: %w", tag, err)
 			}
 		default:
 			if skipped, err := dec.Skip(tag, wt); err != nil {
@@ -321,6 +326,7 @@ func (m *TestEvent) Size() int {
 		}
 	}
 
+	sz += len(m.XXX_unrecognized)
 	// cache the size so it can be re-used in Marshal()/MarshalTo()
 	atomic.StoreInt32(&m.XXX_sizecache, int32(sz))
 	return sz
@@ -389,6 +395,9 @@ func (m *TestEvent) MarshalTo(dest []byte) error {
 		default:
 			_ = typedVal // ensure no unused variable
 		}
+	}
+	if len(m.XXX_unrecognized) > 0 {
+		enc.EncodeRaw(m.XXX_unrecognized)
 	}
 	return nil
 }
@@ -574,6 +583,7 @@ func (m *EmbeddedEvent) Size() int {
 		l = len(bv)
 		sz += csproto.SizeOfTagKey(4) + csproto.SizeOfVarint(uint64(l)) + l
 	}
+	sz += len(m.XXX_unrecognized)
 	// cache the size so it can be re-used in Marshal()/MarshalTo()
 	atomic.StoreInt32(&m.XXX_sizecache, int32(sz))
 	return sz
@@ -617,6 +627,9 @@ func (m *EmbeddedEvent) MarshalTo(dest []byte) error {
 	// RandomThings (4,bytes,repeated)
 	for _, val := range m.RandomThings {
 		enc.EncodeBytes(4, val)
+	}
+	if len(m.XXX_unrecognized) > 0 {
+		enc.EncodeRaw(m.XXX_unrecognized)
 	}
 	return nil
 }
@@ -812,6 +825,7 @@ func (m *AllTheThings) Size() int {
 		l = csproto.Size(m.TheMessage)
 		sz += csproto.SizeOfTagKey(18) + csproto.SizeOfVarint(uint64(l)) + l
 	}
+	sz += len(m.XXX_unrecognized)
 	// cache the size so it can be re-used in Marshal()/MarshalTo()
 	atomic.StoreInt32(&m.XXX_sizecache, int32(sz))
 	return sz
@@ -911,6 +925,9 @@ func (m *AllTheThings) MarshalTo(dest []byte) error {
 		if err = enc.EncodeNested(18, m.TheMessage); err != nil {
 			return fmt.Errorf("unable to encode message data for field 'theMessage' (tag=18): %w", err)
 		}
+	}
+	if len(m.XXX_unrecognized) > 0 {
+		enc.EncodeRaw(m.XXX_unrecognized)
 	}
 	return nil
 }
@@ -1233,6 +1250,7 @@ func (m *RepeatAllTheThings) Size() int {
 			sz += csproto.SizeOfTagKey(18) + csproto.SizeOfVarint(uint64(l)) + l
 		}
 	}
+	sz += len(m.XXX_unrecognized)
 	// cache the size so it can be re-used in Marshal()/MarshalTo()
 	atomic.StoreInt32(&m.XXX_sizecache, int32(sz))
 	return sz
@@ -1334,6 +1352,9 @@ func (m *RepeatAllTheThings) MarshalTo(dest []byte) error {
 		if err = enc.EncodeNested(18, mm); err != nil {
 			return fmt.Errorf("unable to encode message data for field 'theMessages' (tag=18): %w", err)
 		}
+	}
+	if len(m.XXX_unrecognized) > 0 {
+		enc.EncodeRaw(m.XXX_unrecognized)
 	}
 	return nil
 }
@@ -1685,11 +1706,14 @@ func (m *AllOptionalFields) Size() int {
 		sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(*m.Field2))
 	}
 	// extension field - eventExt (message,optional)
-	if extVal, _ := csproto.GetExtension(m, E_EmptyExtension_EventExt); extVal != nil {
-		l = csproto.Size(extVal)
-		sz += csproto.SizeOfTagKey(101) + csproto.SizeOfVarint(uint64(l)) + l
+	if csproto.HasExtension(m, E_EmptyExtension_EventExt) {
+		if extVal, _ := csproto.GetExtension(m, E_EmptyExtension_EventExt); extVal != nil {
+			l = csproto.Size(extVal)
+			sz += csproto.SizeOfTagKey(101) + csproto.SizeOfVarint(uint64(l)) + l
+		}
 	}
 
+	sz += len(m.XXX_unrecognized)
 	// cache the size so it can be re-used in Marshal()/MarshalTo()
 	atomic.StoreInt32(&m.XXX_sizecache, int32(sz))
 	return sz
@@ -1727,12 +1751,17 @@ func (m *AllOptionalFields) MarshalTo(dest []byte) error {
 	}
 
 	// extension field - eventExt (message,optional)
-	if extVal, _ = csproto.GetExtension(m, E_EmptyExtension_EventExt); extVal != nil {
-		if err = enc.EncodeNested(101, extVal); err != nil {
-			return fmt.Errorf("unable to encode message data for extension field 'eventExt' (tag=101): %w", err)
+	if csproto.HasExtension(m, E_EmptyExtension_EventExt) {
+		if extVal, _ = csproto.GetExtension(m, E_EmptyExtension_EventExt); extVal != nil {
+			if err = enc.EncodeNested(101, extVal); err != nil {
+				return fmt.Errorf("unable to encode message data for extension field 'eventExt' (tag=101): %w", err)
+			}
 		}
 	}
 
+	if len(m.XXX_unrecognized) > 0 {
+		enc.EncodeRaw(m.XXX_unrecognized)
+	}
 	return nil
 }
 
@@ -1771,13 +1800,10 @@ func (m *AllOptionalFields) Unmarshal(p []byte) error {
 			}
 
 		case 101: // eventExt (extension,message)
-			var mm_eventExt EmptyExtension
-			if err := dec.DecodeNested(&mm_eventExt); err != nil {
-				return fmt.Errorf("unable to decode message field 'eventExt' (tag=101): %w", err)
-			} else {
-				if err = csproto.SetExtension(m, E_EmptyExtension_EventExt, &mm_eventExt); err != nil {
-					return fmt.Errorf("unable to set extension field 'eventExt' (tag=101): %w", err)
-				}
+			if extdata, err := dec.Skip(tag, wt); err != nil {
+				return fmt.Errorf("invalid operation skipping extension data for tag %v: %w", tag, err)
+			} else if err := csproto.SetExtensionData(m, E_EmptyExtension_EventExt, extdata); err != nil {
+				return fmt.Errorf("unable to parse extension data for tag %v: %w", tag, err)
 			}
 		default:
 			if skipped, err := dec.Skip(tag, wt); err != nil {
@@ -1808,6 +1834,7 @@ func (m *EmptyExtension) Size() int {
 	var sz, l int
 	_ = l // avoid unused variable
 
+	sz += len(m.XXX_unrecognized)
 	// cache the size so it can be re-used in Marshal()/MarshalTo()
 	atomic.StoreInt32(&m.XXX_sizecache, int32(sz))
 	return sz
@@ -1835,6 +1862,9 @@ func (m *EmptyExtension) MarshalTo(dest []byte) error {
 	_ = err
 	_ = extVal
 
+	if len(m.XXX_unrecognized) > 0 {
+		enc.EncodeRaw(m.XXX_unrecognized)
+	}
 	return nil
 }
 
@@ -1886,6 +1916,7 @@ func (m *TestEvent_NestedMsg) Size() int {
 		l = len(*m.Details)
 		sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(l)) + l
 	}
+	sz += len(m.XXX_unrecognized)
 	// cache the size so it can be re-used in Marshal()/MarshalTo()
 	atomic.StoreInt32(&m.XXX_sizecache, int32(sz))
 	return sz
@@ -1916,6 +1947,9 @@ func (m *TestEvent_NestedMsg) MarshalTo(dest []byte) error {
 	// Details (1,string,optional)
 	if m.Details != nil {
 		enc.EncodeString(1, *m.Details)
+	}
+	if len(m.XXX_unrecognized) > 0 {
+		enc.EncodeRaw(m.XXX_unrecognized)
 	}
 	return nil
 }

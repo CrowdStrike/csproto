@@ -80,6 +80,7 @@ func (m *TestEvent) Size() int {
 		}
 	}
 
+	sz += len(m.unknownFields)
 	// cache the size so it can be re-used in Marshal()/MarshalTo()
 	atomic.StoreInt32(&m.sizeCache, int32(sz))
 	return sz
@@ -157,6 +158,9 @@ func (m *TestEvent) MarshalTo(dest []byte) error {
 		default:
 			_ = typedVal // ensure no unused variable
 		}
+	}
+	if len(m.unknownFields) > 0 {
+		enc.EncodeRaw([]byte(m.unknownFields))
 	}
 	return nil
 }
@@ -336,6 +340,7 @@ func (m *EmbeddedEvent) Size() int {
 		l = len(bv)
 		sz += csproto.SizeOfTagKey(4) + csproto.SizeOfVarint(uint64(l)) + l
 	}
+	sz += len(m.unknownFields)
 	// cache the size so it can be re-used in Marshal()/MarshalTo()
 	atomic.StoreInt32(&m.sizeCache, int32(sz))
 	return sz
@@ -378,6 +383,9 @@ func (m *EmbeddedEvent) MarshalTo(dest []byte) error {
 	// RandomThings (4,bytes,repeated)
 	for _, val := range m.RandomThings {
 		enc.EncodeBytes(4, val)
+	}
+	if len(m.unknownFields) > 0 {
+		enc.EncodeRaw([]byte(m.unknownFields))
 	}
 	return nil
 }
@@ -545,6 +553,7 @@ func (m *AllTheThings) Size() int {
 		l = csproto.Size(m.TheMessage)
 		sz += csproto.SizeOfTagKey(18) + csproto.SizeOfVarint(uint64(l)) + l
 	}
+	sz += len(m.unknownFields)
 	// cache the size so it can be re-used in Marshal()/MarshalTo()
 	atomic.StoreInt32(&m.sizeCache, int32(sz))
 	return sz
@@ -641,6 +650,9 @@ func (m *AllTheThings) MarshalTo(dest []byte) error {
 		if err = enc.EncodeNested(18, m.TheMessage); err != nil {
 			return fmt.Errorf("unable to encode message data for field 'theMessage' (tag=18): %w", err)
 		}
+	}
+	if len(m.unknownFields) > 0 {
+		enc.EncodeRaw([]byte(m.unknownFields))
 	}
 	return nil
 }
@@ -967,6 +979,7 @@ func (m *RepeatAllTheThings) Size() int {
 			sz += csproto.SizeOfTagKey(18) + csproto.SizeOfVarint(uint64(l)) + l
 		}
 	}
+	sz += len(m.unknownFields)
 	// cache the size so it can be re-used in Marshal()/MarshalTo()
 	atomic.StoreInt32(&m.sizeCache, int32(sz))
 	return sz
@@ -1071,6 +1084,9 @@ func (m *RepeatAllTheThings) MarshalTo(dest []byte) error {
 		if err = enc.EncodeNested(18, mm); err != nil {
 			return fmt.Errorf("unable to encode message data for field 'theMessages' (tag=18): %w", err)
 		}
+	}
+	if len(m.unknownFields) > 0 {
+		enc.EncodeRaw([]byte(m.unknownFields))
 	}
 	return nil
 }
@@ -1388,6 +1404,7 @@ func (m *TestEvent_NestedMsg) Size() int {
 	if l = len(m.Details); l > 0 {
 		sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(l)) + l
 	}
+	sz += len(m.unknownFields)
 	// cache the size so it can be re-used in Marshal()/MarshalTo()
 	atomic.StoreInt32(&m.sizeCache, int32(sz))
 	return sz
@@ -1418,6 +1435,9 @@ func (m *TestEvent_NestedMsg) MarshalTo(dest []byte) error {
 	// Details (1,string,optional)
 	if len(m.Details) > 0 {
 		enc.EncodeString(1, m.Details)
+	}
+	if len(m.unknownFields) > 0 {
+		enc.EncodeRaw([]byte(m.unknownFields))
 	}
 	return nil
 }

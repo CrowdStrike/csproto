@@ -55,6 +55,7 @@ func (m *EmbeddedEvent) Size() int {
 	}
 	// cache the size so it can be re-used in Marshal()/MarshalTo()
 	atomic.StoreInt32(&m.XXX_sizecache, int32(sz))
+	sz += len(m.XXX_unrecognized)
 	return sz
 }
 
@@ -99,6 +100,9 @@ func (m *EmbeddedEvent) MarshalTo(dest []byte) error {
 	// Size (5,int32,optional)
 	if m.Size_ != 0 {
 		enc.EncodeInt32(5, m.Size_)
+	}
+	if len(m.XXX_unrecognized) > 0 {
+		enc.EncodeRaw(m.XXX_unrecognized)
 	}
 	return nil
 }

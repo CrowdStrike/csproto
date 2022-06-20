@@ -254,44 +254,46 @@
 {{ define "SizeOfExtension" }}
 {{- $kind := (.Desc.Kind) | string -}}
     // extension field - {{ .Desc.Name }} ({{.Desc.Kind}},{{.Desc.Cardinality}})
-    if extVal, _ := csproto.GetExtension(m, E_{{.GoIdent.GoName | getSafeFieldName}}); extVal != nil {
-        {{ if eq $kind "bool" -}}
-        _ = extVal
-        sz += csproto.SizeOfTagKey({{.Desc.Number}}) + 1
-        {{- else if eq $kind "fixed32" "sfixed32" "float" -}}
-        _ = extVal
-        sz += csproto.SizeOfTagKey({{.Desc.Number}}) + 4
-        {{- else if eq $kind "fixed64" "sfixed64" "double" -}}
-        _ = extVal
-        sz += csproto.SizeOfTagKey({{.Desc.Number}}) + 8
-        {{- else -}}
-        {{ if eq $kind "int32" -}}
-        sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(extVal.(int32)))
-        {{- else if eq $kind "int64" -}}
-        sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(extVal.(int64)))
-        {{- else if eq $kind "uint32" -}}
-        sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(int64(uint64(extVal.(uint32))))
-        {{- else if eq $kind "uint64" -}}
-        sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(extVal.(uint64))
-        {{- else if eq $kind "sint32" -}}
-        sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfZigZag(uint64(extVal.(int32)))
-        {{- else if eq $kind "sint64" -}}
-        sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfZigZag(uint64(extVal.(int64)))
-        {{- else if eq $kind "enum" -}}
-        sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(extVal.({{.Enum.GoIdent}})))
-        {{- else if eq $kind "string" -}}
-        l = len(extVal.(string))
-        sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(l)) + l
-        {{- else if eq $kind "bytes" -}}
-        l = len(extVal.([]byte))
-        sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(l)) + l
-        {{- else if eq $kind "message" -}}
-        l = csproto.Size(extVal)
-        sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(l)) + l
-        {{- else -}}
-        panic(fmt.Errorf("unknown/unrecognized field type {{ $kind }} (%T) for field {{.GoIdent.GoName | getSafeFieldName}}", extVal))
-        {{- end -}}
-        {{- end -}}
+    if csproto.HasExtension(m, E_{{.GoIdent.GoName | getSafeFieldName}}) {
+        if extVal, _ := csproto.GetExtension(m, E_{{.GoIdent.GoName | getSafeFieldName}}); extVal != nil {
+            {{ if eq $kind "bool" -}}
+            _ = extVal
+            sz += csproto.SizeOfTagKey({{.Desc.Number}}) + 1
+            {{- else if eq $kind "fixed32" "sfixed32" "float" -}}
+            _ = extVal
+            sz += csproto.SizeOfTagKey({{.Desc.Number}}) + 4
+            {{- else if eq $kind "fixed64" "sfixed64" "double" -}}
+            _ = extVal
+            sz += csproto.SizeOfTagKey({{.Desc.Number}}) + 8
+            {{- else -}}
+            {{ if eq $kind "int32" -}}
+            sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(extVal.(int32)))
+            {{- else if eq $kind "int64" -}}
+            sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(extVal.(int64)))
+            {{- else if eq $kind "uint32" -}}
+            sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(int64(uint64(extVal.(uint32))))
+            {{- else if eq $kind "uint64" -}}
+            sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(extVal.(uint64))
+            {{- else if eq $kind "sint32" -}}
+            sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfZigZag(uint64(extVal.(int32)))
+            {{- else if eq $kind "sint64" -}}
+            sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfZigZag(uint64(extVal.(int64)))
+            {{- else if eq $kind "enum" -}}
+            sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(extVal.({{.Enum.GoIdent}})))
+            {{- else if eq $kind "string" -}}
+            l = len(extVal.(string))
+            sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(l)) + l
+            {{- else if eq $kind "bytes" -}}
+            l = len(extVal.([]byte))
+            sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(l)) + l
+            {{- else if eq $kind "message" -}}
+            l = csproto.Size(extVal)
+            sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(l)) + l
+            {{- else -}}
+            panic(fmt.Errorf("unknown/unrecognized field type {{ $kind }} (%T) for field {{.GoIdent.GoName | getSafeFieldName}}", extVal))
+            {{- end -}}
+            {{- end -}}
+        }
     }
 {{ end }}
 {{/* MarshalNumber - generates the snippet to marshal a number (bool,int32,int64,uint32,uint64,sint32,sint64,fixed32,float,fixed64,double) field */}}
@@ -619,42 +621,44 @@
 {{ define "MarshalExtension" }}
 {{- $kind := (.Desc.Kind) | string -}}
     // extension field - {{ .Desc.Name }} ({{.Desc.Kind}},{{.Desc.Cardinality}})
-    if extVal, _ = csproto.GetExtension(m, E_{{.GoIdent.GoName | getSafeFieldName}}); extVal != nil {
-        {{ if eq $kind "bool" -}}
-        enc.EncodeBool({{.Desc.Number}}, extVal.(bool))
-        {{- else if eq $kind "int32" -}}
-        enc.EncodeInt32({{.Desc.Number}}, extVal.(int32))
-        {{- else if eq $kind "int64" -}}
-        enc.EncodeInt64({{.Desc.Number}}, extVal.(int64))
-        {{- else if eq $kind "uint32" -}}
-        enc.EncodeUInt32({{.Desc.Number}}, extVal.(uint32))
-        {{- else if eq $kind "uint64" -}}
-        enc.EncodeUInt64({{.Desc.Number}}, extVal.(uint64))
-        {{- else if eq $kind "sint32" -}}
-        enc.EncodeSInt32({{.Desc.Number}}, extVal.(int32))
-        {{- else if eq $kind "sint64" -}}
-        enc.EncodeSInt64({{.Desc.Number}}, extVal.(int64))
-        {{- else if eq $kind "fixed32" "sfixed32" -}}
-        enc.EncodeFixed32({{.Desc.Number}}, extVal.(uint32))
-        {{- else if eq $kind "float" -}}
-        enc.EncodeFloat32({{.Desc.Number}}, extVal.(float32))
-        {{- else if eq $kind "fixed64" "sfixed64" -}}
-        enc.EncodeFixed64({{.Desc.Number}}, extVal.(uint64))
-        {{- else if eq $kind "double" -}}
-        enc.EncodeFloat64({{.Desc.Number}}, extVal.(float64))
-        {{- else if eq $kind "enum" -}}
-        enc.EncodeInt32({{.Desc.Number}}, int32(extVal.({{.Enum.GoIdent}})))
-        {{- else if eq $kind "string" -}}
-        enc.EncodeString({{.Desc.Number}}, extVal.(string))
-        {{- else if eq $kind "bytes" -}}
-        enc.EncodeBytes({{.Desc.Number}}, extVal.([]byte))
-        {{- else if eq $kind "message" -}}
-        if err = enc.EncodeNested({{.Desc.Number}}, extVal); err != nil {
-            return fmt.Errorf("unable to encode message data for extension field '{{.Desc.Name}}' (tag={{.Desc.Number}}): %w", err)
+    if csproto.HasExtension(m, E_{{.GoIdent.GoName | getSafeFieldName}}) {
+        if extVal, _ = csproto.GetExtension(m, E_{{.GoIdent.GoName | getSafeFieldName}}); extVal != nil {
+            {{ if eq $kind "bool" -}}
+            enc.EncodeBool({{.Desc.Number}}, extVal.(bool))
+            {{- else if eq $kind "int32" -}}
+            enc.EncodeInt32({{.Desc.Number}}, extVal.(int32))
+            {{- else if eq $kind "int64" -}}
+            enc.EncodeInt64({{.Desc.Number}}, extVal.(int64))
+            {{- else if eq $kind "uint32" -}}
+            enc.EncodeUInt32({{.Desc.Number}}, extVal.(uint32))
+            {{- else if eq $kind "uint64" -}}
+            enc.EncodeUInt64({{.Desc.Number}}, extVal.(uint64))
+            {{- else if eq $kind "sint32" -}}
+            enc.EncodeSInt32({{.Desc.Number}}, extVal.(int32))
+            {{- else if eq $kind "sint64" -}}
+            enc.EncodeSInt64({{.Desc.Number}}, extVal.(int64))
+            {{- else if eq $kind "fixed32" "sfixed32" -}}
+            enc.EncodeFixed32({{.Desc.Number}}, extVal.(uint32))
+            {{- else if eq $kind "float" -}}
+            enc.EncodeFloat32({{.Desc.Number}}, extVal.(float32))
+            {{- else if eq $kind "fixed64" "sfixed64" -}}
+            enc.EncodeFixed64({{.Desc.Number}}, extVal.(uint64))
+            {{- else if eq $kind "double" -}}
+            enc.EncodeFloat64({{.Desc.Number}}, extVal.(float64))
+            {{- else if eq $kind "enum" -}}
+            enc.EncodeInt32({{.Desc.Number}}, int32(extVal.({{.Enum.GoIdent}})))
+            {{- else if eq $kind "string" -}}
+            enc.EncodeString({{.Desc.Number}}, extVal.(string))
+            {{- else if eq $kind "bytes" -}}
+            enc.EncodeBytes({{.Desc.Number}}, extVal.([]byte))
+            {{- else if eq $kind "message" -}}
+            if err = enc.EncodeNested({{.Desc.Number}}, extVal); err != nil {
+                return fmt.Errorf("unable to encode message data for extension field '{{.Desc.Name}}' (tag={{.Desc.Number}}): %w", err)
+            }
+            {{- else -}}
+            return fmt.Errorf("unknown/unrecognized field type {{ $kind }} for field {{.GoIdent.GoName | getSafeFieldName}} (tag={{.Desc.Number}})")
+            {{- end -}}
         }
-        {{- else -}}
-        return fmt.Errorf("unknown/unrecognized field type {{ $kind }} for field {{.GoIdent.GoName | getSafeFieldName}} (tag={{.Desc.Number}})")
-        {{- end -}}
     }
 {{ end }}
 {{/* UnmarshalNumber - generates the snippet to unmarshal a number (bool,int32,int64,uint32,uint64,sint32,sint64,fixed32,float,fixed64,double,enum) field */}}

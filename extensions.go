@@ -117,6 +117,38 @@ func SetExtension(msg interface{}, ext interface{}, val interface{}) error {
 		}
 		return gogo.SetExtension(msg.(google.Message), ed, val)
 	default:
-		return fmt.Errorf("unsupported message type %T", ext)
+		return fmt.Errorf("unsupported message type %T", msg)
+	}
+}
+
+// SetExtensionData can be used to attach the raw bytes for a proto2 extension field to msg without
+// decoding the contents, which can be useful for high-throughput processing.
+func SetExtensionData(msg interface{}, ext interface{}, data []byte) error {
+	switch MsgType(msg) {
+	case MessageTypeGoogleV1:
+		ed, ok := ext.(*google.ExtensionDesc)
+		if !ok {
+			return fmt.Errorf("invalid extension description type %T", ext)
+		}
+		google.SetRawExtension(msg.(google.Message), ed.Field, data)
+		return nil
+	case MessageTypeGoogle:
+		xt, ok := ext.(protoreflect.ExtensionType)
+		if !ok {
+			return fmt.Errorf("invalid extension type %T", ext)
+		}
+		m := msg.(googlev2.Message)
+		googlev2.ClearExtension(m, xt)
+		m.ProtoReflect().SetUnknown(data)
+		return nil
+	case MessageTypeGogo:
+		ed, ok := ext.(*gogo.ExtensionDesc)
+		if !ok {
+			return fmt.Errorf("invalid extension description type %T", ext)
+		}
+		gogo.SetRawExtension(msg.(gogo.Message), ed.Field, data)
+		return nil
+	default:
+		return fmt.Errorf("unsupported message type %T", msg)
 	}
 }

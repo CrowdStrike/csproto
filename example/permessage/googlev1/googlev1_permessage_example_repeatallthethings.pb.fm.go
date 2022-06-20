@@ -140,6 +140,7 @@ func (m *RepeatAllTheThings) Size() int {
 	}
 	// cache the size so it can be re-used in Marshal()/MarshalTo()
 	atomic.StoreInt32(&m.sizeCache, int32(sz))
+	sz += len(m.unknownFields)
 	return sz
 }
 
@@ -242,6 +243,9 @@ func (m *RepeatAllTheThings) MarshalTo(dest []byte) error {
 		if err = enc.EncodeNested(18, mm); err != nil {
 			return fmt.Errorf("unable to encode message data for field 'theMessages' (tag=18): %w", err)
 		}
+	}
+	if len(m.unknownFields) > 0 {
+		enc.EncodeRaw([]byte(m.unknownFields))
 	}
 	return nil
 }

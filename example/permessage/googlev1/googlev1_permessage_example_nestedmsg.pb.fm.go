@@ -33,6 +33,7 @@ func (m *TestEvent_NestedMsg) Size() int {
 	}
 	// cache the size so it can be re-used in Marshal()/MarshalTo()
 	atomic.StoreInt32(&m.sizeCache, int32(sz))
+	sz += len(m.unknownFields)
 	return sz
 }
 
@@ -61,6 +62,9 @@ func (m *TestEvent_NestedMsg) MarshalTo(dest []byte) error {
 	// Details (1,string,optional)
 	if len(m.Details) > 0 {
 		enc.EncodeString(1, m.Details)
+	}
+	if len(m.unknownFields) > 0 {
+		enc.EncodeRaw([]byte(m.unknownFields))
 	}
 	return nil
 }

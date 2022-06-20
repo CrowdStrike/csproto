@@ -57,6 +57,11 @@ func (m *{{ .Message.GoIdent.GoName }}) Size() int {
 {{- else -}}
     atomic.StoreInt32(&m.sizeCache, int32(sz))
 {{- end }}
+{{ if eq $protoAPIVersion "v1" -}}
+    sz += len(m.XXX_unrecognized)
+{{- else -}}
+    sz += len(m.unknownFields)
+{{- end }}
     return sz
 }
 
@@ -96,6 +101,15 @@ func (m *{{ .Message.GoIdent.GoName }}) MarshalTo(dest []byte) error {
     {{ template "MarshalExtension" . }}
 {{ end }}
 {{- end -}}
+{{ if eq $protoAPIVersion "v1" -}}
+    if len(m.XXX_unrecognized) > 0 {
+        enc.EncodeRaw(m.XXX_unrecognized)
+    }
+{{- else -}}
+    if len(m.unknownFields) > 0 {
+        enc.EncodeRaw([]byte(m.unknownFields))
+    }
+{{- end }}
     return nil
 }
 

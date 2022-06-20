@@ -194,6 +194,7 @@ func (m *AllTheMaps) Size() int {
 
 	// cache the size so it can be re-used in Marshal()/MarshalTo()
 	atomic.StoreInt32(&m.sizeCache, int32(sz))
+	sz += len(m.unknownFields)
 	return sz
 }
 
@@ -401,6 +402,9 @@ func (m *AllTheMaps) MarshalTo(dest []byte) error {
 		enc.EncodeUInt64(2, uint64(v))
 	}
 
+	if len(m.unknownFields) > 0 {
+		enc.EncodeRaw([]byte(m.unknownFields))
+	}
 	return nil
 }
 

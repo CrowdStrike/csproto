@@ -1,6 +1,9 @@
 package example_test
 
 import (
+	"fmt"
+	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -24,7 +27,17 @@ func TestProto2GoogleV1Message(t *testing.T) {
 		err = csproto.Unmarshal(data, &msg2)
 		if err != nil {
 			t.Errorf("Expected no error, got %v", err)
-		} else if !proto.Equal(msg, &msg2) {
+		}
+		// verify decoding of proto2 extension data
+		xd, err := csproto.GetExtension(&msg2, googlev1.E_TestEvent_EventExt)
+		if err != nil {
+			t.Errorf("Unable to read proto2 extension data: %v", err)
+		}
+		if xd == nil || reflect.ValueOf(xd).IsNil() {
+			t.Errorf("Unable to read proto2 extension data: result is nil")
+		}
+		fmt.Fprintf(os.Stderr, "extension data: %#v", xd)
+		if !proto.Equal(msg, &msg2) {
 			t.Errorf("Mismatched data after unmarshal\n\tExpected: %s\n\t     Got: %s\n", msg.String(), msg2.String())
 		}
 	})

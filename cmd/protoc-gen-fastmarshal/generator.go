@@ -24,6 +24,7 @@ func generateSingle(plugin *protogen.Plugin, req generateRequest) error {
 		APIVersion         string
 		SpecialNames       specialNames
 		EnableUnsafeDecode bool
+		ExtensionMode      string
 	}
 	args := genArgsSingle{
 		Now:                time.Now().UTC(),
@@ -32,6 +33,7 @@ func generateSingle(plugin *protogen.Plugin, req generateRequest) error {
 		APIVersion:         req.APIVersion,
 		SpecialNames:       req.SpecialNames,
 		EnableUnsafeDecode: req.EnableUnsafeDecode,
+		ExtensionMode:      "lazy",
 	}
 
 	var (
