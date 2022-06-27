@@ -7,7 +7,7 @@ require (
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/protobuf v1.5.2
 	github.com/huandu/xstrings v1.3.2
-	github.com/stretchr/testify v1.7.2
+	github.com/stretchr/testify v1.7.5
 	google.golang.org/protobuf v1.28.0
 )
 
