@@ -31,7 +31,9 @@ bench:
 GENERATE_TARGETS =\
    example-proto2-gogo example-proto2-googlev1 example-proto2-googlev2\
    example-proto3-gogo example-proto3-googlev1 example-proto3-googlev2\
-   example-permessage-gogo example-permessage-googlev1 example-permessage-googlev2
+   example-permessage-gogo example-permessage-googlev1 example-permessage-googlev2\
+   testproto
+
 .PHONY: generate
 generate: ${GENERATE_TARGETS}
 	$(info Done)
@@ -91,6 +93,12 @@ example-permessage-googlev1: install-protoc-gen-go-v1 protoc-gen-fastmarshal
 example-permessage-googlev2: install-protoc-gen-go-v2 protoc-gen-fastmarshal
 	$(info Generating Protobuf code for example/permessage/googlev2 ...)
 	@cd ${PROJECT_BASE_DIR}/example/permessage/googlev2 &&\
+		protoc -I . --plugin=protoc-gen-go=${PROJECT_BASE_DIR}/bin/protoc-gen-go-v2 --go_out=paths=source_relative:. --fastmarshal_out=apiversion=v2,filepermessage=true,paths=source_relative:. *.proto
+
+.PHONY: testproto
+testproto: install-protoc-gen-go-v2 protoc-gen-fastmarshal
+	$(info Generating Protobuf code for testproto ...)
+	@cd ${PROJECT_BASE_DIR}/testproto &&\
 		protoc -I . --plugin=protoc-gen-go=${PROJECT_BASE_DIR}/bin/protoc-gen-go-v2 --go_out=paths=source_relative:. --fastmarshal_out=apiversion=v2,filepermessage=true,paths=source_relative:. *.proto
 
 .PHONY: protoc-gen-fastmarshal

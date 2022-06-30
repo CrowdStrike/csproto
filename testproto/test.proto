@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package crowdstrike.csproto.testproto;
+
+option go_package = "github.com/CrowdStrike/csproto/testproto";
+
+import "google/protobuf/timestamp.proto";
+
+message Test {
+  string name = 1;
+  uint32 age = 2;
+  google.protobuf.Timestamp ts = 3;
+  enum Status {
+    UNKNOWN = 0;
+    PRESENT = 1;
+    GONE = 2;
+  }
+  Status status = 4;
+}
