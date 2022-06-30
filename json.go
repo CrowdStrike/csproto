@@ -53,17 +53,18 @@ func (m *jsonMarshaler) MarshalJSON() ([]byte, error) {
 
 	var buf bytes.Buffer
 
-	// Gogo message?
-	if msg, isGogo := m.msg.(gogo.Message); isGogo {
-		jm := gogojson.Marshaler{
-			Indent:       m.opts.indent,
-			EnumsAsInts:  m.opts.useEnumNumbers,
-			EmitDefaults: m.opts.emitZeroValues,
+	// Google V2 message?
+	if msg, isV2 := m.msg.(protov2.Message); isV2 {
+		mo := protojson.MarshalOptions{
+			Indent:          m.opts.indent,
+			UseProtoNames:   m.opts.useEnumNumbers,
+			EmitUnpopulated: m.opts.emitZeroValues,
 		}
-		if err := jm.Marshal(&buf, msg); err != nil {
+		b, err := mo.Marshal(msg)
+		if err != nil {
 			return nil, fmt.Errorf("unable to marshal message to JSON: %w", err)
 		}
-		return buf.Bytes(), nil
+		return b, nil
 	}
 
 	// Google V1 message?
@@ -79,18 +80,17 @@ func (m *jsonMarshaler) MarshalJSON() ([]byte, error) {
 		return buf.Bytes(), nil
 	}
 
-	// Google V2 message?
-	if msg, isV2 := m.msg.(protov2.Message); isV2 {
-		mo := protojson.MarshalOptions{
-			Indent:          m.opts.indent,
-			UseProtoNames:   m.opts.useEnumNumbers,
-			EmitUnpopulated: m.opts.emitZeroValues,
+	// Gogo message?
+	if msg, isGogo := m.msg.(gogo.Message); isGogo {
+		jm := gogojson.Marshaler{
+			Indent:       m.opts.indent,
+			EnumsAsInts:  m.opts.useEnumNumbers,
+			EmitDefaults: m.opts.emitZeroValues,
 		}
-		b, err := mo.Marshal(msg)
-		if err != nil {
+		if err := jm.Marshal(&buf, msg); err != nil {
 			return nil, fmt.Errorf("unable to marshal message to JSON: %w", err)
 		}
-		return b, nil
+		return buf.Bytes(), nil
 	}
 
 	return nil, fmt.Errorf("unsupported message type %T", m.msg)
