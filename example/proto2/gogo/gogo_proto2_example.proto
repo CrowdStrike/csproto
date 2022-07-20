@@ -1,8 +1,9 @@
 syntax = "proto2";
 
 package crowdstrike.csproto.example.proto2.gogo;
-
 option go_package = "github.com/CrowdStrike/csproto/example/proto2/gogo";
+
+import "google/protobuf/timestamp.proto";
 
 enum EventType {
     EVENT_TYPE_UNDEFINED = 0;
@@ -109,4 +110,8 @@ message EmptyExtension {
     }
 }
 
-
+message EventUsingWKTs {
+    required string name = 1;
+    optional google.protobuf.Timestamp ts = 2;
+    optional EventType event_type = 3;
+}

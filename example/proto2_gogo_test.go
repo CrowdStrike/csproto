@@ -1,10 +1,13 @@
 package example_test
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"github.com/gogo/protobuf/proto"
+	"github.com/gogo/protobuf/types"
 	"github.com/stretchr/testify/assert"
 
 	"github.com/CrowdStrike/csproto"
@@ -58,6 +61,91 @@ func TestUnmarshalFailsOnMissingRequiredFieldForGogoMessage(t *testing.T) {
 	err := csproto.Unmarshal(data, &msg)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "one or more required fields missing")
+}
+
+func TestProto2GogoMarshalJSON(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
+		ts := types.TimestampNow()
+		etype := gogo.EventType_EVENT_TYPE_UNDEFINED
+		msg := gogo.EventUsingWKTs{
+			Name:      csproto.String("default"),
+			Ts:        ts,
+			EventType: &etype,
+		}
+		expected := fmt.Sprintf(`{"eventType":"EVENT_TYPE_UNDEFINED","name":"default","ts":"%s"}`, genGogoTimestampString(ts))
+
+		res, err := csproto.JSONMarshaler(&msg).MarshalJSON()
+
+		assert.NoError(t, err)
+		assert.JSONEq(t, expected, string(res))
+	})
+	t.Run("with-indent", func(t *testing.T) {
+		ts := types.TimestampNow()
+		etype := gogo.EventType_EVENT_TYPE_UNDEFINED
+		msg := gogo.EventUsingWKTs{
+			Name:      csproto.String("with-indent"),
+			Ts:        ts,
+			EventType: &etype,
+		}
+		expected := fmt.Sprintf("{\n\t\"name\": \"with-indent\",\n\t\"ts\": \"%s\",\n\t\"eventType\": \"EVENT_TYPE_UNDEFINED\"\n}", genGogoTimestampString(ts))
+
+		opts := []csproto.JSONOption{
+			csproto.JSONIndent("\t"),
+		}
+		res, err := csproto.JSONMarshaler(&msg, opts...).MarshalJSON()
+
+		assert.NoError(t, err)
+		assert.JSONEq(t, expected, string(res))
+		// compare the actual string
+		// - validate the formatted JSON text output, including line breaks and indentation
+		assert.Equal(t, expected, string(res))
+	})
+	t.Run("exclude-zero-values", func(t *testing.T) {
+		msg := gogo.EventUsingWKTs{
+			Name: csproto.String("exclude-zero-values"),
+		}
+		expected := `{"name":"exclude-zero-values"}`
+
+		opts := []csproto.JSONOption{
+			csproto.JSONIncludeZeroValues(false),
+		}
+		res, err := csproto.JSONMarshaler(&msg, opts...).MarshalJSON()
+
+		assert.NoError(t, err)
+		assert.JSONEq(t, expected, string(res))
+	})
+	t.Run("include-zero-values", func(t *testing.T) {
+		msg := gogo.EventUsingWKTs{
+			Name: csproto.String("include-zero-values"),
+		}
+		expected := `{"eventType":null,"name":"include-zero-values","ts":null}`
+
+		opts := []csproto.JSONOption{
+			csproto.JSONIncludeZeroValues(true),
+		}
+		res, err := csproto.JSONMarshaler(&msg, opts...).MarshalJSON()
+
+		assert.NoError(t, err)
+		assert.JSONEq(t, expected, string(res))
+	})
+	t.Run("enable-all", func(t *testing.T) {
+		etype := gogo.EventType_EVENT_TYPE_UNDEFINED
+		msg := gogo.EventUsingWKTs{
+			Name:      csproto.String("enable-all"),
+			EventType: &etype,
+		}
+		expected := fmt.Sprintf("{\n  \"eventType\":0,\"name\":\"enable-all\",\n  \"ts\":null\n}")
+
+		opts := []csproto.JSONOption{
+			csproto.JSONIndent("  "),
+			csproto.JSONIncludeZeroValues(true),
+			csproto.JSONUseEnumNumbers(true),
+		}
+		res, err := csproto.JSONMarshaler(&msg, opts...).MarshalJSON()
+
+		assert.NoError(t, err)
+		assert.JSONEq(t, expected, string(res))
+	})
 }
 
 func createTestProto2GogoMessage() *gogo.BaseEvent {
@@ -120,4 +208,15 @@ func createTestProto2GogoEmptyExtensionMessage() *gogo.BaseEvent {
 	_ = proto.SetExtension(&testEvent, gogo.E_EmptyExtension_EventExt, &emptyEventExt)
 	_ = proto.SetExtension(&baseEvent, gogo.E_AllOptionalFields_EventExt, &testEvent)
 	return &baseEvent
+}
+
+func genGogoTimestampString(ts *types.Timestamp) string {
+	// Uses RFC 3339, where generated output will be Z-normalized and uses 0, 3, 6 or 9 fractional digits.
+	// . see the Google's source for reference: https://github.com/protocolbuffers/protobuf-go/blob/v1.28.0/encoding/protojson/well_known_types.go#L782-L806
+	t := time.Unix(ts.Seconds, int64(ts.Nanos)).UTC()
+	s := t.Format("2006-01-02T15:04:05.000000000")
+	s = strings.TrimSuffix(s, "000")
+	s = strings.TrimSuffix(s, "000")
+	s = strings.TrimSuffix(s, ".000")
+	return s + "Z"
 }

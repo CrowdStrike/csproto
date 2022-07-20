@@ -1367,6 +1367,135 @@ func (m *RepeatAllTheThings) Unmarshal(p []byte) error {
 }
 
 //------------------------------------------------------------------------------
+// Custom Protobuf size/marshal/unmarshal code for EventUsingWKTs
+
+// Size calculates and returns the size, in bytes, required to hold the contents of m using the Protobuf
+// binary encoding.
+func (m *EventUsingWKTs) Size() int {
+	// nil message is always 0 bytes
+	if m == nil {
+		return 0
+	}
+	// return cached size, if present
+	if csz := int(atomic.LoadInt32(&m.sizeCache)); csz > 0 {
+		return csz
+	}
+	// calculate and cache
+	var sz, l int
+	_ = l // avoid unused variable
+
+	// Name (string,optional)
+	if l = len(m.Name); l > 0 {
+		sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(l)) + l
+	}
+	// Ts (message,optional)
+	if m.Ts != nil {
+		l = csproto.Size(m.Ts)
+		sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
+	}
+	// EventType (enum,optional)
+	if m.EventType != 0 {
+		sz += csproto.SizeOfTagKey(3) + csproto.SizeOfVarint(uint64(m.EventType))
+	}
+	// cache the size so it can be re-used in Marshal()/MarshalTo()
+	atomic.StoreInt32(&m.sizeCache, int32(sz))
+	return sz
+}
+
+// Marshal converts the contents of m to the Protobuf binary encoding and returns the result or an error.
+func (m *EventUsingWKTs) Marshal() ([]byte, error) {
+	siz := m.Size()
+	buf := make([]byte, siz)
+	err := m.MarshalTo(buf)
+	return buf, err
+}
+
+// MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
+func (m *EventUsingWKTs) MarshalTo(dest []byte) error {
+	var (
+		enc    = csproto.NewEncoder(dest)
+		buf    []byte
+		err    error
+		extVal interface{}
+	)
+	// ensure no unused variables
+	_ = enc
+	_ = buf
+	_ = err
+	_ = extVal
+
+	// Name (1,string,optional)
+	if len(m.Name) > 0 {
+		enc.EncodeString(1, m.Name)
+	}
+	// Ts (2,message,optional)
+	if m.Ts != nil {
+		if err = enc.EncodeNested(2, m.Ts); err != nil {
+			return fmt.Errorf("unable to encode message data for field 'ts' (tag=2): %w", err)
+		}
+	}
+	// EventType (3,enum,optional)
+	if m.EventType != 0 {
+		enc.EncodeInt32(3, int32(m.EventType))
+	}
+	return nil
+}
+
+// Unmarshal decodes a binary encoded Protobuf message from p and populates m with the result.
+func (m *EventUsingWKTs) Unmarshal(p []byte) error {
+	if len(p) == 0 {
+		return fmt.Errorf("cannot unmarshal from an empty buffer")
+	}
+	// clear any existing data
+	m.Reset()
+	dec := csproto.NewDecoder(p)
+	for dec.More() {
+		tag, wt, err := dec.DecodeTag()
+		if err != nil {
+			return err
+		}
+		switch tag {
+		case 1: // Name (string,optional)
+			if wt != csproto.WireTypeLengthDelimited {
+				return fmt.Errorf("incorrect wire type %v for field 'name' (tag=1), expected 2 (length-delimited)", wt)
+			}
+			if s, err := dec.DecodeString(); err != nil {
+				return fmt.Errorf("unable to decode string value for field 'name' (tag=1): %w", err)
+			} else {
+				m.Name = s
+			}
+
+		case 2: // Ts (message,optional)
+			if wt != csproto.WireTypeLengthDelimited {
+				return fmt.Errorf("incorrect wire type %v for field 'ts' (tag=2), expected 2 (length-delimited)", wt)
+			}
+			var mm timestamppb.Timestamp
+			if err = dec.DecodeNested(&mm); err != nil {
+				return fmt.Errorf("unable to decode message value for field 'ts' (tag=2): %w", err)
+			}
+			m.Ts = &mm
+		case 3: // EventType (enum,optional)
+			if wt != csproto.WireTypeVarint {
+				return fmt.Errorf("incorrect wire type %v for tag field 'event_type' (tag=3), expected 0 (varint)", wt)
+			}
+			if v, err := dec.DecodeInt32(); err != nil {
+				return fmt.Errorf("unable to decode int32 enum value for field 'event_type' (tag=3): %w", err)
+			} else {
+				m.EventType = EventType(v)
+			}
+
+		default:
+			if skipped, err := dec.Skip(tag, wt); err != nil {
+				return fmt.Errorf("invalid operation skipping tag %v: %w", tag, err)
+			} else {
+				m.unknownFields = append(m.unknownFields, skipped...)
+			}
+		}
+	}
+	return nil
+}
+
+//------------------------------------------------------------------------------
 // Custom Protobuf size/marshal/unmarshal code for TestEvent_NestedMsg
 
 // Size calculates and returns the size, in bytes, required to hold the contents of m using the Protobuf
