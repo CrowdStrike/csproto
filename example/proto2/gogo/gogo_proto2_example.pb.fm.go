@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"github.com/CrowdStrike/csproto"
+	"github.com/gogo/protobuf/types"
 )
 
 //------------------------------------------------------------------------------
@@ -1859,6 +1860,166 @@ func (m *EmptyExtension) Unmarshal(p []byte) error {
 				m.XXX_unrecognized = append(m.XXX_unrecognized, skipped...)
 			}
 		}
+	}
+	return nil
+}
+
+//------------------------------------------------------------------------------
+// Custom Protobuf size/marshal/unmarshal code for EventUsingWKTs
+
+// Size calculates and returns the size, in bytes, required to hold the contents of m using the Protobuf
+// binary encoding.
+func (m *EventUsingWKTs) Size() int {
+	// nil message is always 0 bytes
+	if m == nil {
+		return 0
+	}
+	// return cached size, if present
+	if csz := int(atomic.LoadInt32(&m.XXX_sizecache)); csz > 0 {
+		return csz
+	}
+	// calculate and cache
+	var sz, l int
+	_ = l // avoid unused variable
+
+	// Name (string,required)
+	if m.Name != nil {
+		l = len(*m.Name)
+		sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(l)) + l
+	}
+	// Ts (message,optional)
+	if m.Ts != nil {
+		l = csproto.Size(m.Ts)
+		sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
+	}
+	// EventType (enum,optional)
+	if m.EventType != nil {
+		sz += csproto.SizeOfTagKey(3) + csproto.SizeOfVarint(uint64(*m.EventType))
+	}
+	// cache the size so it can be re-used in Marshal()/MarshalTo()
+	atomic.StoreInt32(&m.XXX_sizecache, int32(sz))
+	return sz
+}
+
+// Marshal converts the contents of m to the Protobuf binary encoding and returns the result or an error.
+func (m *EventUsingWKTs) Marshal() ([]byte, error) {
+	siz := m.Size()
+	buf := make([]byte, siz)
+	err := m.MarshalTo(buf)
+	return buf, err
+}
+
+// MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
+func (m *EventUsingWKTs) MarshalTo(dest []byte) error {
+	var (
+		enc    = csproto.NewEncoder(dest)
+		buf    []byte
+		err    error
+		extVal interface{}
+	)
+	// ensure no unused variables
+	_ = enc
+	_ = buf
+	_ = err
+	_ = extVal
+
+	// Name (1,string,required)
+	if m.Name == nil {
+		return fmt.Errorf("required field 'Name' has no value")
+	}
+	enc.EncodeString(1, *m.Name)
+	// Ts (2,message,optional)
+	if m.Ts != nil {
+		if err = enc.EncodeNested(2, m.Ts); err != nil {
+			return fmt.Errorf("unable to encode message data for field 'ts' (tag=2): %w", err)
+		}
+	}
+	// EventType (3,enum,optional)
+	if m.EventType != nil {
+		enc.EncodeInt32(3, int32(*m.EventType))
+	}
+	return nil
+}
+
+// Unmarshal decodes a binary encoded Protobuf message from p and populates m with the result.
+func (m *EventUsingWKTs) Unmarshal(p []byte) error {
+	if len(p) == 0 {
+		return fmt.Errorf("cannot unmarshal from an empty buffer")
+	}
+	// clear any existing data
+	m.Reset()
+	dec := csproto.NewDecoder(p)
+	for dec.More() {
+		tag, wt, err := dec.DecodeTag()
+		if err != nil {
+			return err
+		}
+		switch tag {
+		case 1: // Name (string,required)
+			if wt != csproto.WireTypeLengthDelimited {
+				return fmt.Errorf("incorrect wire type %v for field 'name' (tag=1), expected 2 (length-delimited)", wt)
+			}
+			if s, err := dec.DecodeString(); err != nil {
+				return fmt.Errorf("unable to decode string value for field 'name' (tag=1): %w", err)
+			} else {
+				m.Name = csproto.String(s)
+			}
+
+		case 2: // Ts (message,optional)
+			if wt != csproto.WireTypeLengthDelimited {
+				return fmt.Errorf("incorrect wire type %v for field 'ts' (tag=2), expected 2 (length-delimited)", wt)
+			}
+			var mm types.Timestamp
+			if err = dec.DecodeNested(&mm); err != nil {
+				return fmt.Errorf("unable to decode message value for field 'ts' (tag=2): %w", err)
+			}
+			m.Ts = &mm
+		case 3: // EventType (enum,optional)
+			if wt != csproto.WireTypeVarint {
+				return fmt.Errorf("incorrect wire type %v for tag field 'event_type' (tag=3), expected 0 (varint)", wt)
+			}
+			if v, err := dec.DecodeInt32(); err != nil {
+				return fmt.Errorf("unable to decode int32 enum value for field 'event_type' (tag=3): %w", err)
+			} else {
+				ev := EventType(v)
+				m.EventType = &ev
+			}
+
+		default:
+			if skipped, err := dec.Skip(tag, wt); err != nil {
+				return fmt.Errorf("invalid operation skipping tag %v: %w", tag, err)
+			} else {
+				m.XXX_unrecognized = append(m.XXX_unrecognized, skipped...)
+			}
+		}
+	}
+	// verify required fields are assigned
+	if err := m.csprotoCheckRequiredFields(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// csprotoCheckRequiredFields is called by Unmarshal() to ensure that all required fields have been
+// populated.
+func (m *EventUsingWKTs) csprotoCheckRequiredFields() error {
+	var missingFields []string
+
+	if m.Name == nil {
+		missingFields = append(missingFields, "Name")
+	}
+
+	if len(missingFields) > 0 {
+		var sb strings.Builder
+		sb.WriteString("cannot unmarshal, one or more required fields missing: ")
+		for i, s := range missingFields {
+			if i > 0 {
+				sb.WriteRune(',')
+			}
+			sb.WriteString(s)
+		}
+		return fmt.Errorf(sb.String())
 	}
 	return nil
 }

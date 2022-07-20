@@ -1,11 +1,13 @@
 package example_test
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
+	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/CrowdStrike/csproto"
 	"github.com/CrowdStrike/csproto/example/proto2/googlev2"
@@ -64,6 +66,95 @@ func TestUnmarshalFailsOnMissingRequiredFieldForGoogleV2Message(t *testing.T) {
 	err := csproto.Unmarshal(data, &msg)
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "one or more required fields missing")
+}
+
+func TestProto2GoogleV2MarshalJSON(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
+		ts := timestamppb.Now()
+		etype := googlev2.EventType_EVENT_TYPE_UNDEFINED
+		msg := googlev2.EventUsingWKTs{
+			Name:      csproto.String("default"),
+			Ts:        ts,
+			EventType: &etype,
+		}
+		expected := fmt.Sprintf(`{"eventType":"EVENT_TYPE_UNDEFINED","name":"default","ts":"%s"}`, genGoogleTimestampString(ts))
+
+		res, err := csproto.JSONMarshaler(&msg).MarshalJSON()
+
+		assert.NoError(t, err)
+		assert.JSONEq(t, expected, string(res))
+	})
+	t.Run("with-indent", func(t *testing.T) {
+		ts := timestamppb.Now()
+		etype := googlev2.EventType_EVENT_TYPE_UNDEFINED
+		msg := googlev2.EventUsingWKTs{
+			Name:      csproto.String("with-indent"),
+			Ts:        ts,
+			EventType: &etype,
+		}
+		expected := fmt.Sprintf("{\n\t\"name\": \"with-indent\",\n\t\"ts\": \"%s\",\n\t\"eventType\": \"EVENT_TYPE_UNDEFINED\"\n}", genGoogleTimestampString(ts))
+
+		opts := []csproto.JSONOption{
+			csproto.JSONIndent("\t"),
+		}
+		res, err := csproto.JSONMarshaler(&msg, opts...).MarshalJSON()
+
+		assert.NoError(t, err)
+		assert.JSONEq(t, expected, string(res))
+		// TODO: compare the actual string
+		// - validate the formatted JSON text output, including line breaks and indentation
+		// - dbourque (2022-07-20)
+		//   for some reason, Google V2 is outputting 2 spaces after the `:` in the formatted JSON
+		//   but when I make expected contain 2 spaces the actual only has 1.  both Gogo and Google V1
+		//   always output 1 space. :confused:
+		//assert.Equal(t, expected, string(res))
+	})
+	t.Run("exclude-zero-values", func(t *testing.T) {
+		msg := googlev2.EventUsingWKTs{
+			Name: csproto.String("exclude-zero-values"),
+		}
+		expected := `{"name":"exclude-zero-values"}`
+
+		opts := []csproto.JSONOption{
+			csproto.JSONIncludeZeroValues(false),
+		}
+		res, err := csproto.JSONMarshaler(&msg, opts...).MarshalJSON()
+
+		assert.NoError(t, err)
+		assert.JSONEq(t, expected, string(res))
+	})
+	t.Run("include-zero-values", func(t *testing.T) {
+		msg := googlev2.EventUsingWKTs{
+			Name: csproto.String("include-zero-values"),
+		}
+		expected := `{"eventType":null,"name":"include-zero-values","ts":null}`
+
+		opts := []csproto.JSONOption{
+			csproto.JSONIncludeZeroValues(true),
+		}
+		res, err := csproto.JSONMarshaler(&msg, opts...).MarshalJSON()
+
+		assert.NoError(t, err)
+		assert.JSONEq(t, expected, string(res))
+	})
+	t.Run("enable-all", func(t *testing.T) {
+		etype := googlev2.EventType_EVENT_TYPE_UNDEFINED
+		msg := googlev2.EventUsingWKTs{
+			Name:      csproto.String("enable-all"),
+			EventType: &etype,
+		}
+		expected := fmt.Sprintf("{\n  \"eventType\":0,\"name\":\"enable-all\",\n  \"ts\":null\n}")
+
+		opts := []csproto.JSONOption{
+			csproto.JSONIndent("  "),
+			csproto.JSONIncludeZeroValues(true),
+			csproto.JSONUseEnumNumbers(true),
+		}
+		res, err := csproto.JSONMarshaler(&msg, opts...).MarshalJSON()
+
+		assert.NoError(t, err)
+		assert.JSONEq(t, expected, string(res))
+	})
 }
 
 func createTestProto2GoogleV2Message() *googlev2.BaseEvent {
