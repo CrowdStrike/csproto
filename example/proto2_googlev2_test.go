@@ -2,6 +2,7 @@ package example_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -101,13 +102,12 @@ func TestProto2GoogleV2MarshalJSON(t *testing.T) {
 
 		assert.NoError(t, err)
 		assert.JSONEq(t, expected, string(res))
-		// TODO: compare the actual string
+		// compare the actual string
 		// - validate the formatted JSON text output, including line breaks and indentation
-		// - dbourque (2022-07-20)
-		//   for some reason, Google V2 is outputting 2 spaces after the `:` in the formatted JSON
-		//   but when I make expected contain 2 spaces the actual only has 1.  both Gogo and Google V1
-		//   always output 1 space. :confused:
-		//assert.Equal(t, expected, string(res))
+		// - replace ":  " with ": " to undo the Google library's intentional randomization of the output :(
+		//   see: https://github.com/protocolbuffers/protobuf-go/blob/v1.28.1/internal/encoding/json/encode.go#L268-L274
+		s := strings.ReplaceAll(string(res), ":  ", ": ")
+		assert.Equal(t, expected, s)
 	})
 	t.Run("exclude-zero-values", func(t *testing.T) {
 		msg := googlev2.EventUsingWKTs{
