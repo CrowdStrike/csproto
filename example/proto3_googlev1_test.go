@@ -2,6 +2,7 @@ package example_test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/golang/protobuf/proto"
@@ -79,7 +80,10 @@ func TestProto3GoogleV1MarshalJSON(t *testing.T) {
 		assert.JSONEq(t, expected, string(res))
 		// compare the actual string
 		// - validate the formatted JSON text output, including line breaks and indentation
-		assert.Equal(t, expected, string(res))
+		// - replace ":  " with ": " to undo the Google library's intentional randomization of the output :(
+		//   see: https://github.com/protocolbuffers/protobuf-go/blob/v1.28.1/internal/encoding/json/encode.go#L268-L274
+		s := strings.ReplaceAll(string(res), ":  ", ": ")
+		assert.Equal(t, expected, s)
 	})
 	t.Run("exclude-zero-values", func(t *testing.T) {
 		msg := googlev1.EventUsingWKTs{
