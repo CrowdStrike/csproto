@@ -4,6 +4,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"unsafe"
 )
@@ -78,7 +79,12 @@ func (d *Decoder) More() bool {
 }
 
 // DecodeTag decodes a field tag and Protobuf wire type from the stream and returns the values.
+//
+// io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
 func (d *Decoder) DecodeTag() (tag int, wireType WireType, err error) {
+	if d.offset >= len(d.p) {
+		return 0, WireTypeVarint, io.ErrUnexpectedEOF
+	}
 	v, n := decodeVarint(d.p[d.offset:])
 	if n == 0 {
 		return 0, -1, ErrInvalidFieldTag
@@ -88,7 +94,12 @@ func (d *Decoder) DecodeTag() (tag int, wireType WireType, err error) {
 }
 
 // DecodeBool decodes a boolean value from the stream and returns the value.
+//
+// io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
 func (d *Decoder) DecodeBool() (b bool, err error) {
+	if d.offset >= len(d.p) {
+		return false, io.ErrUnexpectedEOF
+	}
 	v, n := decodeVarint(d.p[d.offset:])
 	if n == 0 {
 		return false, ErrInvalidVarintData
@@ -98,7 +109,12 @@ func (d *Decoder) DecodeBool() (b bool, err error) {
 }
 
 // DecodeString decodes a length-delimited string from the stream and returns the value.
+//
+// io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
 func (d *Decoder) DecodeString() (string, error) {
+	if d.offset >= len(d.p) {
+		return "", io.ErrUnexpectedEOF
+	}
 	b, err := d.DecodeBytes()
 	if err != nil {
 		return "", err
@@ -114,7 +130,12 @@ func (d *Decoder) DecodeString() (string, error) {
 }
 
 // DecodeBytes decodes a length-delimited slice of bytes from the stream and returns the value.
+//
+// io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
 func (d *Decoder) DecodeBytes() ([]byte, error) {
+	if d.offset >= len(d.p) {
+		return nil, io.ErrUnexpectedEOF
+	}
 	l, n := decodeVarint(d.p[d.offset:])
 	if n == 0 {
 		return nil, ErrInvalidVarintData
@@ -125,7 +146,12 @@ func (d *Decoder) DecodeBytes() ([]byte, error) {
 }
 
 // DecodeUInt32 decodes a varint-encoded 32-bit unsigned integer from the stream and returns the value.
+//
+// io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
 func (d *Decoder) DecodeUInt32() (uint32, error) {
+	if d.offset >= len(d.p) {
+		return 0, io.ErrUnexpectedEOF
+	}
 	v, n := decodeVarint(d.p[d.offset:])
 	if n == 0 {
 		return 0, ErrInvalidVarintData
@@ -138,7 +164,12 @@ func (d *Decoder) DecodeUInt32() (uint32, error) {
 }
 
 // DecodeUInt64 decodes a varint-encoded 64-bit unsigned integer from the stream and returns the value.
+//
+// io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
 func (d *Decoder) DecodeUInt64() (uint64, error) {
+	if d.offset >= len(d.p) {
+		return 0, io.ErrUnexpectedEOF
+	}
 	v, n := decodeVarint(d.p[d.offset:])
 	if n == 0 {
 		return 0, ErrInvalidVarintData
@@ -148,7 +179,12 @@ func (d *Decoder) DecodeUInt64() (uint64, error) {
 }
 
 // DecodeInt32 decodes a varint-encoded 32-bit integer from the stream and returns the value.
+//
+// io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
 func (d *Decoder) DecodeInt32() (int32, error) {
+	if d.offset >= len(d.p) {
+		return 0, io.ErrUnexpectedEOF
+	}
 	v, n := decodeVarint(d.p[d.offset:])
 	if n == 0 {
 		return 0, ErrInvalidVarintData
@@ -161,7 +197,12 @@ func (d *Decoder) DecodeInt32() (int32, error) {
 }
 
 // DecodeInt64 decodes a varint-encoded 64-bit integer from the stream and returns the value.
+//
+// io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
 func (d *Decoder) DecodeInt64() (int64, error) {
+	if d.offset >= len(d.p) {
+		return 0, io.ErrUnexpectedEOF
+	}
 	v, n := decodeVarint(d.p[d.offset:])
 	if n == 0 {
 		return 0, ErrInvalidVarintData
@@ -171,7 +212,12 @@ func (d *Decoder) DecodeInt64() (int64, error) {
 }
 
 // DecodeSInt32 decodes a zigzag-encoded 32-bit integer from the stream and returns the value.
+//
+// io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
 func (d *Decoder) DecodeSInt32() (int32, error) {
+	if d.offset >= len(d.p) {
+		return 0, io.ErrUnexpectedEOF
+	}
 	v, n := decodeZigZag32(d.p[d.offset:])
 	if n == 0 {
 		return 0, ErrInvalidZigZagData
@@ -181,7 +227,12 @@ func (d *Decoder) DecodeSInt32() (int32, error) {
 }
 
 // DecodeSInt64 decodes a zigzag-encoded 32-bit integer from the stream and returns the value.
+//
+// io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
 func (d *Decoder) DecodeSInt64() (int64, error) {
+	if d.offset >= len(d.p) {
+		return 0, io.ErrUnexpectedEOF
+	}
 	v, n := decodeZigZag64(d.p[d.offset:])
 	if n == 0 {
 		return 0, ErrInvalidZigZagData
@@ -191,7 +242,12 @@ func (d *Decoder) DecodeSInt64() (int64, error) {
 }
 
 // DecodeFixed32 decodes a 4-byte integer from the stream and returns the value.
+//
+// io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
 func (d *Decoder) DecodeFixed32() (uint32, error) {
+	if d.offset >= len(d.p) {
+		return 0, io.ErrUnexpectedEOF
+	}
 	v, n := decodeFixed32(d.p[d.offset:])
 	if n == 0 {
 		return 0, ErrInvalidFixed32Data
@@ -201,7 +257,12 @@ func (d *Decoder) DecodeFixed32() (uint32, error) {
 }
 
 // DecodeFixed64 decodes an 8-byte integer from the stream and returns the value.
+//
+// io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
 func (d *Decoder) DecodeFixed64() (uint64, error) {
+	if d.offset >= len(d.p) {
+		return 0, io.ErrUnexpectedEOF
+	}
 	v, n := decodeFixed64(d.p[d.offset:])
 	if n == 0 {
 		return 0, ErrInvalidFixed64Data
@@ -211,7 +272,12 @@ func (d *Decoder) DecodeFixed64() (uint64, error) {
 }
 
 // DecodeFloat32 decodes a 4-byte IEEE 754 floating point value from the stream and returns the value.
+//
+// io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
 func (d *Decoder) DecodeFloat32() (float32, error) {
+	if d.offset >= len(d.p) {
+		return 0, io.ErrUnexpectedEOF
+	}
 	v := binary.LittleEndian.Uint32(d.p[d.offset:])
 	fv := math.Float32frombits(v)
 	d.offset += 4
@@ -219,7 +285,12 @@ func (d *Decoder) DecodeFloat32() (float32, error) {
 }
 
 // DecodeFloat64 decodes an 8-byte IEEE 754 floating point value from the stream and returns the value.
+//
+// io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
 func (d *Decoder) DecodeFloat64() (float64, error) {
+	if d.offset >= len(d.p) {
+		return 0, io.ErrUnexpectedEOF
+	}
 	v := binary.LittleEndian.Uint64(d.p[d.offset:])
 	fv := math.Float64frombits(v)
 	d.offset += 8
@@ -227,7 +298,12 @@ func (d *Decoder) DecodeFloat64() (float64, error) {
 }
 
 // DecodePackedBool decodes a packed encoded list of boolean values from the stream and returns the value.
+//
+// io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
 func (d *Decoder) DecodePackedBool() ([]bool, error) {
+	if d.offset >= len(d.p) {
+		return nil, io.ErrUnexpectedEOF
+	}
 	var (
 		l, nRead uint64
 		n        int
@@ -254,7 +330,12 @@ func (d *Decoder) DecodePackedBool() ([]bool, error) {
 }
 
 // DecodePackedInt32 decodes a packed encoded list of 32-bit integers from the stream and returns the value.
+//
+// io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
 func (d *Decoder) DecodePackedInt32() ([]int32, error) {
+	if d.offset >= len(d.p) {
+		return nil, io.ErrUnexpectedEOF
+	}
 	var (
 		l, nRead uint64
 		n        int
@@ -284,7 +365,12 @@ func (d *Decoder) DecodePackedInt32() ([]int32, error) {
 }
 
 // DecodePackedInt64 decodes a packed encoded list of 64-bit integers from the stream and returns the value.
+//
+// io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
 func (d *Decoder) DecodePackedInt64() ([]int64, error) {
+	if d.offset >= len(d.p) {
+		return nil, io.ErrUnexpectedEOF
+	}
 	var (
 		l, nRead uint64
 		n        int
@@ -315,7 +401,12 @@ func (d *Decoder) DecodePackedInt64() ([]int64, error) {
 
 // DecodePackedUint32 decodes a packed encoded list of unsigned 32-bit integers from the stream and
 // returns the value.
+//
+// io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
 func (d *Decoder) DecodePackedUint32() ([]uint32, error) {
+	if d.offset >= len(d.p) {
+		return nil, io.ErrUnexpectedEOF
+	}
 	var (
 		l, nRead uint64
 		n        int
@@ -346,7 +437,12 @@ func (d *Decoder) DecodePackedUint32() ([]uint32, error) {
 
 // DecodePackedUint64 decodes a packed encoded list of unsigned 64-bit integers from the stream and
 // returns the value.
+//
+// io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
 func (d *Decoder) DecodePackedUint64() ([]uint64, error) {
+	if d.offset >= len(d.p) {
+		return nil, io.ErrUnexpectedEOF
+	}
 	var (
 		l, nRead uint64
 		n        int
@@ -374,7 +470,12 @@ func (d *Decoder) DecodePackedUint64() ([]uint64, error) {
 
 // DecodePackedSint32 decodes a packed encoded list of 32-bit signed integers from the stream and returns
 // the value.
+//
+// io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
 func (d *Decoder) DecodePackedSint32() ([]int32, error) {
+	if d.offset >= len(d.p) {
+		return nil, io.ErrUnexpectedEOF
+	}
 	var (
 		l, nRead uint64
 		n        int
@@ -402,7 +503,12 @@ func (d *Decoder) DecodePackedSint32() ([]int32, error) {
 
 // DecodePackedSint64 decodes a packed encoded list of 64-bit signed integers from the stream and returns
 // the value.
+//
+// io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
 func (d *Decoder) DecodePackedSint64() ([]int64, error) {
+	if d.offset >= len(d.p) {
+		return nil, io.ErrUnexpectedEOF
+	}
 	var (
 		l, nRead uint64
 		n        int
@@ -430,7 +536,12 @@ func (d *Decoder) DecodePackedSint64() ([]int64, error) {
 
 // DecodePackedFixed32 decodes a packed encoded list of 32-bit fixed-width integers from the stream
 // and returns the value.
+//
+// io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
 func (d *Decoder) DecodePackedFixed32() ([]uint32, error) {
+	if d.offset >= len(d.p) {
+		return nil, io.ErrUnexpectedEOF
+	}
 	var (
 		l, nRead uint64
 		n        int
@@ -458,7 +569,12 @@ func (d *Decoder) DecodePackedFixed32() ([]uint32, error) {
 
 // DecodePackedFixed64 decodes a packed encoded list of 64-bit fixed-width integers from the stream
 // and returns the value.
+//
+// io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
 func (d *Decoder) DecodePackedFixed64() ([]uint64, error) {
+	if d.offset >= len(d.p) {
+		return nil, io.ErrUnexpectedEOF
+	}
 	var (
 		l, nRead uint64
 		n        int
@@ -486,7 +602,12 @@ func (d *Decoder) DecodePackedFixed64() ([]uint64, error) {
 
 // DecodePackedFloat32 decodes a packed encoded list of 32-bit floating point numbers from the stream
 // and returns the value.
+//
+// io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
 func (d *Decoder) DecodePackedFloat32() ([]float32, error) {
+	if d.offset >= len(d.p) {
+		return nil, io.ErrUnexpectedEOF
+	}
 	var (
 		l, nRead uint64
 		n        int
@@ -512,7 +633,12 @@ func (d *Decoder) DecodePackedFloat32() ([]float32, error) {
 
 // DecodePackedFloat64 decodes a packed encoded list of 64-bit floating point numbers from the stream
 // and returns the value.
+//
+// io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
 func (d *Decoder) DecodePackedFloat64() ([]float64, error) {
+	if d.offset >= len(d.p) {
+		return nil, io.ErrUnexpectedEOF
+	}
 	var (
 		l, nRead uint64
 		n        int
@@ -537,7 +663,12 @@ func (d *Decoder) DecodePackedFloat64() ([]float64, error) {
 
 // DecodeNested decodes a nested Protobuf message from the stream into m.  If m satisfies our csproto.Unmarshaler
 // interface its Unmarshal() method will be called.  Otherwise, this method delegates to Marshal().
+//
+// io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
 func (d *Decoder) DecodeNested(m interface{}) error {
+	if d.offset >= len(d.p) {
+		return io.ErrUnexpectedEOF
+	}
 	l, n := decodeVarint(d.p[d.offset:])
 	if n == 0 {
 		return ErrInvalidVarintData
@@ -565,7 +696,12 @@ func (d *Decoder) DecodeNested(m interface{}) error {
 //
 // The tag and wire type are validated against the provided values and a DecoderSkipError error is
 // returned if they do not match.  This check is skipped when using "fast" mode.
+//
+// io.ErrUnexpectedEOF is returned if the operation would advance past the end of the data.
 func (d *Decoder) Skip(tag int, wt WireType) ([]byte, error) {
+	if d.offset >= len(d.p) {
+		return nil, io.ErrUnexpectedEOF
+	}
 	sz := SizeOfTagKey(tag)
 	bof := d.offset - sz
 	// account for skipping the first field

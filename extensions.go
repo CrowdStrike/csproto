@@ -120,3 +120,25 @@ func SetExtension(msg interface{}, ext interface{}, val interface{}) error {
 		return fmt.Errorf("unsupported message type %T", ext)
 	}
 }
+
+// ClearAllExtensions removes all proto2 extension fields from msg.
+//
+// This operation can be very inefficient, especially for Google V2 messages, so it is generally better
+// to explicitly clear individual extension fields.
+func ClearAllExtensions(msg interface{}) {
+	switch MsgType(msg) {
+	case MessageTypeGoogleV1:
+		google.ClearAllExtensions(msg.(google.Message))
+	case MessageTypeGoogle:
+		// no ClearAllExtensions() API in Google V2 so we have to brute force it :(
+		m := msg.(googlev2.Message)
+		googlev2.RangeExtensions(m, func(xt protoreflect.ExtensionType, _ interface{}) bool {
+			googlev2.ClearExtension(m, xt)
+			return true
+		})
+	case MessageTypeGogo:
+		gogo.ClearAllExtensions(msg.(gogo.Message))
+	default:
+		// no-op
+	}
+}
