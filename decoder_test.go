@@ -1,6 +1,7 @@
 package csproto_test
 
 import (
+	"io"
 	"math"
 	"testing"
 
@@ -903,4 +904,73 @@ func TestDecoderInvalidSkip(t *testing.T) {
 		_, err := dec.Skip(1, wt)
 		assert.ErrorAs(t, err, &skipErr)
 	}
+}
+
+func TestDecodePastEndOfBuffer(t *testing.T) {
+	var data = []byte{
+		// 1 (varint): 42
+		0x8, 0x2A,
+	}
+
+	dec := csproto.NewDecoder(data)
+	// consume tag and value
+	_, _, _ = dec.DecodeTag()
+	_, _ = dec.DecodeInt32()
+	// call each Decode* method again
+	_, _, err := dec.DecodeTag()
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "DecodeTag() should return io.ErrUnexpectedEOF")
+	_, err = dec.DecodeBool()
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "DecodeBool() should return io.ErrUnexpectedEOF")
+	_, err = dec.DecodeString()
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "DecodeString() should return io.ErrUnexpectedEOF")
+	_, err = dec.DecodeBytes()
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "DecodeBytes() should return io.ErrUnexpectedEOF")
+	_, err = dec.DecodeUInt32()
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "DecodeUInt32() should return io.ErrUnexpectedEOF")
+	_, err = dec.DecodeUInt64()
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "DecodeUInt64() should return io.ErrUnexpectedEOF")
+	_, err = dec.DecodeInt32()
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "DecodeInt32() should return io.ErrUnexpectedEOF")
+	_, err = dec.DecodeInt64()
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "DecodeInt64() should return io.ErrUnexpectedEOF")
+	_, err = dec.DecodeSInt32()
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "DecodeSInt32() should return io.ErrUnexpectedEOF")
+	_, err = dec.DecodeSInt64()
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "DecodeSInt64() should return io.ErrUnexpectedEOF")
+	_, err = dec.DecodeFixed32()
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "DecodeFixed32() should return io.ErrUnexpectedEOF")
+	_, err = dec.DecodeFixed64()
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "DecodeFixed64() should return io.ErrUnexpectedEOF")
+	_, err = dec.DecodeFloat32()
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "DecodeFloat32() should return io.ErrUnexpectedEOF")
+	_, err = dec.DecodeFloat64()
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "DecodeFloat64() should return io.ErrUnexpectedEOF")
+	_, err = dec.DecodePackedBool()
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "DecodePackedBool() should return io.ErrUnexpectedEOF")
+	_, err = dec.DecodePackedUint32()
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "DecodePackedUint32() should return io.ErrUnexpectedEOF")
+	_, err = dec.DecodePackedUint64()
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "DecodePackedUint64() should return io.ErrUnexpectedEOF")
+	_, err = dec.DecodePackedInt32()
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "DecodePackedInt32() should return io.ErrUnexpectedEOF")
+	_, err = dec.DecodePackedInt64()
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "DecodePackedInt64() should return io.ErrUnexpectedEOF")
+	_, err = dec.DecodePackedSint32()
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "DecodePackedSint32() should return io.ErrUnexpectedEOF")
+	_, err = dec.DecodePackedSint64()
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "DecodePackedSint64() should return io.ErrUnexpectedEOF")
+	_, err = dec.DecodePackedFixed32()
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "DecodePackedFixed32() should return io.ErrUnexpectedEOF")
+	_, err = dec.DecodePackedFixed64()
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "DecodePackedFixed64() should return io.ErrUnexpectedEOF")
+	_, err = dec.DecodePackedFloat32()
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "DecodePackedFloat32() should return io.ErrUnexpectedEOF")
+	_, err = dec.DecodePackedFloat64()
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "DecodePackedFloat64() should return io.ErrUnexpectedEOF")
+	var mm interface{}
+	err = dec.DecodeNested(mm)
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "DecodeNested() should return io.ErrUnexpectedEOF")
+
+	_, err = dec.Skip(1, csproto.WireTypeVarint)
+	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "Skip() should return io.ErrUnexpectedEOF")
 }

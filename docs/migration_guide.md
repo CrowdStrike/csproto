@@ -54,6 +54,63 @@ data, err := json.Marshal(csproto.JSONMarshaler(msg, jsonOpts...))
 
 If you need more control that this adapter provides, you will need to use the V2 [`protojson`](https://pkg.go.dev/google.golang.org/protobuf/encoding/protojson) API directly.
 
+### Or you're using `proto.Buffer`
+
+The `proto.Buffer` type implements a wrapper around a buffer and provides methods for encoding and decoding individual message fields.  We took a slightly different tack with `csproto`.  You can convert your code to use `csproto.Encoder` or `csproto.Decoder` to encode or decode values, respectively.  In some cases, the `csproto` API is even more user-friendly.
+
+Using `gogo/protobuf`:
+
+```go
+buf := proto.NewBuffer(data)
+val, err := buf.DecodeVarint()
+if err != nil {
+   // handle failure
+   return
+}
+tag, wireType := int(val)>>3, int(val & 0x7)
+if tag != 1 {
+   // handle unexpected tag
+   return
+}
+if wireType != proto.WireBytes {
+   // handle invalid field
+   return
+}
+s, err := buf.DecodeStringBytes()
+if err != nil {
+   // handle decode error
+   return
+}
+fmt.Println("tag:", tag, ", value:", s)
+```
+
+Using `csproto`:
+
+```go
+d := csproto.NewDecoder(data)
+tag, wireType, err := d.DecodeTag()
+switch {
+case tag != 1:
+   // handle unexpected tag
+   return
+case err != nil:
+   // handle failure
+   return
+case wireType != csproto.WireTypeLengthDelimited:
+   // handle invalid field:
+   return
+default:
+}
+s, err := d.DecodeString()
+if err != nil {
+   // handle decode error
+   return
+}
+fmt.Println("tag:", tag, ", value:", s)
+```
+
+A similar translation can be done to replace `proto.Buffer` with `csproto.Encoder` for writing raw fields, with the caveat that `Encoder` requires that the caller allocates the destination buffer rather than holding its own internal buffer and growing it as needed.
+
 ## Updating Code Generation
 
 Now that your non-generated code has been decoupled, the next step is to fix up the generated code.  Since the `csproto` library only provides shim APIs, you'll need to convert to using `protoc-gen-go` from the Protobuf V2 API in `google.golang.org/protobuf`.
