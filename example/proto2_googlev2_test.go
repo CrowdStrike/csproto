@@ -157,6 +157,27 @@ func TestProto2GoogleV2MarshalJSON(t *testing.T) {
 	})
 }
 
+func TestProto2GoogleV2MarshalText(t *testing.T) {
+	msg := createTestProto2GoogleV2Message()
+	// replace the current date/time with a known value for reproducible output
+	now := time.Date(2000, time.January, 1, 1, 2, 3, 0, time.UTC)
+	msg.Timestamp = proto.Uint64(uint64(now.Unix()))
+	// NOTE: the prototext format is explicitly documented as not stable
+	// - this string matches google.golang.org/protobuf@v1.28.1
+	// - if this test breaks after updating google.golang.org/protobuf, then update the expected string
+	//   accordingly
+	expected := "eventID: \"test-event\"\nsourceID: \"test-source\"\ntimestamp: 946688523\neventType: EVENT_TYPE_ONE\ndata: \"\"\n[crowdstrike.csproto.example.proto2.googlev2.TestEvent.eventExt]: {\n  name: \"test\"\n  info: \"\"\n  labels: \"one\"\n  labels: \"two\"\n  labels: \"three\"\n  embedded: {\n    ID: 42\n    stuff: \"some stuff\"\n    favoriteNumbers: 42\n    favoriteNumbers: 1138\n  }\n  jedi: true\n  nested: {\n    details: \"these are some nested details\"\n  }\n}\n"
+
+	s, err := csproto.MarshalText(msg)
+	// replace ":  " with ": " to undo the Google library's intentional randomization of the output :(
+	// see: https://github.com/protocolbuffers/protobuf-go/blob/v1.28.1/internal/encoding/text/encode.go#L226
+	//      https://github.com/protocolbuffers/protobuf-go/blob/v1.28.1/internal/encoding/text/encode.go#L238
+	s = strings.ReplaceAll(s, ":  ", ": ")
+
+	assert.NoError(t, err)
+	assert.Equal(t, expected, s)
+}
+
 func createTestProto2GoogleV2Message() *googlev2.BaseEvent {
 	now := uint64(time.Now().UTC().Unix())
 	et := googlev2.EventType_EVENT_TYPE_ONE

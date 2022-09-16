@@ -3,6 +3,7 @@ package example_test
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/gogo/protobuf/types"
@@ -127,6 +128,23 @@ func TestProto3GogoMarshalJSON(t *testing.T) {
 		assert.NoError(t, err)
 		assert.JSONEq(t, expected, string(res))
 	})
+}
+
+func TestProto3GogoMarshalText(t *testing.T) {
+	msg := createTestProto3GogoMessage()
+	// replace the current date/time with a known value for reproducible output
+	now := time.Date(2000, time.January, 1, 1, 2, 3, 0, time.UTC)
+	msg.Ts, _ = types.TimestampProto(now)
+	// NOTE: the prototext format is explicitly documented as not stable
+	// - this string matches gogo/protobuf@v1.3.2
+	// - if this test breaks after updating gogo/protobuf, then update the expected string
+	//   accordingly
+	expected := "name: \"test\"\nlabels: \"one\"\nlabels: \"two\"\nlabels: \"three\"\nembedded: <\n  ID: 42\n  stuff: \"some stuff\"\n  favoriteNumbers: 42\n  favoriteNumbers: 1138\n>\njedi: true\nnested: <\n  details: \"these are some nested details\"\n>\nts: <\n  seconds: 946688523\n>\n"
+
+	s, err := csproto.MarshalText(msg)
+
+	assert.NoError(t, err)
+	assert.Equal(t, expected, s)
 }
 
 func createTestProto3GogoMessage() *gogo.TestEvent {
