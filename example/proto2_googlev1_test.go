@@ -178,6 +178,17 @@ func TestProto2GoogleV1MarshalText(t *testing.T) {
 	assert.Equal(t, expected, s)
 }
 
+func TestProto2GoogleV1Equal(t *testing.T) {
+	m1 := createTestProto2GoogleV1Message()
+	m2 := createTestProto2GoogleV1Message()
+	*m2.Timestamp = *m1.Timestamp + 1
+	// m1 and m2 will have different timestamps so should not be equal
+	assert.False(t, csproto.Equal(m1, m2), "messages should not be equal\nm1=%s\nm2=%s", m1.String(), m2.String())
+	// make them equal
+	*m2.Timestamp = *m1.Timestamp
+	assert.True(t, csproto.Equal(m1, m2), "messages should be equal\nm1=%s\nm2=%s", m1.String(), m2.String())
+}
+
 func createTestProto2GoogleV1Message() *googlev1.BaseEvent {
 	now := uint64(time.Now().UTC().Unix())
 	et := googlev1.EventType_EVENT_TYPE_ONE

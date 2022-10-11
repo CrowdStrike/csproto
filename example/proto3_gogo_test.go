@@ -147,6 +147,16 @@ func TestProto3GogoMarshalText(t *testing.T) {
 	assert.Equal(t, expected, s)
 }
 
+func TestProto3GogoEqual(t *testing.T) {
+	m1 := createTestProto3GogoMessage()
+	m2 := createTestProto3GogoMessage()
+	// m1 and m2 will have different timestamps so should not be equal
+	assert.False(t, csproto.Equal(m1, m2), "messages should not be equal\nm1=%s\nm2=%s", m1.String(), m2.String())
+	// make them equal
+	*m2.Ts = *m1.Ts
+	assert.True(t, csproto.Equal(m1, m2), "messages should be equal\nm1=%s\nm2=%s", m1.String(), m2.String())
+}
+
 func createTestProto3GogoMessage() *gogo.TestEvent {
 	event := gogo.TestEvent{
 		Name:   "test",
