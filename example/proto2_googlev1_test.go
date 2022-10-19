@@ -157,6 +157,95 @@ func TestProto2GoogleV1MarshalJSON(t *testing.T) {
 	})
 }
 
+func TestProto2GoogleV1UnmarshalJSON(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
+		ts := timestamppb.Now()
+		data := []byte(fmt.Sprintf(`{"eventType":"EVENT_TYPE_UNDEFINED","name":"default","ts":"%s"}`, genGoogleTimestampString(ts)))
+		var msg googlev1.EventUsingWKTs
+
+		err := csproto.JSONUnmarshaler(&msg).UnmarshalJSON(data)
+		assert.NoError(t, err)
+		etype := googlev1.EventType_EVENT_TYPE_UNDEFINED
+		expected := googlev1.EventUsingWKTs{
+			Name:      csproto.String("default"),
+			Ts:        ts,
+			EventType: &etype,
+		}
+		assert.True(t, csproto.Equal(&msg, &expected))
+	})
+	t.Run("with-unknown-fields", func(t *testing.T) {
+		ts := timestamppb.Now()
+		data := []byte(fmt.Sprintf(`{"eventType":"EVENT_TYPE_UNDEFINED","name":"default","ts":"%s","fdsajkld":"dfjakldfa"}`, genGoogleTimestampString(ts)))
+		var msg googlev1.EventUsingWKTs
+
+		err := csproto.JSONUnmarshaler(&msg).UnmarshalJSON(data)
+		assert.Error(t, err, "JSON unmarshaling should fail if there are unknown fields")
+	})
+	t.Run("allow-unknown-fields", func(t *testing.T) {
+		ts := timestamppb.Now()
+		data := []byte(fmt.Sprintf(`{"eventType":"EVENT_TYPE_UNDEFINED","name":"default","ts":"%s","fdsajkld":"dfjakldfa"}`, genGoogleTimestampString(ts)))
+		var msg googlev1.EventUsingWKTs
+
+		opts := []csproto.JSONOption{
+			csproto.JSONAllowUnknownFields(true),
+		}
+		err := csproto.JSONUnmarshaler(&msg, opts...).UnmarshalJSON(data)
+		assert.NoError(t, err)
+		etype := googlev1.EventType_EVENT_TYPE_UNDEFINED
+		expected := googlev1.EventUsingWKTs{
+			Name:      csproto.String("default"),
+			Ts:        ts,
+			EventType: &etype,
+		}
+		assert.True(t, csproto.Equal(&msg, &expected))
+	})
+	t.Run("with-missing-required-field", func(t *testing.T) {
+		ts := timestamppb.Now()
+		data := []byte(fmt.Sprintf(`{"eventType":"EVENT_TYPE_UNDEFINED","ts":"%s"}`, genGoogleTimestampString(ts)))
+		var msg googlev1.EventUsingWKTs
+
+		err := csproto.JSONUnmarshaler(&msg).UnmarshalJSON(data)
+		assert.Error(t, err, "JSON unmarshaling should fail if required fields are missing")
+	})
+	t.Run("allow-partial", func(t *testing.T) {
+		ts := timestamppb.Now()
+		data := []byte(fmt.Sprintf(`{"eventType":"EVENT_TYPE_UNDEFINED","ts":"%s"}`, genGoogleTimestampString(ts)))
+		var msg googlev1.EventUsingWKTs
+
+		opts := []csproto.JSONOption{
+			csproto.JSONAllowPartialMessages(true),
+		}
+		err := csproto.JSONUnmarshaler(&msg, opts...).UnmarshalJSON(data)
+		assert.NoError(t, err)
+		etype := googlev1.EventType_EVENT_TYPE_UNDEFINED
+		expected := googlev1.EventUsingWKTs{
+			Name:      nil, // name should not be set
+			Ts:        ts,
+			EventType: &etype,
+		}
+		assert.True(t, csproto.Equal(&msg, &expected))
+	})
+	t.Run("enable-all", func(t *testing.T) {
+		ts := timestamppb.Now()
+		data := []byte(fmt.Sprintf(`{"eventType":"EVENT_TYPE_UNDEFINED","ts":"%s","fdsajkld":"dfjakldfa"}`, genGoogleTimestampString(ts)))
+		var msg googlev1.EventUsingWKTs
+
+		opts := []csproto.JSONOption{
+			csproto.JSONAllowUnknownFields(true),
+			csproto.JSONAllowPartialMessages(true),
+		}
+		err := csproto.JSONUnmarshaler(&msg, opts...).UnmarshalJSON(data)
+		assert.NoError(t, err)
+		etype := googlev1.EventType_EVENT_TYPE_UNDEFINED
+		expected := googlev1.EventUsingWKTs{
+			Name:      nil, // name should not be set
+			Ts:        ts,
+			EventType: &etype,
+		}
+		assert.True(t, csproto.Equal(&msg, &expected))
+	})
+}
+
 func TestProto2GoogleV1MarshalText(t *testing.T) {
 	msg := createTestProto2GoogleV1Message()
 	// replace the current date/time with a known value for reproducible output

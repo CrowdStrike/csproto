@@ -148,6 +148,81 @@ func TestProto2GogoMarshalJSON(t *testing.T) {
 	})
 }
 
+func TestProto2GogoV1UnmarshalJSON(t *testing.T) {
+	t.Run("default", func(t *testing.T) {
+		ts := types.TimestampNow()
+		data := []byte(fmt.Sprintf(`{"eventType":"EVENT_TYPE_UNDEFINED","name":"default","ts":"%s"}`, genGogoTimestampString(ts)))
+		var msg gogo.EventUsingWKTs
+
+		err := csproto.JSONUnmarshaler(&msg).UnmarshalJSON(data)
+		assert.NoError(t, err)
+		etype := gogo.EventType_EVENT_TYPE_UNDEFINED
+		expected := gogo.EventUsingWKTs{
+			Name:      csproto.String("default"),
+			Ts:        ts,
+			EventType: &etype,
+		}
+		assert.True(t, csproto.Equal(&msg, &expected))
+	})
+	t.Run("with-unknown-fields", func(t *testing.T) {
+		ts := types.TimestampNow()
+		data := []byte(fmt.Sprintf(`{"eventType":"EVENT_TYPE_UNDEFINED","name":"default","ts":"%s","fdsajkld":"dfjakldfa"}`, genGogoTimestampString(ts)))
+		var msg gogo.EventUsingWKTs
+
+		err := csproto.JSONUnmarshaler(&msg).UnmarshalJSON(data)
+		assert.Error(t, err, "JSON unmarshaling should fail if there are unknown fields")
+	})
+	t.Run("allow-unknown-fields", func(t *testing.T) {
+		ts := types.TimestampNow()
+		data := []byte(fmt.Sprintf(`{"eventType":"EVENT_TYPE_UNDEFINED","name":"default","ts":"%s","fdsajkld":"dfjakldfa"}`, genGogoTimestampString(ts)))
+		var msg gogo.EventUsingWKTs
+
+		opts := []csproto.JSONOption{
+			csproto.JSONAllowUnknownFields(true),
+		}
+		err := csproto.JSONUnmarshaler(&msg, opts...).UnmarshalJSON(data)
+		assert.NoError(t, err)
+		etype := gogo.EventType_EVENT_TYPE_UNDEFINED
+		expected := gogo.EventUsingWKTs{
+			Name:      csproto.String("default"),
+			Ts:        ts,
+			EventType: &etype,
+		}
+		assert.True(t, csproto.Equal(&msg, &expected))
+	})
+	t.Run("with-missing-required-field", func(t *testing.T) {
+		ts := types.TimestampNow()
+		data := []byte(fmt.Sprintf(`{"eventType":"EVENT_TYPE_UNDEFINED","ts":"%s"}`, genGogoTimestampString(ts)))
+		var msg gogo.EventUsingWKTs
+
+		err := csproto.JSONUnmarshaler(&msg).UnmarshalJSON(data)
+		assert.Error(t, err, "JSON unmarshaling should fail if required fields are missing")
+	})
+	t.Run("allow-partial", func(t *testing.T) {
+		ts := types.TimestampNow()
+		data := []byte(fmt.Sprintf(`{"eventType":"EVENT_TYPE_UNDEFINED","ts":"%s"}`, genGogoTimestampString(ts)))
+		var msg gogo.EventUsingWKTs
+
+		opts := []csproto.JSONOption{
+			csproto.JSONAllowPartialMessages(true),
+		}
+		err := csproto.JSONUnmarshaler(&msg, opts...).UnmarshalJSON(data)
+		assert.Error(t, err, "JSONAllowPartialMessages(true) should have no effect on Gogo messages")
+	})
+	t.Run("enable-all", func(t *testing.T) {
+		ts := types.TimestampNow()
+		data := []byte(fmt.Sprintf(`{"eventType":"EVENT_TYPE_UNDEFINED","ts":"%s","fdsajkld":"dfjakldfa"}`, genGogoTimestampString(ts)))
+		var msg gogo.EventUsingWKTs
+
+		opts := []csproto.JSONOption{
+			csproto.JSONAllowUnknownFields(true),
+			csproto.JSONAllowPartialMessages(true),
+		}
+		err := csproto.JSONUnmarshaler(&msg, opts...).UnmarshalJSON(data)
+		assert.Error(t, err, "JSONAllowPartialMessages(true) should have no effect on Gogo messages")
+	})
+}
+
 func TestProto2GogoMarshalText(t *testing.T) {
 	msg := createTestProto2GogoMessage()
 	// replace the current date/time with a known value for reproducible output

@@ -96,6 +96,78 @@ func (m *jsonMarshaler) MarshalJSON() ([]byte, error) {
 	return nil, fmt.Errorf("unsupported message type %T", m.msg)
 }
 
+// JSONUnmarshaler returns an implementation of the json.Unmarshaler interface that unmarshals a
+// JSON data stream into msg using the specified options.
+func JSONUnmarshaler(msg interface{}, opts ...JSONOption) json.Unmarshaler {
+	m := jsonUnmarshaler{
+		msg: msg,
+	}
+	for _, o := range opts {
+		o(&m.opts)
+	}
+	return &m
+
+}
+
+// jsonUnmarshaler wraps a Protobuf message and satisfies the json.Unmarshaler interface
+type jsonUnmarshaler struct {
+	msg  interface{}
+	opts jsonOptions
+}
+
+// UnmarshalJSON satisfies the json.Unmarshaler interface.
+//
+// If the wrapped message is nil, or a non-nil interface value holding nil, this method returns an error.
+// If the message satisfies the json.Marshaler interface we delegate to it directly.  Otherwise,
+// this method calls the appropriate underlying runtime (Gogo vs Google V1 vs Google V2) based on
+// the message's actual type.
+func (m *jsonUnmarshaler) UnmarshalJSON(data []byte) error {
+	if m.msg == nil || reflect.ValueOf(m.msg).IsNil() {
+		return fmt.Errorf("cannot unmarshal into nil")
+	}
+
+	// call the message's implementation directly, if present
+	if jm, ok := m.msg.(json.Unmarshaler); ok {
+		return jm.UnmarshalJSON(data)
+	}
+
+	// Google V2 message?
+	if msg, isV2 := m.msg.(protov2.Message); isV2 {
+		mo := protojson.UnmarshalOptions{
+			AllowPartial:   m.opts.allowPartial,
+			DiscardUnknown: m.opts.allowUnknownFields,
+		}
+		if err := mo.Unmarshal(data, msg); err != nil {
+			return fmt.Errorf("unable to unmarshal JSON data: %w", err)
+		}
+		return nil
+	}
+
+	// Google V1 message?
+	if msg, isV1 := m.msg.(protov1.Message); isV1 {
+		jm := jsonpb.Unmarshaler{
+			AllowUnknownFields: m.opts.allowUnknownFields,
+		}
+		if err := jm.Unmarshal(bytes.NewReader(data), msg); err != nil {
+			return fmt.Errorf("unable to unmarshal JSON data: %w", err)
+		}
+		return nil
+	}
+
+	// Gogo message?
+	if msg, isGogo := m.msg.(gogo.Message); isGogo {
+		jm := gogojson.Unmarshaler{
+			AllowUnknownFields: m.opts.allowUnknownFields,
+		}
+		if err := jm.Unmarshal(bytes.NewBuffer(data), msg); err != nil {
+			return fmt.Errorf("unable to unmarshal JSON data: %w", err)
+		}
+		return nil
+	}
+
+	return fmt.Errorf("unsupported message type %T", m.msg)
+}
+
 // JSONOption defines a function that sets a specific JSON formatting option
 type JSONOption func(*jsonOptions)
 
@@ -125,6 +197,24 @@ func JSONIncludeZeroValues(emitZeroValues bool) JSONOption {
 	}
 }
 
+// JSONAllowUnknownFields returns a JSON option that configures JSON unmarshaling to skip unknown
+// fields rather than return an error
+func JSONAllowUnknownFields(allow bool) JSONOption {
+	return func(opts *jsonOptions) {
+		opts.allowUnknownFields = allow
+	}
+}
+
+// JSONAllowPartialMessages returns a JSON option that configured JSON unmarshaling to not return an
+// error if unmarshaling data results in required fields not being set on the message.
+//
+// Note: only applies to Google V2 (google.golang.org/protobuf) messages that are using proto2 syntax.
+func JSONAllowPartialMessages(allow bool) JSONOption {
+	return func(opts *jsonOptions) {
+		opts.allowPartial = allow
+	}
+}
+
 // jsonOptions defines the JSON formatting options
 //
 // These options are a subset of those available by each of the three supported runtimes.  The supported
@@ -141,4 +231,12 @@ type jsonOptions struct {
 	useEnumNumbers bool
 	// If true, include zero-valued fields in the JSON output
 	emitZeroValues bool
+
+	// If true, unknown fields will be discarded when unmarshaling rather than unmarshaling returning
+	// an error
+	allowUnknownFields bool
+	// If true, unmarshaled messages with missing required fields will not return an error
+	//
+	// Note: only applies to Google V2 (google.golang.org/protobuf) messages that are using proto2 syntax.
+	allowPartial bool
 }
