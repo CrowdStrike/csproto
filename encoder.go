@@ -86,16 +86,14 @@ func (e *Encoder) EncodeSInt64(tag int, v int64) {
 // preceded by the varint-encoded tag key.
 func (e *Encoder) EncodeFixed32(tag int, v uint32) {
 	e.offset += EncodeTag(e.p[e.offset:], tag, WireTypeFixed32)
-	binary.LittleEndian.PutUint32(e.p[e.offset:], v)
-	e.offset += 4
+	e.offset += EncodeFixed32(e.p[e.offset:], v)
 }
 
 // EncodeFixed64 writes a 64-bit unsigned integer value to the buffer using 8 bytes in little endian format,
 // preceded by the varint-encoded tag key.
 func (e *Encoder) EncodeFixed64(tag int, v uint64) {
 	e.offset += EncodeTag(e.p[e.offset:], tag, WireTypeFixed64)
-	binary.LittleEndian.PutUint64(e.p[e.offset:], v)
-	e.offset += 8
+	e.offset += EncodeFixed64(e.p[e.offset:], v)
 }
 
 // EncodeFloat32 writes a 32-bit IEEE 754 floating point value to the buffer using 4 bytes in little endian format,
@@ -414,6 +412,20 @@ func EncodeVarint(dest []byte, v uint64) int {
 	}
 	dest[n] = uint8(v)
 	return n + 1
+}
+
+// EncodeFixed32 encodes v into dest using the Protobuf fixed 32-bit encoding, which is just the 4 bytes
+// of the value in little-endian format, and returns the number of bytes written
+func EncodeFixed32(dest []byte, v uint32) int {
+	binary.LittleEndian.PutUint32(dest, v)
+	return 4
+}
+
+// EncodeFixed64 encodes v into dest using the Protobuf fixed 64-bit encoding, which is just the 8 bytes
+// of the value in little-endian format, and returns the number of bytes written
+func EncodeFixed64(dest []byte, v uint64) int {
+	binary.LittleEndian.PutUint64(dest, v)
+	return 8
 }
 
 // EncodeZigZag32 encodes v into dest using the Protobuf zig/zag encoding for more efficient encoding
