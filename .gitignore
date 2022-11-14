@@ -6,3 +6,6 @@ dist/
 
 # editor-related files
 .vscode/
+
+# Go workspace files
+go.work*

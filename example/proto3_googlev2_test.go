@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
@@ -254,6 +255,15 @@ func TestProto3GoogleV2Equal(t *testing.T) {
 	// make them equal
 	*m2.Ts = *m1.Ts
 	assert.True(t, csproto.Equal(m1, m2), "messages should be equal\nm1=%s\nm2=%s", m1.String(), m2.String())
+}
+
+func TestProto3GoogleV2Clone(t *testing.T) {
+	m1 := createTestProto3GoogleV2Message()
+	m2, ok := csproto.Clone(m1).(*googlev2.TestEvent)
+
+	assert.True(t, ok, "type assertion to *googlev2.TestEvent should succeed")
+	assert.True(t, csproto.Equal(m1, m2), "cloned messages should be equal\nm1=%s\nm2=%s", m1.String(), m2.String())
+	assert.NotEqual(t, unsafe.Pointer(m1), unsafe.Pointer(m2))
 }
 
 func createTestProto3GoogleV2Message() *googlev2.TestEvent {

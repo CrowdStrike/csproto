@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"testing"
 	"time"
+	"unsafe"
 
 	"github.com/gogo/protobuf/proto"
 	"github.com/gogo/protobuf/types"
@@ -246,6 +247,15 @@ func TestProto3GogoEqual(t *testing.T) {
 	// make them equal
 	*m2.Ts = *m1.Ts
 	assert.True(t, csproto.Equal(m1, m2), "messages should be equal\nm1=%s\nm2=%s", m1.String(), m2.String())
+}
+
+func TestProto3GogoClone(t *testing.T) {
+	m1 := createTestProto3GogoMessage()
+	m2, ok := csproto.Clone(m1).(*gogo.TestEvent)
+
+	assert.True(t, ok, "type assertion to *gogo.TestEvent should succeed")
+	assert.True(t, csproto.Equal(m1, m2), "cloned messages should be equal\nm1=%s\nm2=%s", m1.String(), m2.String())
+	assert.NotEqual(t, unsafe.Pointer(m1), unsafe.Pointer(m2))
 }
 
 func createTestProto3GogoMessage() *gogo.TestEvent {
