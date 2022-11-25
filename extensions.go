@@ -1,8 +1,8 @@
 package csproto
 
 import (
+	"errors"
 	"fmt"
-	"reflect"
 
 	gogo "github.com/gogo/protobuf/proto"
 	google "github.com/golang/protobuf/proto" //nolint: staticcheck // we're using this deprecated package intentionally
@@ -14,18 +14,15 @@ import (
 // common descriptor values and the underlying extension value.
 // NOTE: Certain tags have been excluded as they are deprecated or non-existent or certain libraries
 type Extension struct {
-	ExtensionType interface{}
-	Field         int32
-	Name          string
-	Filename      string
-	Value         interface{}
+	Field int32
+	Name  string
+	Value interface{}
 }
 
 // RangeExtensions iterates through all extension descriptors of a given proto message, calling fn
 // on each iteration. It returns immediately on any error encountered.
 func RangeExtensions(msg interface{}, fn func(ext Extension) error) error {
-	value := reflect.ValueOf(msg)
-	msgType := deduceMsgType(msg, value.Type())
+	msgType := MsgType(msg)
 
 	switch msgType {
 	case MessageTypeGogo:
@@ -35,11 +32,9 @@ func RangeExtensions(msg interface{}, fn func(ext Extension) error) error {
 		}
 		for _, ext := range exts {
 			if err = fn(Extension{
-				Value:         ext,
-				Name:          ext.Name,
-				Field:         ext.Field,
-				Filename:      ext.Filename,
-				ExtensionType: ext.ExtensionType,
+				Value: ext,
+				Name:  ext.Name,
+				Field: ext.Field,
 			}); err != nil {
 				return err
 			}
@@ -52,11 +47,9 @@ func RangeExtensions(msg interface{}, fn func(ext Extension) error) error {
 		}
 		for _, ext := range exts {
 			if err = fn(Extension{
-				Value:         ext,
-				Name:          string(ext.TypeDescriptor().FullName()),
-				Field:         int32(ext.TypeDescriptor().Descriptor().Number()),
-				ExtensionType: ext.InterfaceOf(ext.Zero()),
-				Filename:      ext.TypeDescriptor().Descriptor().ParentFile().Path(),
+				Value: ext,
+				Name:  string(ext.TypeDescriptor().FullName()),
+				Field: int32(ext.TypeDescriptor().Descriptor().Number()),
 			}); err != nil {
 				return err
 			}
@@ -66,15 +59,15 @@ func RangeExtensions(msg interface{}, fn func(ext Extension) error) error {
 		var err error
 		googlev2.RangeExtensions(msg.(googlev2.Message), func(t protoreflect.ExtensionType, v interface{}) bool {
 			err = fn(Extension{
-				Value:         v,
-				Name:          string(t.TypeDescriptor().FullName()),
-				Field:         int32(t.TypeDescriptor().Descriptor().Number()),
-				ExtensionType: t.InterfaceOf(t.Zero()),
-				Filename:      t.TypeDescriptor().Descriptor().ParentFile().Path(),
+				Value: v,
+				Name:  string(t.TypeDescriptor().FullName()),
+				Field: int32(t.TypeDescriptor().Descriptor().Number()),
 			})
 			return err != nil
 		})
 		return err
+	case MessageTypeUnknown:
+		return errors.New("unsupported message type")
 	}
 	return nil
 }
