@@ -42,7 +42,8 @@ var _ json.Marshaler = (*jsonMarshaler)(nil)
 // this method calls the appropriate underlying runtime (Gogo vs Google V1 vs Google V2) based on
 // the message's actual type.
 func (m *jsonMarshaler) MarshalJSON() ([]byte, error) {
-	if m.msg == nil || reflect.ValueOf(m.msg).IsNil() {
+	value := reflect.ValueOf(m.msg)
+	if m.msg == nil || value.IsNil() {
 		return nil, nil
 	}
 
@@ -53,41 +54,36 @@ func (m *jsonMarshaler) MarshalJSON() ([]byte, error) {
 
 	var buf bytes.Buffer
 
-	// Google V2 message?
-	if msg, isV2 := m.msg.(protov2.Message); isV2 {
+	msgType := deduceMsgType(m.msg, value.Type())
+	switch msgType {
+	case MessageTypeGoogle:
 		mo := protojson.MarshalOptions{
 			Indent:          m.opts.indent,
 			UseEnumNumbers:  m.opts.useEnumNumbers,
 			EmitUnpopulated: m.opts.emitZeroValues,
 		}
-		b, err := mo.Marshal(msg)
+		b, err := mo.Marshal(m.msg.(protov2.Message))
 		if err != nil {
 			return nil, fmt.Errorf("unable to marshal message to JSON: %w", err)
 		}
 		return b, nil
-	}
-
-	// Google V1 message?
-	if msg, isV1 := m.msg.(protov1.Message); isV1 {
+	case MessageTypeGoogleV1:
 		jm := jsonpb.Marshaler{
 			Indent:       m.opts.indent,
 			EnumsAsInts:  m.opts.useEnumNumbers,
 			EmitDefaults: m.opts.emitZeroValues,
 		}
-		if err := jm.Marshal(&buf, msg); err != nil {
+		if err := jm.Marshal(&buf, m.msg.(protov1.Message)); err != nil {
 			return nil, fmt.Errorf("unable to marshal message to JSON: %w", err)
 		}
 		return buf.Bytes(), nil
-	}
-
-	// Gogo message?
-	if msg, isGogo := m.msg.(gogo.Message); isGogo {
+	case MessageTypeGogo:
 		jm := gogojson.Marshaler{
 			Indent:       m.opts.indent,
 			EnumsAsInts:  m.opts.useEnumNumbers,
 			EmitDefaults: m.opts.emitZeroValues,
 		}
-		if err := jm.Marshal(&buf, msg); err != nil {
+		if err := jm.Marshal(&buf, m.msg.(gogo.Message)); err != nil {
 			return nil, fmt.Errorf("unable to marshal message to JSON: %w", err)
 		}
 		return buf.Bytes(), nil
