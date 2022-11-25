@@ -2,12 +2,82 @@ package csproto
 
 import (
 	"fmt"
+	"reflect"
 
 	gogo "github.com/gogo/protobuf/proto"
 	google "github.com/golang/protobuf/proto" //nolint: staticcheck // we're using this deprecated package intentionally
 	googlev2 "google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
+
+// Extension is a combined struct describing features from gogo, google v1 & v2, containing all
+// common descriptor values and the underlying extension value.
+// NOTE: Certain tags have been excluded as they are deprecated or non-existent or certain libraries
+type Extension struct {
+	ExtensionType interface{}
+	Field         int32
+	Name          string
+	Filename      string
+	Value         interface{}
+}
+
+// RangeExtensions iterates through all extension descriptors of a given proto message, calling fn
+// on each iteration. It returns immediately on any error encountered.
+func RangeExtensions(msg interface{}, fn func(ext Extension) error) error {
+	value := reflect.ValueOf(msg)
+	msgType := deduceMsgType(msg, value.Type())
+
+	switch msgType {
+	case MessageTypeGogo:
+		exts, err := gogo.ExtensionDescs(msg.(gogo.Message))
+		if err != nil {
+			return err
+		}
+		for _, ext := range exts {
+			if err = fn(Extension{
+				Value:         ext,
+				Name:          ext.Name,
+				Field:         ext.Field,
+				Filename:      ext.Filename,
+				ExtensionType: ext.ExtensionType,
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	case MessageTypeGoogleV1:
+		exts, err := google.ExtensionDescs(msg.(google.Message))
+		if err != nil {
+			return err
+		}
+		for _, ext := range exts {
+			if err = fn(Extension{
+				Value:         ext,
+				Name:          string(ext.TypeDescriptor().FullName()),
+				Field:         int32(ext.TypeDescriptor().Descriptor().Number()),
+				ExtensionType: ext.InterfaceOf(ext.Zero()),
+				Filename:      ext.TypeDescriptor().Descriptor().ParentFile().Path(),
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	case MessageTypeGoogle:
+		var err error
+		googlev2.RangeExtensions(msg.(googlev2.Message), func(t protoreflect.ExtensionType, v interface{}) bool {
+			err = fn(Extension{
+				Value:         v,
+				Name:          string(t.TypeDescriptor().FullName()),
+				Field:         int32(t.TypeDescriptor().Descriptor().Number()),
+				ExtensionType: t.InterfaceOf(t.Zero()),
+				Filename:      t.TypeDescriptor().Descriptor().ParentFile().Path(),
+			})
+			return err != nil
+		})
+		return err
+	}
+	return nil
+}
 
 // HasExtension returns true if msg contains the specified proto2 extension field, delegating to the
 // appropriate underlying Protobuf API based on the concrete type of msg.
