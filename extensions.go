@@ -1,7 +1,6 @@
 package csproto
 
 import (
-	"errors"
 	"fmt"
 
 	gogo "github.com/gogo/protobuf/proto"
@@ -52,7 +51,7 @@ func RangeExtensions(msg interface{}, fn func(value interface{}, name string, fi
 		})
 		return err
 	case MessageTypeUnknown:
-		return errors.New("unsupported message type")
+		return fmt.Errorf("unsupported message type: %T", msg)
 	}
 	return nil
 }
