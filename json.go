@@ -42,8 +42,7 @@ var _ json.Marshaler = (*jsonMarshaler)(nil)
 // this method calls the appropriate underlying runtime (Gogo vs Google V1 vs Google V2) based on
 // the message's actual type.
 func (m *jsonMarshaler) MarshalJSON() ([]byte, error) {
-	value := reflect.ValueOf(m.msg)
-	if m.msg == nil || value.IsNil() {
+	if m.msg == nil || reflect.ValueOf(m.msg).IsNil() {
 		return nil, nil
 	}
 
@@ -54,7 +53,7 @@ func (m *jsonMarshaler) MarshalJSON() ([]byte, error) {
 
 	var buf bytes.Buffer
 
-	msgType := deduceMsgType(m.msg, value.Type())
+	msgType := MsgType(m.msg)
 	switch msgType {
 	case MessageTypeGoogle:
 		mo := protojson.MarshalOptions{
@@ -87,9 +86,10 @@ func (m *jsonMarshaler) MarshalJSON() ([]byte, error) {
 			return nil, fmt.Errorf("unable to marshal message to JSON: %w", err)
 		}
 		return buf.Bytes(), nil
+	default:
+		return nil, fmt.Errorf("unsupported message type %T", m.msg)
 	}
 
-	return nil, fmt.Errorf("unsupported message type %T", m.msg)
 }
 
 // JSONUnmarshaler returns an implementation of the json.Unmarshaler interface that unmarshals a
