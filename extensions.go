@@ -10,18 +10,9 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
-// Extension is a combined struct describing features from gogo, google v1 & v2, containing all
-// common descriptor values and the underlying extension value.
-// NOTE: Certain tags have been excluded as they are deprecated or non-existent or certain libraries
-type Extension struct {
-	Field int32
-	Name  string
-	Value interface{}
-}
-
 // RangeExtensions iterates through all extension descriptors of a given proto message, calling fn
 // on each iteration. It returns immediately on any error encountered.
-func RangeExtensions(msg interface{}, fn func(ext Extension) error) error {
+func RangeExtensions(msg interface{}, fn func(value interface{}, name string, field int32) error) error {
 	msgType := MsgType(msg)
 
 	switch msgType {
@@ -31,11 +22,7 @@ func RangeExtensions(msg interface{}, fn func(ext Extension) error) error {
 			return err
 		}
 		for _, ext := range exts {
-			if err = fn(Extension{
-				Value: ext,
-				Name:  ext.Name,
-				Field: ext.Field,
-			}); err != nil {
+			if err = fn(ext, ext.Name, ext.Field); err != nil {
 				return err
 			}
 		}
@@ -46,11 +33,10 @@ func RangeExtensions(msg interface{}, fn func(ext Extension) error) error {
 			return err
 		}
 		for _, ext := range exts {
-			if err = fn(Extension{
-				Value: ext,
-				Name:  string(ext.TypeDescriptor().FullName()),
-				Field: int32(ext.TypeDescriptor().Descriptor().Number()),
-			}); err != nil {
+			if err = fn(ext,
+				string(ext.TypeDescriptor().FullName()),
+				int32(ext.TypeDescriptor().Descriptor().Number()),
+			); err != nil {
 				return err
 			}
 		}
@@ -58,11 +44,10 @@ func RangeExtensions(msg interface{}, fn func(ext Extension) error) error {
 	case MessageTypeGoogle:
 		var err error
 		googlev2.RangeExtensions(msg.(googlev2.Message), func(t protoreflect.ExtensionType, v interface{}) bool {
-			err = fn(Extension{
-				Value: v,
-				Name:  string(t.TypeDescriptor().FullName()),
-				Field: int32(t.TypeDescriptor().Descriptor().Number()),
-			})
+			err = fn(v,
+				string(t.TypeDescriptor().FullName()),
+				int32(t.TypeDescriptor().Descriptor().Number()),
+			)
 			return err != nil
 		})
 		return err
@@ -152,7 +137,7 @@ func GetExtension(msg interface{}, ext interface{}) (interface{}, error) {
 		}
 		return gogo.GetExtension(msg.(gogo.Message), ed)
 	default:
-		return nil, fmt.Errorf("unsupported message type %T", ext)
+		return nil, fmt.Errorf("unsupported message type %T", msg)
 	}
 }
 
