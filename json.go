@@ -42,7 +42,8 @@ var _ json.Marshaler = (*jsonMarshaler)(nil)
 // this method calls the appropriate underlying runtime (Gogo vs Google V1 vs Google V2) based on
 // the message's actual type.
 func (m *jsonMarshaler) MarshalJSON() ([]byte, error) {
-	if m.msg == nil || reflect.ValueOf(m.msg).IsNil() {
+	value := reflect.ValueOf(m.msg)
+	if m.msg == nil || value.Kind() == reflect.Ptr && value.IsNil() {
 		return nil, nil
 	}
 

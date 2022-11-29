@@ -11,6 +11,8 @@ import (
 
 // RangeExtensions iterates through all extension descriptors of a given proto message, calling fn
 // on each iteration. It returns immediately on any error encountered.
+// WARNING: RangeExtensions ranges over all registered extensions and therefore has a very high performance
+// cost. Please consider using individual calls to GetExtension, if possible.
 func RangeExtensions(msg interface{}, fn func(value interface{}, name string, field int32) error) error {
 	msgType := MsgType(msg)
 
