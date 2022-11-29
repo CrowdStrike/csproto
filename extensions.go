@@ -9,6 +9,55 @@ import (
 	"google.golang.org/protobuf/reflect/protoreflect"
 )
 
+// RangeExtensions iterates through all extension descriptors of a given proto message, calling fn
+// on each iteration. It returns immediately on any error encountered.
+// WARNING: RangeExtensions ranges over all registered extensions and therefore has a very high performance
+// cost. Please consider using individual calls to GetExtension, if possible.
+func RangeExtensions(msg interface{}, fn func(value interface{}, name string, field int32) error) error {
+	msgType := MsgType(msg)
+
+	switch msgType {
+	case MessageTypeGogo:
+		exts, err := gogo.ExtensionDescs(msg.(gogo.Message))
+		if err != nil {
+			return err
+		}
+		for _, ext := range exts {
+			if err = fn(ext, ext.Name, ext.Field); err != nil {
+				return err
+			}
+		}
+		return nil
+	case MessageTypeGoogleV1:
+		exts, err := google.ExtensionDescs(msg.(google.Message))
+		if err != nil {
+			return err
+		}
+		for _, ext := range exts {
+			if err = fn(ext,
+				string(ext.TypeDescriptor().FullName()),
+				int32(ext.TypeDescriptor().Descriptor().Number()),
+			); err != nil {
+				return err
+			}
+		}
+		return nil
+	case MessageTypeGoogle:
+		var err error
+		googlev2.RangeExtensions(msg.(googlev2.Message), func(t protoreflect.ExtensionType, v interface{}) bool {
+			err = fn(v,
+				string(t.TypeDescriptor().FullName()),
+				int32(t.TypeDescriptor().Descriptor().Number()),
+			)
+			return err != nil
+		})
+		return err
+	case MessageTypeUnknown:
+		return fmt.Errorf("unsupported message type: %T", msg)
+	}
+	return nil
+}
+
 // HasExtension returns true if msg contains the specified proto2 extension field, delegating to the
 // appropriate underlying Protobuf API based on the concrete type of msg.
 func HasExtension(msg interface{}, ext interface{}) bool {
@@ -89,7 +138,7 @@ func GetExtension(msg interface{}, ext interface{}) (interface{}, error) {
 		}
 		return gogo.GetExtension(msg.(gogo.Message), ed)
 	default:
-		return nil, fmt.Errorf("unsupported message type %T", ext)
+		return nil, fmt.Errorf("unsupported message type %T", msg)
 	}
 }
 
