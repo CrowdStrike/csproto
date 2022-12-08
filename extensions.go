@@ -191,3 +191,18 @@ func ClearAllExtensions(msg interface{}) {
 		// no-op
 	}
 }
+
+// ExtensionFieldNumber returns the integer field tag associated with the specified proto2 extension
+// descriptor.  If ext is not one of the three supported types, this function returns 0 and an error.
+func ExtensionFieldNumber(ext any) (int, error) {
+	switch tv := ext.(type) {
+	case *gogo.ExtensionDesc:
+		return int(tv.Field), nil
+	case *google.ExtensionDesc:
+		return int(tv.Field), nil
+	case protoreflect.ExtensionType:
+		return int(tv.TypeDescriptor().Number()), nil
+	default:
+		return 0, fmt.Errorf("unsupported proto2 extension descriptor type %T", ext)
+	}
+}
