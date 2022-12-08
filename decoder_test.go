@@ -88,11 +88,12 @@ func TestDecodeString(t *testing.T) {
 
 func TestDecodeBytes(t *testing.T) {
 	cases := []struct {
-		name     string
-		fieldNum int
-		v        []byte
-		wt       csproto.WireType
-		expected []byte
+		name        string
+		fieldNum    int
+		v           []byte
+		wt          csproto.WireType
+		expected    []byte
+		expectedErr error
 	}{
 		{
 			name:     "empty slice",
@@ -108,6 +109,14 @@ func TestDecodeBytes(t *testing.T) {
 			wt:       csproto.WireTypeLengthDelimited,
 			expected: []byte{0x42, 0x11, 0x38},
 		},
+		{
+			name:        "invalid data",
+			fieldNum:    2,
+			v:           []byte{0x12, 0x3, 0x42, 0x11}, // field data is truncated
+			wt:          csproto.WireTypeLengthDelimited,
+			expected:    []byte{0x42, 0x11, 0x38},
+			expectedErr: io.ErrUnexpectedEOF,
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -118,8 +127,12 @@ func TestDecodeBytes(t *testing.T) {
 			assert.NoError(t, err, "should not fail")
 
 			got, err := dec.DecodeBytes()
-			assert.NoError(t, err)
-			assert.Equal(t, tc.expected, got)
+			if tc.expectedErr == nil {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.expected, got)
+			} else {
+				assert.ErrorIs(t, err, tc.expectedErr)
+			}
 		})
 	}
 }

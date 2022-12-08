@@ -140,6 +140,9 @@ func (d *Decoder) DecodeBytes() ([]byte, error) {
 	if n == 0 {
 		return nil, ErrInvalidVarintData
 	}
+	if d.offset+n+int(l) > len(d.p) {
+		return nil, io.ErrUnexpectedEOF
+	}
 	b := d.p[d.offset+n : d.offset+n+int(l)]
 	d.offset += n + int(l)
 	return b, nil
