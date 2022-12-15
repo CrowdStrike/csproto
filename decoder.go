@@ -26,6 +26,9 @@ var (
 	ErrInvalidPackedData = errors.New("unable to read protobuf packed value")
 )
 
+// MaxTagValue is the largest supported protobuf field tag, which is 2^29 - 1 (or 536,870,911)
+const MaxTagValue = 536870911
+
 // DecoderMode defines the behavior of the decoder (safe vs fastest).
 type DecoderMode int
 
@@ -85,8 +88,11 @@ func (d *Decoder) DecodeTag() (tag int, wireType WireType, err error) {
 	if d.offset >= len(d.p) {
 		return 0, WireTypeVarint, io.ErrUnexpectedEOF
 	}
-	v, n := decodeVarint(d.p[d.offset:])
-	if n == 0 {
+	v, n, err := decodeVarint(d.p[d.offset:])
+	if err != nil {
+		return 0, -1, err
+	}
+	if n < 1 || n > MaxTagValue {
 		return 0, -1, ErrInvalidFieldTag
 	}
 	d.offset += n
@@ -100,7 +106,10 @@ func (d *Decoder) DecodeBool() (b bool, err error) {
 	if d.offset >= len(d.p) {
 		return false, io.ErrUnexpectedEOF
 	}
-	v, n := decodeVarint(d.p[d.offset:])
+	v, n, err := decodeVarint(d.p[d.offset:])
+	if err != nil {
+		return false, err
+	}
 	if n == 0 {
 		return false, ErrInvalidVarintData
 	}
@@ -136,7 +145,10 @@ func (d *Decoder) DecodeBytes() ([]byte, error) {
 	if d.offset >= len(d.p) {
 		return nil, io.ErrUnexpectedEOF
 	}
-	l, n := decodeVarint(d.p[d.offset:])
+	l, n, err := decodeVarint(d.p[d.offset:])
+	if err != nil {
+		return nil, err
+	}
 	if n == 0 {
 		return nil, ErrInvalidVarintData
 	}
@@ -155,7 +167,10 @@ func (d *Decoder) DecodeUInt32() (uint32, error) {
 	if d.offset >= len(d.p) {
 		return 0, io.ErrUnexpectedEOF
 	}
-	v, n := decodeVarint(d.p[d.offset:])
+	v, n, err := decodeVarint(d.p[d.offset:])
+	if err != nil {
+		return 0, err
+	}
 	if n == 0 {
 		return 0, ErrInvalidVarintData
 	}
@@ -173,7 +188,10 @@ func (d *Decoder) DecodeUInt64() (uint64, error) {
 	if d.offset >= len(d.p) {
 		return 0, io.ErrUnexpectedEOF
 	}
-	v, n := decodeVarint(d.p[d.offset:])
+	v, n, err := decodeVarint(d.p[d.offset:])
+	if err != nil {
+		return 0, err
+	}
 	if n == 0 {
 		return 0, ErrInvalidVarintData
 	}
@@ -188,7 +206,10 @@ func (d *Decoder) DecodeInt32() (int32, error) {
 	if d.offset >= len(d.p) {
 		return 0, io.ErrUnexpectedEOF
 	}
-	v, n := decodeVarint(d.p[d.offset:])
+	v, n, err := decodeVarint(d.p[d.offset:])
+	if err != nil {
+		return 0, err
+	}
 	if n == 0 {
 		return 0, ErrInvalidVarintData
 	}
@@ -206,7 +227,10 @@ func (d *Decoder) DecodeInt64() (int64, error) {
 	if d.offset >= len(d.p) {
 		return 0, io.ErrUnexpectedEOF
 	}
-	v, n := decodeVarint(d.p[d.offset:])
+	v, n, err := decodeVarint(d.p[d.offset:])
+	if err != nil {
+		return 0, err
+	}
 	if n == 0 {
 		return 0, ErrInvalidVarintData
 	}
@@ -221,7 +245,10 @@ func (d *Decoder) DecodeSInt32() (int32, error) {
 	if d.offset >= len(d.p) {
 		return 0, io.ErrUnexpectedEOF
 	}
-	v, n := decodeZigZag32(d.p[d.offset:])
+	v, n, err := decodeZigZag32(d.p[d.offset:])
+	if err != nil {
+		return 0, err
+	}
 	if n == 0 {
 		return 0, ErrInvalidZigZagData
 	}
@@ -236,7 +263,10 @@ func (d *Decoder) DecodeSInt64() (int64, error) {
 	if d.offset >= len(d.p) {
 		return 0, io.ErrUnexpectedEOF
 	}
-	v, n := decodeZigZag64(d.p[d.offset:])
+	v, n, err := decodeZigZag64(d.p[d.offset:])
+	if err != nil {
+		return 0, err
+	}
 	if n == 0 {
 		return 0, ErrInvalidZigZagData
 	}
@@ -251,7 +281,10 @@ func (d *Decoder) DecodeFixed32() (uint32, error) {
 	if d.offset >= len(d.p) {
 		return 0, io.ErrUnexpectedEOF
 	}
-	v, n := decodeFixed32(d.p[d.offset:])
+	v, n, err := decodeFixed32(d.p[d.offset:])
+	if err != nil {
+		return 0, err
+	}
 	if n == 0 {
 		return 0, ErrInvalidFixed32Data
 	}
@@ -266,7 +299,10 @@ func (d *Decoder) DecodeFixed64() (uint64, error) {
 	if d.offset >= len(d.p) {
 		return 0, io.ErrUnexpectedEOF
 	}
-	v, n := decodeFixed64(d.p[d.offset:])
+	v, n, err := decodeFixed64(d.p[d.offset:])
+	if err != nil {
+		return 0, err
+	}
 	if n == 0 {
 		return 0, ErrInvalidFixed64Data
 	}
@@ -310,15 +346,25 @@ func (d *Decoder) DecodePackedBool() ([]bool, error) {
 	var (
 		l, nRead uint64
 		n        int
+		err      error
 		res      []bool
 	)
-	l, n = decodeVarint(d.p[d.offset:])
+	l, n, err = decodeVarint(d.p[d.offset:])
+	if err != nil {
+		return nil, err
+	}
 	if n == 0 {
 		return nil, ErrInvalidVarintData
 	}
 	d.offset += n
 	for nRead < l {
-		v, n := decodeVarint(d.p[d.offset:])
+		if d.offset >= len(d.p) {
+			return nil, io.ErrUnexpectedEOF
+		}
+		v, n, err := decodeVarint(d.p[d.offset:])
+		if err != nil {
+			return nil, err
+		}
 		if n == 0 {
 			return nil, ErrInvalidVarintData
 		}
@@ -335,22 +381,32 @@ func (d *Decoder) DecodePackedBool() ([]bool, error) {
 // DecodePackedInt32 decodes a packed encoded list of 32-bit integers from the stream and returns the value.
 //
 // io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
-func (d *Decoder) DecodePackedInt32() ([]int32, error) {
+func (d *Decoder) DecodePackedInt32() ([]int32, error) { //nolint: dupl // FALSE POSITIVE: this function is NOT a duplicate
 	if d.offset >= len(d.p) {
 		return nil, io.ErrUnexpectedEOF
 	}
 	var (
 		l, nRead uint64
 		n        int
+		err      error
 		res      []int32
 	)
-	l, n = decodeVarint(d.p[d.offset:])
+	l, n, err = decodeVarint(d.p[d.offset:])
+	if err != nil {
+		return nil, err
+	}
 	if n == 0 {
 		return nil, ErrInvalidVarintData
 	}
 	d.offset += n
 	for nRead < l {
-		v, n := decodeVarint(d.p[d.offset:])
+		if d.offset >= len(d.p) {
+			return nil, io.ErrUnexpectedEOF
+		}
+		v, n, err := decodeVarint(d.p[d.offset:])
+		if err != nil {
+			return nil, err
+		}
 		if n == 0 {
 			return nil, ErrInvalidVarintData
 		}
@@ -370,22 +426,32 @@ func (d *Decoder) DecodePackedInt32() ([]int32, error) {
 // DecodePackedInt64 decodes a packed encoded list of 64-bit integers from the stream and returns the value.
 //
 // io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
-func (d *Decoder) DecodePackedInt64() ([]int64, error) {
+func (d *Decoder) DecodePackedInt64() ([]int64, error) { //nolint: dupl // FALSE POSITIVE: this function is NOT a duplicate
 	if d.offset >= len(d.p) {
 		return nil, io.ErrUnexpectedEOF
 	}
 	var (
 		l, nRead uint64
 		n        int
+		err      error
 		res      []int64
 	)
-	l, n = decodeVarint(d.p[d.offset:])
+	l, n, err = decodeVarint(d.p[d.offset:])
+	if err != nil {
+		return nil, err
+	}
 	if n == 0 {
 		return nil, ErrInvalidVarintData
 	}
 	d.offset += n
 	for nRead < l {
-		v, n := decodeVarint(d.p[d.offset:])
+		if d.offset >= len(d.p) {
+			return nil, io.ErrUnexpectedEOF
+		}
+		v, n, err := decodeVarint(d.p[d.offset:])
+		if err != nil {
+			return nil, err
+		}
 		if n == 0 {
 			return nil, ErrInvalidVarintData
 		}
@@ -406,22 +472,32 @@ func (d *Decoder) DecodePackedInt64() ([]int64, error) {
 // returns the value.
 //
 // io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
-func (d *Decoder) DecodePackedUint32() ([]uint32, error) {
+func (d *Decoder) DecodePackedUint32() ([]uint32, error) { //nolint: dupl // FALSE POSITIVE: this function is NOT a duplicate
 	if d.offset >= len(d.p) {
 		return nil, io.ErrUnexpectedEOF
 	}
 	var (
 		l, nRead uint64
 		n        int
+		err      error
 		res      []uint32
 	)
-	l, n = decodeVarint(d.p[d.offset:])
+	l, n, err = decodeVarint(d.p[d.offset:])
+	if err != nil {
+		return nil, err
+	}
 	if n == 0 {
 		return nil, ErrInvalidVarintData
 	}
 	d.offset += n
 	for nRead < l {
-		v, n := decodeVarint(d.p[d.offset:])
+		if d.offset >= len(d.p) {
+			return nil, io.ErrUnexpectedEOF
+		}
+		v, n, err := decodeVarint(d.p[d.offset:])
+		if err != nil {
+			return nil, err
+		}
 		if n == 0 {
 			return nil, ErrInvalidVarintData
 		}
@@ -442,22 +518,32 @@ func (d *Decoder) DecodePackedUint32() ([]uint32, error) {
 // returns the value.
 //
 // io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
-func (d *Decoder) DecodePackedUint64() ([]uint64, error) {
+func (d *Decoder) DecodePackedUint64() ([]uint64, error) { //nolint: dupl // FALSE POSITIVE: this function is NOT a duplicate
 	if d.offset >= len(d.p) {
 		return nil, io.ErrUnexpectedEOF
 	}
 	var (
 		l, nRead uint64
 		n        int
+		err      error
 		res      []uint64
 	)
-	l, n = decodeVarint(d.p[d.offset:])
+	l, n, err = decodeVarint(d.p[d.offset:])
+	if err != nil {
+		return nil, err
+	}
 	if n == 0 {
 		return nil, ErrInvalidVarintData
 	}
 	d.offset += n
 	for nRead < l {
-		v, n := decodeVarint(d.p[d.offset:])
+		if d.offset >= len(d.p) {
+			return nil, io.ErrUnexpectedEOF
+		}
+		v, n, err := decodeVarint(d.p[d.offset:])
+		if err != nil {
+			return nil, err
+		}
 		if n == 0 {
 			return nil, ErrInvalidVarintData
 		}
@@ -475,22 +561,32 @@ func (d *Decoder) DecodePackedUint64() ([]uint64, error) {
 // the value.
 //
 // io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
-func (d *Decoder) DecodePackedSint32() ([]int32, error) {
+func (d *Decoder) DecodePackedSint32() ([]int32, error) { //nolint: dupl // FALSE POSITIVE: this function is NOT a duplicate
 	if d.offset >= len(d.p) {
 		return nil, io.ErrUnexpectedEOF
 	}
 	var (
 		l, nRead uint64
 		n        int
+		err      error
 		res      []int32
 	)
-	l, n = decodeVarint(d.p[d.offset:])
+	l, n, err = decodeVarint(d.p[d.offset:])
+	if err != nil {
+		return nil, err
+	}
 	if n == 0 {
 		return nil, ErrInvalidVarintData
 	}
 	d.offset += n
 	for nRead < l {
-		v, n := decodeZigZag32(d.p[d.offset:])
+		if d.offset >= len(d.p) {
+			return nil, io.ErrUnexpectedEOF
+		}
+		v, n, err := decodeZigZag32(d.p[d.offset:])
+		if err != nil {
+			return nil, err
+		}
 		if n == 0 {
 			return nil, ErrInvalidVarintData
 		}
@@ -508,22 +604,32 @@ func (d *Decoder) DecodePackedSint32() ([]int32, error) {
 // the value.
 //
 // io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
-func (d *Decoder) DecodePackedSint64() ([]int64, error) {
+func (d *Decoder) DecodePackedSint64() ([]int64, error) { //nolint: dupl // FALSE POSITIVE: this function is NOT a duplicate
 	if d.offset >= len(d.p) {
 		return nil, io.ErrUnexpectedEOF
 	}
 	var (
 		l, nRead uint64
 		n        int
+		err      error
 		res      []int64
 	)
-	l, n = decodeVarint(d.p[d.offset:])
+	l, n, err = decodeVarint(d.p[d.offset:])
+	if err != nil {
+		return nil, err
+	}
 	if n == 0 {
 		return nil, ErrInvalidVarintData
 	}
 	d.offset += n
 	for nRead < l {
-		v, n := decodeZigZag64(d.p[d.offset:])
+		if d.offset >= len(d.p) {
+			return nil, io.ErrUnexpectedEOF
+		}
+		v, n, err := decodeZigZag64(d.p[d.offset:])
+		if err != nil {
+			return nil, err
+		}
 		if n == 0 {
 			return nil, ErrInvalidVarintData
 		}
@@ -541,22 +647,32 @@ func (d *Decoder) DecodePackedSint64() ([]int64, error) {
 // and returns the value.
 //
 // io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
-func (d *Decoder) DecodePackedFixed32() ([]uint32, error) {
+func (d *Decoder) DecodePackedFixed32() ([]uint32, error) { //nolint: dupl // FALSE POSITIVE: this function is NOT a duplicate
 	if d.offset >= len(d.p) {
 		return nil, io.ErrUnexpectedEOF
 	}
 	var (
 		l, nRead uint64
 		n        int
+		err      error
 		res      []uint32
 	)
-	l, n = decodeVarint(d.p[d.offset:])
+	l, n, err = decodeVarint(d.p[d.offset:])
+	if err != nil {
+		return nil, err
+	}
 	if n == 0 {
 		return nil, ErrInvalidVarintData
 	}
 	d.offset += n
 	for nRead < l {
-		v, n := decodeFixed32(d.p[d.offset:])
+		if d.offset >= len(d.p) {
+			return nil, io.ErrUnexpectedEOF
+		}
+		v, n, err := decodeFixed32(d.p[d.offset:])
+		if err != nil {
+			return nil, err
+		}
 		if n == 0 {
 			return nil, ErrInvalidVarintData
 		}
@@ -574,22 +690,32 @@ func (d *Decoder) DecodePackedFixed32() ([]uint32, error) {
 // and returns the value.
 //
 // io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
-func (d *Decoder) DecodePackedFixed64() ([]uint64, error) {
+func (d *Decoder) DecodePackedFixed64() ([]uint64, error) { //nolint: dupl // FALSE POSITIVE: this function is NOT a duplicate
 	if d.offset >= len(d.p) {
 		return nil, io.ErrUnexpectedEOF
 	}
 	var (
 		l, nRead uint64
 		n        int
+		err      error
 		res      []uint64
 	)
-	l, n = decodeVarint(d.p[d.offset:])
+	l, n, err = decodeVarint(d.p[d.offset:])
+	if err != nil {
+		return nil, err
+	}
 	if n == 0 {
 		return nil, ErrInvalidVarintData
 	}
 	d.offset += n
 	for nRead < l {
-		v, n := decodeFixed64(d.p[d.offset:])
+		if d.offset >= len(d.p) {
+			return nil, io.ErrUnexpectedEOF
+		}
+		v, n, err := decodeFixed64(d.p[d.offset:])
+		if err != nil {
+			return nil, err
+		}
 		if n == 0 {
 			return nil, ErrInvalidVarintData
 		}
@@ -607,22 +733,29 @@ func (d *Decoder) DecodePackedFixed64() ([]uint64, error) {
 // and returns the value.
 //
 // io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
-func (d *Decoder) DecodePackedFloat32() ([]float32, error) {
+func (d *Decoder) DecodePackedFloat32() ([]float32, error) { //nolint: dupl // FALSE POSITIVE: this function is NOT a duplicate
 	if d.offset >= len(d.p) {
 		return nil, io.ErrUnexpectedEOF
 	}
 	var (
 		l, nRead uint64
 		n        int
+		err      error
 		res      []float32
 	)
-	l, n = decodeVarint(d.p[d.offset:])
+	l, n, err = decodeVarint(d.p[d.offset:])
+	if err != nil {
+		return nil, err
+	}
 	if n == 0 {
 		return nil, ErrInvalidVarintData
 	}
 	d.offset += n
 	res = make([]float32, 0, l/4)
 	for nRead < l {
+		if d.offset >= len(d.p) {
+			return nil, io.ErrUnexpectedEOF
+		}
 		v := binary.LittleEndian.Uint32(d.p[d.offset:])
 		nRead += 4
 		d.offset += 4
@@ -645,14 +778,21 @@ func (d *Decoder) DecodePackedFloat64() ([]float64, error) {
 	var (
 		l, nRead uint64
 		n        int
+		err      error
 		res      []float64
 	)
-	l, n = decodeVarint(d.p[d.offset:])
+	l, n, err = decodeVarint(d.p[d.offset:])
+	if err != nil {
+		return nil, err
+	}
 	if n == 0 {
 		return nil, ErrInvalidVarintData
 	}
 	d.offset += n
 	for nRead < l {
+		if d.offset >= len(d.p) {
+			return nil, io.ErrUnexpectedEOF
+		}
 		v := binary.LittleEndian.Uint64(d.p[d.offset:])
 		nRead += 8
 		d.offset += 8
@@ -672,13 +812,19 @@ func (d *Decoder) DecodeNested(m interface{}) error {
 	if d.offset >= len(d.p) {
 		return io.ErrUnexpectedEOF
 	}
-	l, n := decodeVarint(d.p[d.offset:])
+	l, n, err := decodeVarint(d.p[d.offset:])
+	if err != nil {
+		return err
+	}
 	if n == 0 {
 		return ErrInvalidVarintData
 	}
 	if l == 0 {
 		d.offset += n
 		return nil
+	}
+	if d.offset+n+int(l) > len(d.p) {
+		return io.ErrUnexpectedEOF
 	}
 	switch tv := m.(type) {
 	case Unmarshaler:
@@ -714,7 +860,10 @@ func (d *Decoder) Skip(tag int, wt WireType) ([]byte, error) {
 	// validate that the field we're skipping matches the specified tag and wire type
 	// . skip validation in fast mode
 	if d.mode == DecoderModeSafe {
-		v, n := decodeVarint(d.p[bof:])
+		v, n, err := decodeVarint(d.p[bof:])
+		if err != nil {
+			return nil, err
+		}
 		if n != sz {
 			return nil, ErrInvalidVarintData
 		}
@@ -727,70 +876,95 @@ func (d *Decoder) Skip(tag int, wt WireType) ([]byte, error) {
 			}
 		}
 	}
+	skipped := 0
 	switch wt {
 	case WireTypeVarint:
-		_, n := decodeVarint(d.p[d.offset:])
-		d.offset += n
+		_, n, err := decodeVarint(d.p[d.offset:])
+		if err != nil {
+			return nil, err
+		}
+		skipped = n
 	case WireTypeFixed64:
-		d.offset += 8
+		skipped = 8
 	case WireTypeLengthDelimited:
-		l, n := decodeVarint(d.p[d.offset:])
+		l, n, err := decodeVarint(d.p[d.offset:])
+		if err != nil {
+			return nil, err
+		}
 		if n == 0 {
 			return nil, ErrInvalidVarintData
 		}
-		d.offset += n + int(l)
+		skipped = n + int(l)
 	case WireTypeFixed32:
-		d.offset += 4
+		skipped = 4
+	default:
+		return nil, fmt.Errorf("unsupported wire type value: %v", wt)
 	}
+	if d.offset+skipped >= len(d.p) {
+		return nil, io.ErrUnexpectedEOF
+	}
+	d.offset += skipped
 	return d.p[bof:d.offset], nil
 }
 
-func decodeVarint(p []byte) (v uint64, n int) {
+func decodeVarint(p []byte) (v uint64, n int, err error) {
 	for shift := uint(0); shift < 64; shift += 7 {
-		if n > len(p) {
-			return 0, 0
+		if n >= len(p) {
+			return 0, 0, io.ErrUnexpectedEOF
 		}
 		b := uint64(p[n])
 		n++
 		v |= (b & 0x7f << shift)
 		if (b & 0x80) == 0 {
-			return v, n
+			return v, n, nil
 		}
 	}
-	return 0, 0
+	return 0, 0, ErrValueOverflow
 }
 
-func decodeZigZag32(p []byte) (v int32, n int) {
+func decodeZigZag32(p []byte) (v int32, n int, err error) {
 	var dv uint64
-	dv, n = decodeVarint(p)
+	dv, n, err = decodeVarint(p)
+	if err != nil {
+		return 0, 0, err
+	}
 	if n == 0 {
-		return 0, 0
+		return 0, 0, ErrInvalidVarintData
 	}
 	dv = uint64((uint32(dv) >> 1) ^ uint32((int32(dv&1)<<31)>>31))
-	return int32(dv), n
+	return int32(dv), n, nil
 }
 
-func decodeZigZag64(p []byte) (v int64, n int) {
+func decodeZigZag64(p []byte) (v int64, n int, err error) {
 	var dv uint64
-	dv, n = decodeVarint(p)
+	dv, n, err = decodeVarint(p)
+	if err != nil {
+		return 0, 0, err
+	}
 	if n == 0 {
-		return 0, 0
+		return 0, 0, ErrInvalidVarintData
 	}
 	dv = (dv >> 1) ^ uint64((int64(dv&1)<<63)>>63)
-	return int64(dv), n
+	return int64(dv), n, nil
 }
 
-func decodeFixed32(p []byte) (v uint32, n int) {
+func decodeFixed32(p []byte) (v uint32, n int, err error) {
+	if len(p) < 4 {
+		return 0, 0, io.ErrUnexpectedEOF
+	}
 	// we only care about the first 4 bytes, so help the compiler eliminate bounds checks
 	p = p[:4]
 	v = uint32(p[0])
 	v |= uint32(p[1]) << 8
 	v |= uint32(p[2]) << 16
 	v |= uint32(p[3]) << 24
-	return v, 4
+	return v, 4, nil
 }
 
-func decodeFixed64(p []byte) (v uint64, n int) {
+func decodeFixed64(p []byte) (v uint64, n int, err error) {
+	if len(p) < 8 {
+		return 0, 0, io.ErrUnexpectedEOF
+	}
 	// we only care about the first 8 bytes, so help the compiler eliminate bounds checks
 	p = p[:8]
 	v = uint64(p[0])
@@ -801,7 +975,7 @@ func decodeFixed64(p []byte) (v uint64, n int) {
 	v |= uint64(p[5]) << 40
 	v |= uint64(p[6]) << 48
 	v |= uint64(p[7]) << 56
-	return v, 8
+	return v, 8, nil
 }
 
 // DecoderSkipError defines an error returned by the decoder's Skip() method when the specified tag and

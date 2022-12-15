@@ -1,6 +1,7 @@
 package csproto_test
 
 import (
+	"errors"
 	"io"
 	"math"
 	"testing"
@@ -986,4 +987,82 @@ func TestDecodePastEndOfBuffer(t *testing.T) {
 
 	_, err = dec.Skip(1, csproto.WireTypeVarint)
 	assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "Skip() should return io.ErrUnexpectedEOF")
+}
+
+func TestDecodeTag(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		data []byte
+		tag  int
+		wt   csproto.WireType
+		err  error
+	}{
+		{
+			name: "multi-byte varint data with remaining bytes missing",
+			data: []byte{0x80},
+			err:  io.ErrUnexpectedEOF,
+		},
+		{
+			name: "varint overflow",
+			// 11 bytes == overflow
+			data: []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80},
+			err:  csproto.ErrValueOverflow,
+		},
+	}
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			dec := csproto.NewDecoder(tc.data)
+
+			tag, wt, err := dec.DecodeTag()
+			assert.Equal(t, tc.tag, tag)
+			if tc.err != nil {
+				assert.ErrorIs(t, err, tc.err)
+				assert.Equal(t, -1, int(wt), "returned wire type should be -1 when an error occurs")
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tc.wt, wt)
+			}
+		})
+	}
+}
+
+func FuzzDecodeTag(f *testing.F) {
+	seedData := [][]byte{
+		{(1 << 3)},     // tag=1, wire type=0
+		{(2 << 3)},     // tag=2, wire type=0
+		{(1 << 3) | 1}, // tag=1, wire type=fixed64
+		{(2 << 3) | 1}, // tag=2, wire type=fixed64
+		{(1 << 3) | 2}, // tag=1, wire type=length-delmited
+		{(2 << 3) | 2}, // tag=2, wire type=length-delmited
+		{(1 << 3) | 5}, // tag=1, wire type=fixed32
+		{(2 << 3) | 5}, // tag=2, wire type=fixed32
+	}
+	// add seed data with max tag for each wire type
+	for _, v := range []int{0, 1, 2, 5} {
+		d := make([]byte, csproto.SizeOfTagKey(csproto.MaxTagValue))
+		csproto.EncodeTag(d, csproto.MaxTagValue, csproto.WireType(v))
+		seedData = append(seedData, d)
+	}
+	for _, s := range seedData {
+		f.Add(s)
+	}
+	f.Fuzz(func(t *testing.T, d []byte) {
+		dec := csproto.NewDecoder(d)
+		_, _, err := dec.DecodeTag()
+		if err != nil {
+			switch {
+			case errors.Is(err, io.ErrUnexpectedEOF):
+				// valid error
+			case errors.Is(err, csproto.ErrValueOverflow):
+				// valid error
+			case errors.Is(err, csproto.ErrInvalidVarintData):
+				// valid error
+			default:
+				t.Errorf("unexpected error from DecodeTag(): %v", err)
+			}
+		}
+	})
 }
