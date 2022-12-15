@@ -261,6 +261,16 @@ func TestProto2GogoClone(t *testing.T) {
 	assert.NotEqual(t, unsafe.Pointer(m1), unsafe.Pointer(m2))
 }
 
+func TestProto2GogoExtensionFieldNumber(t *testing.T) {
+	n, err := csproto.ExtensionFieldNumber(gogo.E_TestEvent_EventExt)
+	assert.Equal(t, 100, n, "extension field number should be 100")
+	assert.NoError(t, err)
+
+	n, err = csproto.ExtensionFieldNumber(37)
+	assert.Equal(t, 0, n, "field number should be 0 for invalid value")
+	assert.Error(t, err)
+}
+
 func createTestProto2GogoMessage() *gogo.BaseEvent {
 	now := uint64(time.Now().UTC().Unix())
 	et := gogo.EventType_EVENT_TYPE_ONE
