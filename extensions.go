@@ -199,7 +199,7 @@ func ExtensionFieldNumber(ext any) (int, error) {
 	case *gogo.ExtensionDesc:
 		return int(tv.Field), nil
 	case *google.ExtensionDesc:
-		return int(tv.Field), nil
+		return int(tv.TypeDescriptor().Number()), nil
 	case protoreflect.ExtensionType:
 		return int(tv.TypeDescriptor().Number()), nil
 	default:

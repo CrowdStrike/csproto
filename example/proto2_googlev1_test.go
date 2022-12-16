@@ -288,6 +288,12 @@ func TestProto2GoogleV1Clone(t *testing.T) {
 	assert.NotEqual(t, unsafe.Pointer(m1), unsafe.Pointer(m2))
 }
 
+func TestProto2GoogleExtensionFieldNumber(t *testing.T) {
+	n, err := csproto.ExtensionFieldNumber(googlev1.E_TestEvent_EventExt)
+	assert.Equal(t, 100, n, "extension field number should be 100")
+	assert.NoError(t, err)
+}
+
 func createTestProto2GoogleV1Message() *googlev1.BaseEvent {
 	now := uint64(time.Now().UTC().Unix())
 	et := googlev1.EventType_EVENT_TYPE_ONE
