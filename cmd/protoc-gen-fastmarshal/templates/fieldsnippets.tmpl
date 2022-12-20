@@ -145,14 +145,19 @@
         // size of key (always has an internal tag of 1)
     {{ if eq (.Kind | string) "int32" "int64" "uint32" "uint64" -}}
         keySize := 1 + csproto.SizeOfVarint(uint64(k))
+    {{- else if eq (.Kind | string) "bool" -}}
+        _ = k
+        keySize := 1 + 1
     {{- else if eq (.Kind | string) "string" -}}
         l = len(k)
         keySize := 1 + csproto.SizeOfVarint(uint64(l)) + l
     {{- else if eq (.Kind | string) "sint32" "sint64" -}}
         keySize := 1 + csproto.SizeOfZigZag(uint64(k))
     {{- else if eq (.Kind | string) "fixed32" "sfixed32" -}}
+        _ = k
         keySize := 5
     {{- else if eq (.Kind | string) "fixed64" "sfixed64" -}}
+         _ = k
         keySize := 9
     {{- else -}}
         panic(fmt.Errorf("unknown/unsupported Protobuf field kind '{{.Kind | string}}' for map key for field {{$mapField.Name}} (tag={{$mapDesc.Number}})"))
@@ -162,6 +167,10 @@
         // size of value (always has an internal tag of 2)
     {{ if eq (.Kind | string) "int32" "int64" "uint32" "uint64" "enum" -}}
         valueSize := 1 + csproto.SizeOfVarint(uint64(v))
+        sz += csproto.SizeOfTagKey({{$mapDesc.Number}}) + csproto.SizeOfVarint(uint64(keySize + valueSize)) + keySize + valueSize
+    {{- else if eq (.Kind | string) "bool" -}}
+        _ = v
+        valueSize := 1 + 1
         sz += csproto.SizeOfTagKey({{$mapDesc.Number}}) + csproto.SizeOfVarint(uint64(keySize + valueSize)) + keySize + valueSize
     {{- else if eq (.Kind | string) "string" "bytes" -}}
         l = len(v)
@@ -490,12 +499,14 @@
 {{- $mapKeyKind := (.Desc.MapKey.Kind | string) -}}
 {{- $mapValueKind := (.Desc.MapValue.Kind | string) -}}
     for k, v := range m.{{.GoName | getSafeFieldName}} {
-        var l int
         {{ if eq $mapValueKind "int32" "int64" "uint32" "uint64" "enum" -}}
         itemSize := 1 + csproto.SizeOfVarint(uint64(v))
+        {{- else if eq $mapValueKind "bool" -}}
+        _ = v
+        itemSize := 1 + 1
         {{- else if eq $mapValueKind "string" "bytes" -}}
-        l = len(v)
-        itemSize := 1 + csproto.SizeOfVarint(uint64(l)) + l
+        valueSize := len(v)
+        itemSize := 1 + csproto.SizeOfVarint(uint64(valueSize)) + valueSize
         {{- else if eq $mapValueKind "sint32" "sint64" -}}
         itemSize := 1 + csproto.SizeOfZigZag(uint64(v))
         {{- else if eq $mapValueKind "fixed32" "sfixed32" "float" -}}
@@ -506,16 +517,19 @@
         if v == nil {
             continue
         }
-        l = csproto.Size(v)
-        itemSize := 1 + csproto.SizeOfVarint(uint64(l)) + l
+        valueSize := csproto.Size(v)
+        itemSize := 1 + csproto.SizeOfVarint(uint64(valueSize)) + valueSize
         {{- else -}}
         panic(fmt.Errorf("unknown/unsupported Protobuf field kind '{{$mapValueKind}}' for map value for field {{$mapField.Desc.Name}} (tag={{$mapField.Desc.Number}})"))
         {{- end }}
         {{ if eq $mapKeyKind "int32" "int64" "uint32" "uint64" "enum" -}}
         itemSize += 1 + csproto.SizeOfVarint(uint64(k))
+        {{- else if eq $mapKeyKind "bool" -}}
+        _ = k
+        itemSize += 1 + 1 + l
         {{- else if eq $mapKeyKind "string" -}}
-        l = len(k)
-        itemSize += 1 + csproto.SizeOfVarint(uint64(l)) + l
+        keySize := len(k)
+        itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
         {{- else if eq $mapKeyKind "sint32" "sint64" -}}
         itemSize += 1 + csproto.SizeOfZigZag(uint64(k))
         {{- else if eq $mapKeyKind "fixed32" "sfixed32" -}}
@@ -528,15 +542,19 @@
         enc.EncodeMapEntryHeader({{$mapField.Desc.Number}}, itemSize)
         {{ if eq $mapKeyKind "int32" "int64" "uint32" "uint64" -}}
         enc.EncodeUInt64(1, uint64(k))
+        {{- else if eq $mapKeyKind "bool" -}}
+        enc.EncodeBool(1, k)
         {{- else if eq $mapKeyKind "string" -}}
         enc.EncodeString(1, k)
         {{- else if eq $mapKeyKind "sint32" "sint64" -}}
         enc.EncodeSInt{{$mapKeyKind | trunc -2}}(1, k)
         {{- else if eq $mapKeyKind "fixed32" "sfixed32" "fixed64" "sfixed64" -}}
-        enc.EncodeFixed{{$mapKeyKind | trunc -2}}(uint{{$mapKeyKind | trunc -2}}(1, k))
+        enc.EncodeFixed{{$mapKeyKind | trunc -2}}(1, uint{{$mapKeyKind | trunc -2}}(k))
         {{- end }}
         {{ if eq $mapValueKind "int32" "int64" "uint32" "uint64" "enum" -}}
         enc.EncodeUInt64(2, uint64(v))
+        {{- else if eq $mapValueKind "bool" -}}
+        enc.EncodeBool(2, v)
         {{- else if eq $mapValueKind "string" "bytes" -}}
         enc.Encode{{$mapValueKind | upperFirst}}(2, v)
         {{- else if eq $mapValueKind "sint32" "sint64" -}}
@@ -1047,7 +1065,7 @@
                 if ewt != csproto.WireTypeVarint {
                     return fmt.Errorf("incorrect wire type %v for map key for field '{{.Desc.Name}}' (tag={{.Desc.Number}}), expected 0 (varint)", ewt)
                 }
-                if entryKey, err = dec.DecodeUint{{$mapKeyKind | trunc -2}}(); err != nil {
+                if entryKey, err = dec.DecodeUInt{{$mapKeyKind | trunc -2}}(); err != nil {
                     return err
                 }
         {{- else if eq $mapKeyKind "sint32" "sint64" -}}
@@ -1057,7 +1075,17 @@
                 if entryKey, err = dec.DecodeSInt{{$mapKeyKind | trunc -2}}(); err != nil {
                     return err
                 }
-        {{- else if eq $mapKeyKind "fixed32" "sfixed32" "fixed64" "sfixed64" -}}
+        {{- else if eq $mapKeyKind "sfixed32" "sfixed64" -}}
+            {{- $bitSize := $mapKeyKind | trunc -2 -}}
+                if ewt != csproto.WireTypeFixed{{$bitSize}} {
+                    return fmt.Errorf("incorrect wire type %v for map key for field '{{.Desc.Name}}' (tag={{.Desc.Number}}), expected {{if eq $bitSize "32"}}5{{else}}1{{end}} (fixed{{$bitSize}})", ewt)
+                }
+                if sv, err := dec.DecodeFixed{{$bitSize}}(); err != nil {
+                    return err
+                } else {
+                    entryKey = int{{$bitSize}}(sv)
+                }
+        {{- else if eq $mapKeyKind "fixed32" "fixed64" -}}
             {{- $bitSize := $mapKeyKind | trunc -2 -}}
                 if ewt != csproto.WireTypeFixed{{$bitSize}} {
                     return fmt.Errorf("incorrect wire type %v for map key for field '{{.Desc.Name}}' (tag={{.Desc.Number}}), expected {{if eq $bitSize "32"}}5{{else}}1{{end}} (fixed{{$bitSize}})", ewt)
@@ -1328,7 +1356,7 @@
             if wt != csproto.WireTypeLengthDelimited {
                 return fmt.Errorf("incorrect wire type %v for tag field '{{.Desc.Name}}' (tag={{.Desc.Number}}), expected 2 (length-delimited)", wt)
             }
-            var mm_{{.Desc.Name}} {{.Message.GoIdent.GoName | getSafeFieldName}}
+            var mm_{{.Desc.Name}} {{.Message | getImportPrefix}}{{.Message.GoIdent.GoName | getSafeFieldName}}
             if err = dec.DecodeNested(&mm_{{.Desc.Name}}); err != nil {
                 return fmt.Errorf("unable to decode message value for field '{{.Desc.Name}}' (tag={{.Desc.Number}}): %w", err)
             } else {

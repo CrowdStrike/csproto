@@ -221,10 +221,9 @@ func (m *AllTheMaps) MarshalTo(dest []byte) error {
 
 	// ToInt32 (1,map)
 	for k, v := range m.ToInt32 {
-		var l int
 		itemSize := 1 + csproto.SizeOfVarint(uint64(v))
-		l = len(k)
-		itemSize += 1 + csproto.SizeOfVarint(uint64(l)) + l
+		keySize := len(k)
+		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
 		enc.EncodeMapEntryHeader(1, itemSize)
 		enc.EncodeString(1, k)
 		enc.EncodeUInt64(2, uint64(v))
@@ -232,10 +231,9 @@ func (m *AllTheMaps) MarshalTo(dest []byte) error {
 
 	// ToInt64 (2,map)
 	for k, v := range m.ToInt64 {
-		var l int
 		itemSize := 1 + csproto.SizeOfVarint(uint64(v))
-		l = len(k)
-		itemSize += 1 + csproto.SizeOfVarint(uint64(l)) + l
+		keySize := len(k)
+		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
 		enc.EncodeMapEntryHeader(2, itemSize)
 		enc.EncodeString(1, k)
 		enc.EncodeUInt64(2, uint64(v))
@@ -243,10 +241,9 @@ func (m *AllTheMaps) MarshalTo(dest []byte) error {
 
 	// ToUInt32 (3,map)
 	for k, v := range m.ToUInt32 {
-		var l int
 		itemSize := 1 + csproto.SizeOfVarint(uint64(v))
-		l = len(k)
-		itemSize += 1 + csproto.SizeOfVarint(uint64(l)) + l
+		keySize := len(k)
+		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
 		enc.EncodeMapEntryHeader(3, itemSize)
 		enc.EncodeString(1, k)
 		enc.EncodeUInt64(2, uint64(v))
@@ -254,10 +251,9 @@ func (m *AllTheMaps) MarshalTo(dest []byte) error {
 
 	// ToUInt64 (4,map)
 	for k, v := range m.ToUInt64 {
-		var l int
 		itemSize := 1 + csproto.SizeOfVarint(uint64(v))
-		l = len(k)
-		itemSize += 1 + csproto.SizeOfVarint(uint64(l)) + l
+		keySize := len(k)
+		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
 		enc.EncodeMapEntryHeader(4, itemSize)
 		enc.EncodeString(1, k)
 		enc.EncodeUInt64(2, uint64(v))
@@ -265,11 +261,10 @@ func (m *AllTheMaps) MarshalTo(dest []byte) error {
 
 	// ToString (5,map)
 	for k, v := range m.ToString {
-		var l int
-		l = len(v)
-		itemSize := 1 + csproto.SizeOfVarint(uint64(l)) + l
-		l = len(k)
-		itemSize += 1 + csproto.SizeOfVarint(uint64(l)) + l
+		valueSize := len(v)
+		itemSize := 1 + csproto.SizeOfVarint(uint64(valueSize)) + valueSize
+		keySize := len(k)
+		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
 		enc.EncodeMapEntryHeader(5, itemSize)
 		enc.EncodeString(1, k)
 		enc.EncodeString(2, v)
@@ -277,11 +272,10 @@ func (m *AllTheMaps) MarshalTo(dest []byte) error {
 
 	// ToBytes (6,map)
 	for k, v := range m.ToBytes {
-		var l int
-		l = len(v)
-		itemSize := 1 + csproto.SizeOfVarint(uint64(l)) + l
-		l = len(k)
-		itemSize += 1 + csproto.SizeOfVarint(uint64(l)) + l
+		valueSize := len(v)
+		itemSize := 1 + csproto.SizeOfVarint(uint64(valueSize)) + valueSize
+		keySize := len(k)
+		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
 		enc.EncodeMapEntryHeader(6, itemSize)
 		enc.EncodeString(1, k)
 		enc.EncodeBytes(2, v)
@@ -289,10 +283,9 @@ func (m *AllTheMaps) MarshalTo(dest []byte) error {
 
 	// ToSInt32 (7,map)
 	for k, v := range m.ToSInt32 {
-		var l int
 		itemSize := 1 + csproto.SizeOfZigZag(uint64(v))
-		l = len(k)
-		itemSize += 1 + csproto.SizeOfVarint(uint64(l)) + l
+		keySize := len(k)
+		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
 		enc.EncodeMapEntryHeader(7, itemSize)
 		enc.EncodeString(1, k)
 		enc.EncodeSInt32(2, v)
@@ -300,10 +293,9 @@ func (m *AllTheMaps) MarshalTo(dest []byte) error {
 
 	// ToSInt64 (8,map)
 	for k, v := range m.ToSInt64 {
-		var l int
 		itemSize := 1 + csproto.SizeOfZigZag(uint64(v))
-		l = len(k)
-		itemSize += 1 + csproto.SizeOfVarint(uint64(l)) + l
+		keySize := len(k)
+		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
 		enc.EncodeMapEntryHeader(8, itemSize)
 		enc.EncodeString(1, k)
 		enc.EncodeSInt64(2, v)
@@ -311,10 +303,9 @@ func (m *AllTheMaps) MarshalTo(dest []byte) error {
 
 	// ToFixed32 (9,map)
 	for k, v := range m.ToFixed32 {
-		var l int
 		itemSize := 5
-		l = len(k)
-		itemSize += 1 + csproto.SizeOfVarint(uint64(l)) + l
+		keySize := len(k)
+		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
 		enc.EncodeMapEntryHeader(9, itemSize)
 		enc.EncodeString(1, k)
 		enc.EncodeFixed32(2, uint32(v))
@@ -322,10 +313,9 @@ func (m *AllTheMaps) MarshalTo(dest []byte) error {
 
 	// ToSFixed32 (10,map)
 	for k, v := range m.ToSFixed32 {
-		var l int
 		itemSize := 5
-		l = len(k)
-		itemSize += 1 + csproto.SizeOfVarint(uint64(l)) + l
+		keySize := len(k)
+		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
 		enc.EncodeMapEntryHeader(10, itemSize)
 		enc.EncodeString(1, k)
 		enc.EncodeFixed32(2, uint32(v))
@@ -333,10 +323,9 @@ func (m *AllTheMaps) MarshalTo(dest []byte) error {
 
 	// ToFixed64 (11,map)
 	for k, v := range m.ToFixed64 {
-		var l int
 		itemSize := 9
-		l = len(k)
-		itemSize += 1 + csproto.SizeOfVarint(uint64(l)) + l
+		keySize := len(k)
+		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
 		enc.EncodeMapEntryHeader(11, itemSize)
 		enc.EncodeString(1, k)
 		enc.EncodeFixed64(2, uint64(v))
@@ -344,10 +333,9 @@ func (m *AllTheMaps) MarshalTo(dest []byte) error {
 
 	// ToSFixed64 (12,map)
 	for k, v := range m.ToSFixed64 {
-		var l int
 		itemSize := 9
-		l = len(k)
-		itemSize += 1 + csproto.SizeOfVarint(uint64(l)) + l
+		keySize := len(k)
+		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
 		enc.EncodeMapEntryHeader(12, itemSize)
 		enc.EncodeString(1, k)
 		enc.EncodeFixed64(2, uint64(v))
@@ -355,10 +343,9 @@ func (m *AllTheMaps) MarshalTo(dest []byte) error {
 
 	// ToFloat (13,map)
 	for k, v := range m.ToFloat {
-		var l int
 		itemSize := 5
-		l = len(k)
-		itemSize += 1 + csproto.SizeOfVarint(uint64(l)) + l
+		keySize := len(k)
+		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
 		enc.EncodeMapEntryHeader(13, itemSize)
 		enc.EncodeString(1, k)
 		enc.EncodeFloat32(2, v)
@@ -366,10 +353,9 @@ func (m *AllTheMaps) MarshalTo(dest []byte) error {
 
 	// ToDouble (14,map)
 	for k, v := range m.ToDouble {
-		var l int
 		itemSize := 9
-		l = len(k)
-		itemSize += 1 + csproto.SizeOfVarint(uint64(l)) + l
+		keySize := len(k)
+		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
 		enc.EncodeMapEntryHeader(14, itemSize)
 		enc.EncodeString(1, k)
 		enc.EncodeFloat64(2, v)
@@ -377,14 +363,13 @@ func (m *AllTheMaps) MarshalTo(dest []byte) error {
 
 	// ToMessage (15,map)
 	for k, v := range m.ToMessage {
-		var l int
 		if v == nil {
 			continue
 		}
-		l = csproto.Size(v)
-		itemSize := 1 + csproto.SizeOfVarint(uint64(l)) + l
-		l = len(k)
-		itemSize += 1 + csproto.SizeOfVarint(uint64(l)) + l
+		valueSize := csproto.Size(v)
+		itemSize := 1 + csproto.SizeOfVarint(uint64(valueSize)) + valueSize
+		keySize := len(k)
+		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
 		enc.EncodeMapEntryHeader(15, itemSize)
 		enc.EncodeString(1, k)
 		enc.EncodeNested(2, v)
@@ -392,10 +377,9 @@ func (m *AllTheMaps) MarshalTo(dest []byte) error {
 
 	// ToEnum (16,map)
 	for k, v := range m.ToEnum {
-		var l int
 		itemSize := 1 + csproto.SizeOfVarint(uint64(v))
-		l = len(k)
-		itemSize += 1 + csproto.SizeOfVarint(uint64(l)) + l
+		keySize := len(k)
+		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
 		enc.EncodeMapEntryHeader(16, itemSize)
 		enc.EncodeString(1, k)
 		enc.EncodeUInt64(2, uint64(v))

@@ -16,7 +16,7 @@ message TestEvent {
     string name = 1;
     string info = 2;
     bool isAwesome = 3;
-    
+
     repeated string labels = 4;
 
     EmbeddedEvent embedded = 5;
@@ -34,6 +34,11 @@ message TestEvent {
 
     google.protobuf.Timestamp ts = 10;
     google.protobuf.NullValue nullVal = 11;
+
+    oneof oneofs {
+        google.protobuf.Timestamp timestamps = 12;
+        google.protobuf.Struct structs = 13;
+    }
 }
 
 message EmbeddedEvent {
@@ -89,5 +94,26 @@ message EventUsingWKTs {
     string name = 1;
     google.protobuf.Timestamp ts = 2;
     EventType event_type = 3;
+}
 
+message MapObject {
+    string name = 1;
+    google.protobuf.Timestamp ts = 2;
+    map<string, string> attributes = 3;
+}
+
+message Maps {
+    map<string, bool> bools = 1;
+    map<string, string> strings = 2;
+    map<int32, int32> int32s = 3;
+    map<int64, int64> int64s = 4;
+    map<uint32, uint32> uint32s = 5;
+    map<uint64, uint64> uint64s = 6;
+    map<sint32, sint32> sint32s = 7;
+    map<sint64, sint64> sint64s = 8;
+    map<fixed32, fixed32> fixed32s = 9;
+    map<fixed64, fixed64> fixed64s = 10;
+    map<sfixed32, sfixed32> sfixed32s = 11;
+    map<sfixed64, sfixed64> sfixed64s = 12;
+    map<string, MapObject> objects = 13;
 }
