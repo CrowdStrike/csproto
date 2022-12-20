@@ -101,11 +101,10 @@ func (m *{{ .Message.GoIdent.GoName }}) MarshalTo(dest []byte) error {
 
 // Unmarshal decodes a binary encoded Protobuf message from p and populates m with the result.
 func (m *{{ .Message.GoIdent.GoName}}) Unmarshal(p []byte) error {
-    if len(p) == 0 {
-        return fmt.Errorf("cannot unmarshal from an empty buffer")
-    }
-    // clear any existing data
     m.Reset()
+    if len(p) == 0 {
+        return nil
+    }
     dec := csproto.NewDecoder(p)
     {{if $useUnsafeDecoder -}}
     // enable faster, but unsafe, string decoding

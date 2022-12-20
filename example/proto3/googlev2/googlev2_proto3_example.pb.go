@@ -82,6 +82,7 @@ type TestEvent struct {
 	Labels    []string       `protobuf:"bytes,4,rep,name=labels,proto3" json:"labels,omitempty"`
 	Embedded  *EmbeddedEvent `protobuf:"bytes,5,opt,name=embedded,proto3" json:"embedded,omitempty"`
 	// Types that are assignable to Path:
+	//
 	//	*TestEvent_Jedi
 	//	*TestEvent_Sith
 	//	*TestEvent_Other
@@ -90,6 +91,7 @@ type TestEvent struct {
 	Ts      *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=ts,proto3" json:"ts,omitempty"`
 	NullVal structpb.NullValue     `protobuf:"varint,11,opt,name=nullVal,proto3,enum=google.protobuf.NullValue" json:"nullVal,omitempty"`
 	// Types that are assignable to Oneofs:
+	//
 	//	*TestEvent_Timestamps
 	//	*TestEvent_Structs
 	Oneofs isTestEvent_Oneofs `protobuf_oneof:"oneofs"`

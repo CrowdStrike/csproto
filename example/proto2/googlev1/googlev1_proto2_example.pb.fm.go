@@ -118,11 +118,10 @@ func (m *BaseEvent) MarshalTo(dest []byte) error {
 
 // Unmarshal decodes a binary encoded Protobuf message from p and populates m with the result.
 func (m *BaseEvent) Unmarshal(p []byte) error {
-	if len(p) == 0 {
-		return fmt.Errorf("cannot unmarshal from an empty buffer")
-	}
-	// clear any existing data
 	m.Reset()
+	if len(p) == 0 {
+		return nil
+	}
 	dec := csproto.NewDecoder(p)
 	for dec.More() {
 		tag, wt, err := dec.DecodeTag()
@@ -373,11 +372,10 @@ func (m *TestEvent) MarshalTo(dest []byte) error {
 
 // Unmarshal decodes a binary encoded Protobuf message from p and populates m with the result.
 func (m *TestEvent) Unmarshal(p []byte) error {
-	if len(p) == 0 {
-		return fmt.Errorf("cannot unmarshal from an empty buffer")
-	}
-	// clear any existing data
 	m.Reset()
+	if len(p) == 0 {
+		return nil
+	}
 	dec := csproto.NewDecoder(p)
 	for dec.More() {
 		tag, wt, err := dec.DecodeTag()
@@ -601,11 +599,10 @@ func (m *EmbeddedEvent) MarshalTo(dest []byte) error {
 
 // Unmarshal decodes a binary encoded Protobuf message from p and populates m with the result.
 func (m *EmbeddedEvent) Unmarshal(p []byte) error {
-	if len(p) == 0 {
-		return fmt.Errorf("cannot unmarshal from an empty buffer")
-	}
-	// clear any existing data
 	m.Reset()
+	if len(p) == 0 {
+		return nil
+	}
 	dec := csproto.NewDecoder(p)
 	for dec.More() {
 		tag, wt, err := dec.DecodeTag()
@@ -895,11 +892,10 @@ func (m *AllTheThings) MarshalTo(dest []byte) error {
 
 // Unmarshal decodes a binary encoded Protobuf message from p and populates m with the result.
 func (m *AllTheThings) Unmarshal(p []byte) error {
-	if len(p) == 0 {
-		return fmt.Errorf("cannot unmarshal from an empty buffer")
-	}
-	// clear any existing data
 	m.Reset()
+	if len(p) == 0 {
+		return nil
+	}
 	dec := csproto.NewDecoder(p)
 	for dec.More() {
 		tag, wt, err := dec.DecodeTag()
@@ -1318,11 +1314,10 @@ func (m *RepeatAllTheThings) MarshalTo(dest []byte) error {
 
 // Unmarshal decodes a binary encoded Protobuf message from p and populates m with the result.
 func (m *RepeatAllTheThings) Unmarshal(p []byte) error {
-	if len(p) == 0 {
-		return fmt.Errorf("cannot unmarshal from an empty buffer")
-	}
-	// clear any existing data
 	m.Reset()
+	if len(p) == 0 {
+		return nil
+	}
 	dec := csproto.NewDecoder(p)
 	for dec.More() {
 		tag, wt, err := dec.DecodeTag()
@@ -1714,11 +1709,10 @@ func (m *EventUsingWKTs) MarshalTo(dest []byte) error {
 
 // Unmarshal decodes a binary encoded Protobuf message from p and populates m with the result.
 func (m *EventUsingWKTs) Unmarshal(p []byte) error {
-	if len(p) == 0 {
-		return fmt.Errorf("cannot unmarshal from an empty buffer")
-	}
-	// clear any existing data
 	m.Reset()
+	if len(p) == 0 {
+		return nil
+	}
 	dec := csproto.NewDecoder(p)
 	for dec.More() {
 		tag, wt, err := dec.DecodeTag()
@@ -1854,11 +1848,10 @@ func (m *TestEvent_NestedMsg) MarshalTo(dest []byte) error {
 
 // Unmarshal decodes a binary encoded Protobuf message from p and populates m with the result.
 func (m *TestEvent_NestedMsg) Unmarshal(p []byte) error {
-	if len(p) == 0 {
-		return fmt.Errorf("cannot unmarshal from an empty buffer")
-	}
-	// clear any existing data
 	m.Reset()
+	if len(p) == 0 {
+		return nil
+	}
 	dec := csproto.NewDecoder(p)
 	for dec.More() {
 		tag, wt, err := dec.DecodeTag()

@@ -154,11 +154,10 @@ func (m *TestEvent) MarshalTo(dest []byte) error {
 
 // Unmarshal decodes a binary encoded Protobuf message from p and populates m with the result.
 func (m *TestEvent) Unmarshal(p []byte) error {
-	if len(p) == 0 {
-		return fmt.Errorf("cannot unmarshal from an empty buffer")
-	}
-	// clear any existing data
 	m.Reset()
+	if len(p) == 0 {
+		return nil
+	}
 	dec := csproto.NewDecoder(p)
 	for dec.More() {
 		tag, wt, err := dec.DecodeTag()
