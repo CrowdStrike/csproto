@@ -110,14 +110,6 @@ func TestDecodeBytes(t *testing.T) {
 			wt:       csproto.WireTypeLengthDelimited,
 			expected: []byte{0x42, 0x11, 0x38},
 		},
-		{
-			name:        "invalid data",
-			fieldNum:    2,
-			v:           []byte{0x12, 0x3, 0x42, 0x11}, // field data is truncated
-			wt:          csproto.WireTypeLengthDelimited,
-			expected:    []byte{0x42, 0x11, 0x38},
-			expectedErr: io.ErrUnexpectedEOF,
-		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -136,6 +128,28 @@ func TestDecodeBytes(t *testing.T) {
 			}
 		})
 	}
+
+	// separate t.Run() because we're not checking for sentinel errors
+	t.Run("corrupt messages", func(t *testing.T) {
+		t.Run("truncated data", func(t *testing.T) {
+			// length-delimited field value with a length of 3 but only 2 bytes
+			data := []byte{0x12, 0x3, 0x42, 0x11}
+			dec := csproto.NewDecoder(data)
+
+			got, err := dec.DecodeBytes()
+			assert.Error(t, err)
+			assert.Nil(t, got)
+		})
+		t.Run("negative length", func(t *testing.T) {
+			// length-delimited field value with a length of -50
+			data := []byte{0xCE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x3, 0x42, 0x11, 0x38}
+			dec := csproto.NewDecoder(data)
+
+			got, err := dec.DecodeBytes()
+			assert.Error(t, err)
+			assert.Nil(t, got)
+		})
+	})
 }
 
 func TestDecodeUInt32(t *testing.T) {

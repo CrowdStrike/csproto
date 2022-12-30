@@ -152,11 +152,15 @@ func (d *Decoder) DecodeBytes() ([]byte, error) {
 	if n == 0 {
 		return nil, ErrInvalidVarintData
 	}
-	if d.offset+n+int(l) > len(d.p) {
+	nb := int(l)
+	if nb < 0 {
+		return nil, fmt.Errorf("csproto: bad byte length %d", nb)
+	}
+	if d.offset+n+nb > len(d.p) {
 		return nil, io.ErrUnexpectedEOF
 	}
-	b := d.p[d.offset+n : d.offset+n+int(l)]
-	d.offset += n + int(l)
+	b := d.p[d.offset+n : d.offset+n+nb]
+	d.offset += n + nb
 	return b, nil
 }
 
@@ -900,7 +904,7 @@ func (d *Decoder) Skip(tag int, wt WireType) ([]byte, error) {
 	default:
 		return nil, fmt.Errorf("unsupported wire type value: %v", wt)
 	}
-	if d.offset+skipped >= len(d.p) {
+	if d.offset+skipped > len(d.p) {
 		return nil, io.ErrUnexpectedEOF
 	}
 	d.offset += skipped
