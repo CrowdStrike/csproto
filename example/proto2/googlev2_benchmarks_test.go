@@ -63,6 +63,26 @@ func BenchmarkCustomDecodeGoogleV2(b *testing.B) {
 	}
 }
 
+func BenchmarkPartialDecodeGoogleV2(b *testing.B) {
+	var (
+		evt = createGoogleV2Event(b)
+		def = map[int]any{
+			1: nil,
+			2: nil,
+			3: nil,
+			4: nil,
+			100: map[int]any{
+				1: nil,
+			},
+		}
+	)
+	data, _ := proto.Marshal(evt)
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		_, _ = csproto.DecodePartial(data, def)
+	}
+}
+
 func createGoogleV2Event(t interface{ Errorf(string, ...interface{}) }) *googlev2.BaseEvent {
 	eventType := googlev2.EventType_EVENT_TYPE_ONE
 	baseEvent := googlev2.BaseEvent{
