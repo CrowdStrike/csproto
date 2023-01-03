@@ -475,6 +475,186 @@ func TestUInt32FieldData(t *testing.T) {
 	})
 }
 
+func TestInt32FieldData(t *testing.T) {
+	var sampleMessage = []byte{
+		// field 1: int32 (0)
+		(1 << 3), 0x00,
+		// field 2: regular int32 (42)
+		(2 << 3), 0x2a,
+		// field 3: negative int32 (-42)
+		(3 << 3), 0xD6, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01,
+		// field 4: max int32 (2,147,483,647)
+		(4 << 3), 0xFF, 0xFF, 0xFF, 0xFF, 0x07,
+		// field 5: min int32 (-2,147,483,647)
+		(5 << 3), 0x80, 0x80, 0x80, 0x80, 0xF8, 0xFF, 0xFF, 0xFF, 0xFF, 0x01,
+		// field 6: regular repeated int32 - 1, 2, 3
+		(6 << 3), 0x01,
+		(6 << 3), 0x02,
+		(6 << 3), 0x03,
+		// field 7: packed repeated int32 - 4, 5, 6
+		(7 << 3) | 2, 0x03, 0x04, 0x05, 0x06,
+		// field 8: fixed32 (invalid for int32 value)
+		(8 << 3) | 5, 0x00, 0x01, 0x02, 0x03,
+		// field 9: varint int32 overflow (max int32 + 1)
+		(9 << 3), 0x80, 0x80, 0x80, 0x80, 0x08,
+	}
+	t.Parallel()
+	t.Run("zero", func(t *testing.T) {
+		t.Parallel()
+		def := map[int]any{
+			1: nil,
+		}
+		res, err := DecodePartial(sampleMessage, def)
+		assert.NoError(t, err)
+
+		fd, err := res.FieldData(1)
+		assert.NoError(t, err)
+
+		v, err := fd.Int32Value()
+		assert.NoError(t, err)
+		assert.Equal(t, int32(0), v)
+	})
+	t.Run("regular int32", func(t *testing.T) {
+		t.Parallel()
+		def := map[int]any{
+			2: nil,
+		}
+		res, err := DecodePartial(sampleMessage, def)
+		assert.NoError(t, err)
+
+		fd, err := res.FieldData(2)
+		assert.NoError(t, err)
+
+		v, err := fd.Int32Value()
+		assert.NoError(t, err)
+		assert.Equal(t, int32(42), v)
+	})
+	t.Run("negative int32", func(t *testing.T) {
+		t.Parallel()
+		def := map[int]any{
+			3: nil,
+		}
+		res, err := DecodePartial(sampleMessage, def)
+		assert.NoError(t, err)
+
+		fd, err := res.FieldData(3)
+		assert.NoError(t, err)
+
+		v, err := fd.Int32Value()
+		assert.NoError(t, err)
+		assert.Equal(t, int32(-42), v)
+	})
+	t.Run("max int32", func(t *testing.T) {
+		t.Parallel()
+		def := map[int]any{
+			4: nil,
+		}
+		res, err := DecodePartial(sampleMessage, def)
+		assert.NoError(t, err)
+
+		fd, err := res.FieldData(4)
+		assert.NoError(t, err)
+
+		v, err := fd.Int32Value()
+		assert.NoError(t, err)
+		assert.Equal(t, int32(math.MaxInt32), v)
+	})
+	t.Run("min int32", func(t *testing.T) {
+		t.Parallel()
+		def := map[int]any{
+			5: nil,
+		}
+		res, err := DecodePartial(sampleMessage, def)
+		assert.NoError(t, err)
+
+		fd, err := res.FieldData(5)
+		assert.NoError(t, err)
+
+		v, err := fd.Int32Value()
+		assert.NoError(t, err)
+		assert.Equal(t, int32(math.MinInt32), v)
+	})
+	t.Run("repeated int32", func(t *testing.T) {
+		t.Parallel()
+		def := map[int]any{
+			6: nil,
+		}
+		res, err := DecodePartial(sampleMessage, def)
+		assert.NoError(t, err)
+
+		fd, err := res.FieldData(6)
+		assert.NoError(t, err)
+
+		vs, err := fd.Int32Values()
+		assert.NoError(t, err)
+		assert.Len(t, vs, 3)
+		for i, expected := range []int32{1, 2, 3} {
+			assert.Equal(t, expected, vs[i], "mismatched values at index %d", i)
+		}
+	})
+	t.Run("packed repeated int32", func(t *testing.T) {
+		t.Parallel()
+		def := map[int]any{
+			7: nil,
+		}
+		res, err := DecodePartial(sampleMessage, def)
+		assert.NoError(t, err)
+
+		fd, err := res.FieldData(7)
+		assert.NoError(t, err)
+
+		vs, err := fd.Int32Values()
+		assert.NoError(t, err)
+		assert.Len(t, vs, 3)
+		for i, expected := range []int32{4, 5, 6} {
+			assert.Equal(t, expected, vs[i], "mismatched values at index %d", i)
+		}
+	})
+	t.Run("tag not present", func(t *testing.T) {
+		t.Parallel()
+		def := map[int]any{
+			1: nil,
+		}
+		res, err := DecodePartial(sampleMessage, def)
+		assert.NoError(t, err)
+
+		fd, err := res.FieldData(2)
+		assert.ErrorIs(t, err, ErrTagNotFound)
+		assert.Nil(t, fd)
+	})
+	t.Run("incorrect wire type", func(t *testing.T) {
+		t.Parallel()
+		var expectedErr *WireTypeMismatchError
+		def := map[int]any{
+			8: nil,
+		}
+		res, err := DecodePartial(sampleMessage, def)
+		assert.NoError(t, err)
+
+		fd, err := res.FieldData(8)
+		assert.NoError(t, err)
+
+		v, err := fd.Int32Value()
+		assert.Equal(t, int32(0), v, "should return 0")
+		assert.ErrorAs(t, err, &expectedErr, "should return a WireTypeMismatchError error")
+	})
+	t.Run("int32 overflow", func(t *testing.T) {
+		t.Parallel()
+		def := map[int]any{
+			9: nil,
+		}
+		res, err := DecodePartial(sampleMessage, def)
+		assert.NoError(t, err)
+
+		fd, err := res.FieldData(9)
+		assert.NoError(t, err)
+
+		v, err := fd.Int32Value()
+		assert.Equal(t, int32(0), v, "should return 0")
+		assert.ErrorIs(t, err, ErrValueOverflow, "should return ErrValueOverflow error")
+	})
+}
+
 func TestUInt64FieldData(t *testing.T) {
 	var sampleMessage = []byte{
 		// field 1: min uint64 (0)
@@ -994,26 +1174,6 @@ func TestFloat32FieldData(t *testing.T) {
 	})
 }
 
-func TestXxx(t *testing.T) {
-	vs := []float64{
-		0.0,
-		1.2,
-		3.4,
-		5.6,
-		42.1138,
-		math.MaxFloat64,
-	}
-	for _, v := range vs {
-		var b [9]byte
-		NewEncoder(b[:]).EncodeFloat64(1, v)
-		var sb strings.Builder
-		for _, bb := range b {
-			sb.WriteString(fmt.Sprintf("0x%02X, ", bb))
-		}
-		t.Log(v, "->", sb.String())
-	}
-}
-
 func TestFloat64FieldData(t *testing.T) {
 	var sampleMessage = []byte{
 		// field 1: float64 (0)
@@ -1144,4 +1304,33 @@ func TestFloat64FieldData(t *testing.T) {
 		assert.Equal(t, float64(0), v, "should return 0")
 		assert.ErrorAs(t, err, &expectedErr, "should return a WireTypeMismatchError error")
 	})
+}
+
+func TestXxx(t *testing.T) {
+	vs := []int32{
+		// math.MinInt32,
+		// 0,
+		// 42,
+		-42,
+		//math.MaxInt32,
+	}
+	for _, v := range vs {
+		var b [11]byte
+		NewEncoder(b[:]).EncodeInt32(1, v)
+		var sb strings.Builder
+		for _, bb := range b {
+			sb.WriteString(fmt.Sprintf("0x%02X, ", bb))
+		}
+		t.Log(v, "->", sb.String())
+	}
+
+	v := int64(math.MaxInt32 + 1)
+	var b [10]byte
+	EncodeVarint(b[:], uint64(v))
+	var sb strings.Builder
+	for _, bb := range b[:] {
+		sb.WriteString(fmt.Sprintf("0x%02X, ", bb))
+	}
+	t.Log(v, "->", sb.String())
+
 }

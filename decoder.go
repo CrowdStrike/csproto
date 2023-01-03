@@ -912,15 +912,33 @@ func (d *Decoder) Skip(tag int, wt WireType) ([]byte, error) {
 }
 
 func decodeVarint(p []byte) (v uint64, n int, err error) {
-	for shift := uint(0); shift < 64; shift += 7 {
-		if n >= len(p) {
-			return 0, 0, io.ErrUnexpectedEOF
+	// single-byte values don't need any processing
+	if p[0] < 0x80 {
+		return uint64(p[0]), 1, nil
+	}
+	// 2-9 byte values
+	if len(p) < 10 {
+		for shift := uint(0); shift < 64; shift += 7 {
+			if n >= len(p) {
+				return 0, 0, io.ErrUnexpectedEOF
+			}
+			b := uint64(p[n])
+			n++
+			v |= (b & 0x7f << shift)
+			if (b & 0x80) == 0 {
+				return v, n, nil
+			}
 		}
-		b := uint64(p[n])
-		n++
-		v |= (b & 0x7f << shift)
+		return 0, 0, ErrValueOverflow
+	}
+	// 10-byte values
+	// . we already know the first byte has the high-bit set, so grab it's value then walk bytes 2-10
+	v = uint64(p[0] & 0x7f)
+	for i, shift := 1, 7; i < 10; i, shift = i+1, shift+7 {
+		b := uint64(p[i])
+		v |= (b & 0x7f) << shift
 		if (b & 0x80) == 0 {
-			return v, n, nil
+			return v, i + 1, nil
 		}
 	}
 	return 0, 0, ErrValueOverflow
