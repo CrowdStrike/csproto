@@ -27,7 +27,7 @@ func TestDecodePartial(t *testing.T) {
 	t.Parallel()
 	t.Run("decode empty buffer", func(t *testing.T) {
 		t.Parallel()
-		res, err := Decode([]byte{}, map[int]any{1: nil})
+		res, err := Decode([]byte{}, NewDef(1))
 
 		assert.NoError(t, err)
 		assert.Empty(t, res.m)
@@ -41,17 +41,14 @@ func TestDecodePartial(t *testing.T) {
 	})
 	t.Run("decode with empty def", func(t *testing.T) {
 		t.Parallel()
-		res, err := Decode([]byte{0x01}, map[int]any{})
+		res, err := Decode([]byte{0x01}, NewDef())
 
 		assert.NoError(t, err)
 		assert.Empty(t, res.m)
 	})
 	t.Run("decode with missing def keys", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			42:  nil,
-			100: nil,
-		}
+		def := NewDef(42, 100)
 		res, err := Decode(sampleMessage, def)
 
 		assert.NoError(t, err)
@@ -59,12 +56,7 @@ func TestDecodePartial(t *testing.T) {
 	})
 	t.Run("decode with matching def keys", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-			2: nil,
-			3: nil,
-			4: nil,
-		}
+		def := NewDef(1, 2, 3, 4)
 		res, err := Decode(sampleMessage, def)
 
 		assert.NoError(t, err)
@@ -72,14 +64,8 @@ func TestDecodePartial(t *testing.T) {
 	})
 	t.Run("decode with nested def keys", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-			2: nil,
-			3: map[int]any{
-				2: nil,
-			},
-			4: nil,
-		}
+		def := NewDef(1, 2, 4)
+		_ = def.AddNested(3, 2)
 		res, err := Decode(sampleMessage, def)
 
 		assert.NoError(t, err)
@@ -89,11 +75,8 @@ func TestDecodePartial(t *testing.T) {
 	})
 	t.Run("get field data with nested def keys", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			3: map[int]any{
-				2: nil,
-			},
-		}
+		def := NewDef()
+		_ = def.AddNested(3, 2)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -120,9 +103,7 @@ func TestBooleanFieldData(t *testing.T) {
 	t.Parallel()
 	t.Run("single boolean", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-		}
+		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -135,9 +116,7 @@ func TestBooleanFieldData(t *testing.T) {
 	})
 	t.Run("repeated boolean", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			2: nil,
-		}
+		def := NewDef(2)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -153,9 +132,7 @@ func TestBooleanFieldData(t *testing.T) {
 	})
 	t.Run("tag not present", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-		}
+		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -166,9 +143,7 @@ func TestBooleanFieldData(t *testing.T) {
 	t.Run("incorrect wire type", func(t *testing.T) {
 		t.Parallel()
 		var expectedErr *WireTypeMismatchError
-		def := map[int]any{
-			4: nil,
-		}
+		def := NewDef(4)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -194,9 +169,7 @@ func TestStringFieldData(t *testing.T) {
 	t.Parallel()
 	t.Run("single string", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-		}
+		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -209,9 +182,7 @@ func TestStringFieldData(t *testing.T) {
 	})
 	t.Run("repeated string", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			2: nil,
-		}
+		def := NewDef(2)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -227,9 +198,7 @@ func TestStringFieldData(t *testing.T) {
 	})
 	t.Run("tag not present", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-		}
+		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -240,9 +209,7 @@ func TestStringFieldData(t *testing.T) {
 	t.Run("incorrect wire type", func(t *testing.T) {
 		t.Parallel()
 		var expectedErr *WireTypeMismatchError
-		def := map[int]any{
-			3: nil,
-		}
+		def := NewDef(3)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -268,9 +235,7 @@ func TestBytesFieldData(t *testing.T) {
 	t.Parallel()
 	t.Run("single bytes", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-		}
+		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -283,9 +248,7 @@ func TestBytesFieldData(t *testing.T) {
 	})
 	t.Run("repeated bytes", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			2: nil,
-		}
+		def := NewDef(2)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -301,9 +264,7 @@ func TestBytesFieldData(t *testing.T) {
 	})
 	t.Run("tag not present", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-		}
+		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -314,9 +275,7 @@ func TestBytesFieldData(t *testing.T) {
 	t.Run("incorrect wire type", func(t *testing.T) {
 		t.Parallel()
 		var expectedErr *WireTypeMismatchError
-		def := map[int]any{
-			3: nil,
-		}
+		def := NewDef(3)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -351,9 +310,7 @@ func TestUInt32FieldData(t *testing.T) {
 	t.Parallel()
 	t.Run("min uint32", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-		}
+		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -366,9 +323,7 @@ func TestUInt32FieldData(t *testing.T) {
 	})
 	t.Run("regular uint32", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			2: nil,
-		}
+		def := NewDef(2)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -381,9 +336,7 @@ func TestUInt32FieldData(t *testing.T) {
 	})
 	t.Run("max uint32", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			3: nil,
-		}
+		def := NewDef(3)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -396,9 +349,7 @@ func TestUInt32FieldData(t *testing.T) {
 	})
 	t.Run("repeated uint32", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			4: nil,
-		}
+		def := NewDef(4)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -414,9 +365,7 @@ func TestUInt32FieldData(t *testing.T) {
 	})
 	t.Run("packed repeated uint32", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			5: nil,
-		}
+		def := NewDef(5)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -432,9 +381,7 @@ func TestUInt32FieldData(t *testing.T) {
 	})
 	t.Run("tag not present", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-		}
+		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -445,9 +392,7 @@ func TestUInt32FieldData(t *testing.T) {
 	t.Run("incorrect wire type", func(t *testing.T) {
 		t.Parallel()
 		var expectedErr *WireTypeMismatchError
-		def := map[int]any{
-			6: nil,
-		}
+		def := NewDef(6)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -460,9 +405,7 @@ func TestUInt32FieldData(t *testing.T) {
 	})
 	t.Run("uint32 overflow", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			7: nil,
-		}
+		def := NewDef(7)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -501,9 +444,7 @@ func TestInt32FieldData(t *testing.T) {
 	t.Parallel()
 	t.Run("zero", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-		}
+		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -516,9 +457,7 @@ func TestInt32FieldData(t *testing.T) {
 	})
 	t.Run("regular int32", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			2: nil,
-		}
+		def := NewDef(2)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -531,9 +470,7 @@ func TestInt32FieldData(t *testing.T) {
 	})
 	t.Run("negative int32", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			3: nil,
-		}
+		def := NewDef(3)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -546,9 +483,7 @@ func TestInt32FieldData(t *testing.T) {
 	})
 	t.Run("max int32", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			4: nil,
-		}
+		def := NewDef(4)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -561,9 +496,7 @@ func TestInt32FieldData(t *testing.T) {
 	})
 	t.Run("min int32", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			5: nil,
-		}
+		def := NewDef(5)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -576,9 +509,7 @@ func TestInt32FieldData(t *testing.T) {
 	})
 	t.Run("repeated int32", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			6: nil,
-		}
+		def := NewDef(6)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -594,9 +525,7 @@ func TestInt32FieldData(t *testing.T) {
 	})
 	t.Run("packed repeated int32", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			7: nil,
-		}
+		def := NewDef(7)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -612,9 +541,7 @@ func TestInt32FieldData(t *testing.T) {
 	})
 	t.Run("tag not present", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-		}
+		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -625,9 +552,7 @@ func TestInt32FieldData(t *testing.T) {
 	t.Run("incorrect wire type", func(t *testing.T) {
 		t.Parallel()
 		var expectedErr *WireTypeMismatchError
-		def := map[int]any{
-			8: nil,
-		}
+		def := NewDef(8)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -640,9 +565,7 @@ func TestInt32FieldData(t *testing.T) {
 	})
 	t.Run("int32 overflow", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			9: nil,
-		}
+		def := NewDef(9)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -681,9 +604,7 @@ func TestSInt32FieldData(t *testing.T) {
 	t.Parallel()
 	t.Run("zero", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-		}
+		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -696,9 +617,7 @@ func TestSInt32FieldData(t *testing.T) {
 	})
 	t.Run("regular int32", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			2: nil,
-		}
+		def := NewDef(2)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -711,9 +630,7 @@ func TestSInt32FieldData(t *testing.T) {
 	})
 	t.Run("negative int32", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			3: nil,
-		}
+		def := NewDef(3)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -726,9 +643,7 @@ func TestSInt32FieldData(t *testing.T) {
 	})
 	t.Run("max int32", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			4: nil,
-		}
+		def := NewDef(4)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -741,9 +656,7 @@ func TestSInt32FieldData(t *testing.T) {
 	})
 	t.Run("min int32", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			5: nil,
-		}
+		def := NewDef(5)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -756,9 +669,7 @@ func TestSInt32FieldData(t *testing.T) {
 	})
 	t.Run("repeated int32", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			6: nil,
-		}
+		def := NewDef(6)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -774,9 +685,7 @@ func TestSInt32FieldData(t *testing.T) {
 	})
 	t.Run("packed repeated int32", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			7: nil,
-		}
+		def := NewDef(7)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -792,9 +701,7 @@ func TestSInt32FieldData(t *testing.T) {
 	})
 	t.Run("tag not present", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-		}
+		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -805,9 +712,7 @@ func TestSInt32FieldData(t *testing.T) {
 	t.Run("incorrect wire type", func(t *testing.T) {
 		t.Parallel()
 		var expectedErr *WireTypeMismatchError
-		def := map[int]any{
-			8: nil,
-		}
+		def := NewDef(8)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -820,9 +725,7 @@ func TestSInt32FieldData(t *testing.T) {
 	})
 	t.Run("int32 overflow", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			9: nil,
-		}
+		def := NewDef(9)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -855,9 +758,7 @@ func TestUInt64FieldData(t *testing.T) {
 	t.Parallel()
 	t.Run("min uint64", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-		}
+		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -870,9 +771,7 @@ func TestUInt64FieldData(t *testing.T) {
 	})
 	t.Run("regular uint64", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			2: nil,
-		}
+		def := NewDef(2)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -885,9 +784,7 @@ func TestUInt64FieldData(t *testing.T) {
 	})
 	t.Run("max uint64", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			3: nil,
-		}
+		def := NewDef(3)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -900,9 +797,7 @@ func TestUInt64FieldData(t *testing.T) {
 	})
 	t.Run("repeated uint64", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			4: nil,
-		}
+		def := NewDef(4)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -918,9 +813,7 @@ func TestUInt64FieldData(t *testing.T) {
 	})
 	t.Run("packed repeated uint64", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			5: nil,
-		}
+		def := NewDef(5)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -936,9 +829,7 @@ func TestUInt64FieldData(t *testing.T) {
 	})
 	t.Run("tag not present", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-		}
+		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -949,9 +840,7 @@ func TestUInt64FieldData(t *testing.T) {
 	t.Run("incorrect wire type", func(t *testing.T) {
 		t.Parallel()
 		var expectedErr *WireTypeMismatchError
-		def := map[int]any{
-			6: nil,
-		}
+		def := NewDef(6)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -992,9 +881,7 @@ func TestInt64FieldData(t *testing.T) {
 	t.Parallel()
 	t.Run("zero", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-		}
+		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1007,9 +894,7 @@ func TestInt64FieldData(t *testing.T) {
 	})
 	t.Run("regular int64", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			2: nil,
-		}
+		def := NewDef(2)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1022,9 +907,7 @@ func TestInt64FieldData(t *testing.T) {
 	})
 	t.Run("negative int64", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			3: nil,
-		}
+		def := NewDef(3)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1037,9 +920,7 @@ func TestInt64FieldData(t *testing.T) {
 	})
 	t.Run("max int64", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			4: nil,
-		}
+		def := NewDef(4)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1052,9 +933,7 @@ func TestInt64FieldData(t *testing.T) {
 	})
 	t.Run("min int64", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			5: nil,
-		}
+		def := NewDef(5)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1067,9 +946,7 @@ func TestInt64FieldData(t *testing.T) {
 	})
 	t.Run("repeated int64", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			6: nil,
-		}
+		def := NewDef(6)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1085,9 +962,7 @@ func TestInt64FieldData(t *testing.T) {
 	})
 	t.Run("packed repeated int64", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			7: nil,
-		}
+		def := NewDef(7)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1103,9 +978,7 @@ func TestInt64FieldData(t *testing.T) {
 	})
 	t.Run("tag not present", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-		}
+		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1116,9 +989,7 @@ func TestInt64FieldData(t *testing.T) {
 	t.Run("incorrect wire type", func(t *testing.T) {
 		t.Parallel()
 		var expectedErr *WireTypeMismatchError
-		def := map[int]any{
-			8: nil,
-		}
+		def := NewDef(8)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1131,9 +1002,7 @@ func TestInt64FieldData(t *testing.T) {
 	})
 	t.Run("max int32 + 1", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			9: nil,
-		}
+		def := NewDef(9)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1146,9 +1015,7 @@ func TestInt64FieldData(t *testing.T) {
 	})
 	t.Run("min int32 - 1", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			10: nil,
-		}
+		def := NewDef(10)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1189,9 +1056,7 @@ func TestSInt64FieldData(t *testing.T) {
 	t.Parallel()
 	t.Run("zero", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-		}
+		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1204,9 +1069,7 @@ func TestSInt64FieldData(t *testing.T) {
 	})
 	t.Run("regular int64", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			2: nil,
-		}
+		def := NewDef(2)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1219,9 +1082,7 @@ func TestSInt64FieldData(t *testing.T) {
 	})
 	t.Run("negative int64", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			3: nil,
-		}
+		def := NewDef(3)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1234,9 +1095,7 @@ func TestSInt64FieldData(t *testing.T) {
 	})
 	t.Run("max int64", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			4: nil,
-		}
+		def := NewDef(4)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1249,9 +1108,7 @@ func TestSInt64FieldData(t *testing.T) {
 	})
 	t.Run("min int64", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			5: nil,
-		}
+		def := NewDef(5)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1264,9 +1121,7 @@ func TestSInt64FieldData(t *testing.T) {
 	})
 	t.Run("repeated int64", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			6: nil,
-		}
+		def := NewDef(6)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1282,9 +1137,7 @@ func TestSInt64FieldData(t *testing.T) {
 	})
 	t.Run("packed repeated int64", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			7: nil,
-		}
+		def := NewDef(7)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1300,9 +1153,7 @@ func TestSInt64FieldData(t *testing.T) {
 	})
 	t.Run("tag not present", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-		}
+		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1313,9 +1164,7 @@ func TestSInt64FieldData(t *testing.T) {
 	t.Run("incorrect wire type", func(t *testing.T) {
 		t.Parallel()
 		var expectedErr *WireTypeMismatchError
-		def := map[int]any{
-			8: nil,
-		}
+		def := NewDef(8)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1328,9 +1177,7 @@ func TestSInt64FieldData(t *testing.T) {
 	})
 	t.Run("max int32 + 1", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			9: nil,
-		}
+		def := NewDef(9)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1343,9 +1190,7 @@ func TestSInt64FieldData(t *testing.T) {
 	})
 	t.Run("min int32 - 1", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			10: nil,
-		}
+		def := NewDef(10)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1378,9 +1223,7 @@ func TestFixed32FieldData(t *testing.T) {
 	t.Parallel()
 	t.Run("min fixed32", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-		}
+		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1393,9 +1236,7 @@ func TestFixed32FieldData(t *testing.T) {
 	})
 	t.Run("regular fixed32", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			2: nil,
-		}
+		def := NewDef(2)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1408,9 +1249,7 @@ func TestFixed32FieldData(t *testing.T) {
 	})
 	t.Run("max fixed32", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			3: nil,
-		}
+		def := NewDef(3)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1423,9 +1262,7 @@ func TestFixed32FieldData(t *testing.T) {
 	})
 	t.Run("repeated fixed32", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			4: nil,
-		}
+		def := NewDef(4)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1441,9 +1278,7 @@ func TestFixed32FieldData(t *testing.T) {
 	})
 	t.Run("packed repeated fixed32", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			5: nil,
-		}
+		def := NewDef(5)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1459,9 +1294,7 @@ func TestFixed32FieldData(t *testing.T) {
 	})
 	t.Run("tag not present", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-		}
+		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1472,9 +1305,7 @@ func TestFixed32FieldData(t *testing.T) {
 	t.Run("incorrect wire type", func(t *testing.T) {
 		t.Parallel()
 		var expectedErr *WireTypeMismatchError
-		def := map[int]any{
-			6: nil,
-		}
+		def := NewDef(6)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1510,9 +1341,7 @@ func TestFixed64FieldData(t *testing.T) {
 	t.Parallel()
 	t.Run("min fixed64", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-		}
+		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1525,9 +1354,7 @@ func TestFixed64FieldData(t *testing.T) {
 	})
 	t.Run("regular fixed64", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			2: nil,
-		}
+		def := NewDef(2)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1540,9 +1367,7 @@ func TestFixed64FieldData(t *testing.T) {
 	})
 	t.Run("max fixed64", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			3: nil,
-		}
+		def := NewDef(3)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1555,9 +1380,7 @@ func TestFixed64FieldData(t *testing.T) {
 	})
 	t.Run("repeated fixed64", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			4: nil,
-		}
+		def := NewDef(4)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1573,9 +1396,7 @@ func TestFixed64FieldData(t *testing.T) {
 	})
 	t.Run("packed repeated fixed64", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			5: nil,
-		}
+		def := NewDef(5)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1591,9 +1412,7 @@ func TestFixed64FieldData(t *testing.T) {
 	})
 	t.Run("tag not present", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-		}
+		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1604,9 +1423,7 @@ func TestFixed64FieldData(t *testing.T) {
 	t.Run("incorrect wire type", func(t *testing.T) {
 		t.Parallel()
 		var expectedErr *WireTypeMismatchError
-		def := map[int]any{
-			6: nil,
-		}
+		def := NewDef(6)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1639,9 +1456,7 @@ func TestFloat32FieldData(t *testing.T) {
 	t.Parallel()
 	t.Run("min float32", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-		}
+		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1654,9 +1469,7 @@ func TestFloat32FieldData(t *testing.T) {
 	})
 	t.Run("regular float32", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			2: nil,
-		}
+		def := NewDef(2)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1669,9 +1482,7 @@ func TestFloat32FieldData(t *testing.T) {
 	})
 	t.Run("max float32", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			3: nil,
-		}
+		def := NewDef(3)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1684,9 +1495,7 @@ func TestFloat32FieldData(t *testing.T) {
 	})
 	t.Run("repeated float32", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			4: nil,
-		}
+		def := NewDef(4)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1702,9 +1511,7 @@ func TestFloat32FieldData(t *testing.T) {
 	})
 	t.Run("packed repeated float32", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			5: nil,
-		}
+		def := NewDef(5)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1720,9 +1527,7 @@ func TestFloat32FieldData(t *testing.T) {
 	})
 	t.Run("tag not present", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-		}
+		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1733,9 +1538,7 @@ func TestFloat32FieldData(t *testing.T) {
 	t.Run("incorrect wire type", func(t *testing.T) {
 		t.Parallel()
 		var expectedErr *WireTypeMismatchError
-		def := map[int]any{
-			6: nil,
-		}
+		def := NewDef(6)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1771,9 +1574,7 @@ func TestFloat64FieldData(t *testing.T) {
 	t.Parallel()
 	t.Run("min float64", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-		}
+		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1786,9 +1587,7 @@ func TestFloat64FieldData(t *testing.T) {
 	})
 	t.Run("regular float64", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			2: nil,
-		}
+		def := NewDef(2)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1801,9 +1600,7 @@ func TestFloat64FieldData(t *testing.T) {
 	})
 	t.Run("max float64", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			3: nil,
-		}
+		def := NewDef(3)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1816,9 +1613,7 @@ func TestFloat64FieldData(t *testing.T) {
 	})
 	t.Run("repeated float64", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			4: nil,
-		}
+		def := NewDef(4)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1834,9 +1629,7 @@ func TestFloat64FieldData(t *testing.T) {
 	})
 	t.Run("packed repeated float64", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			5: nil,
-		}
+		def := NewDef(5)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1852,9 +1645,7 @@ func TestFloat64FieldData(t *testing.T) {
 	})
 	t.Run("tag not present", func(t *testing.T) {
 		t.Parallel()
-		def := map[int]any{
-			1: nil,
-		}
+		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 
@@ -1865,9 +1656,7 @@ func TestFloat64FieldData(t *testing.T) {
 	t.Run("incorrect wire type", func(t *testing.T) {
 		t.Parallel()
 		var expectedErr *WireTypeMismatchError
-		def := map[int]any{
-			6: nil,
-		}
+		def := NewDef(6)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 

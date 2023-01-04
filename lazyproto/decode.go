@@ -18,16 +18,16 @@ var emptyResult DecodeResult
 // The methods on the returned PartialDecodeResult can be used to retrieve the decoded values.
 //
 // The def param is an optionally nested mapping of protobuf field tags declaring which values should
-// be decoded from the message.  If the wire type for a given tag is WireTypeLengthDelimited and the
-// value of def[tag] is another map[int]any, the contents are treated as a nested message and is
+// be decoded from the message.  If the value for a given tag is a nested mapping and the wire type
+// in the encoded data is WireTypeLengthDelimited , the contents are treated as a nested message and is
 // decoded recursively.
 //
 // The purpose of this API is to avoid fully unmarshalling nested message data when only a small subset
 // of field values are needed, so [PartialDecodeResult] and [FieldData] only support extracting
 // scalar values or slices of scalar values. Consumers that need to decode entire messages will need
 // to use [Unmarshal] instead.
-func Decode(data []byte, def map[int]any) (res DecodeResult, err error) {
-	if len(data) == 0 || len(def) == 0 {
+func Decode(data []byte, def *Def) (res DecodeResult, err error) {
+	if len(data) == 0 || def == nil || len(def.m) == 0 {
 		return emptyResult, nil
 	}
 	for dec := csproto.NewDecoder(data); dec.More(); {
@@ -35,7 +35,7 @@ func Decode(data []byte, def map[int]any) (res DecodeResult, err error) {
 		if err != nil {
 			return emptyResult, err
 		}
-		dv, want := def[tag]
+		dv, want := def.Get(tag)
 		if !want {
 			if _, err := dec.Skip(tag, wt); err != nil {
 				return emptyResult, err
@@ -65,7 +65,7 @@ func Decode(data []byte, def map[int]any) (res DecodeResult, err error) {
 			if err != nil {
 				return emptyResult, err
 			}
-			if subDef, ok := dv.(map[int]any); ok && len(subDef) > 0 {
+			if subDef, ok := dv.(*Def); ok && len(subDef.m) > 0 {
 				// recurse
 				subResult, err := Decode(val, subDef)
 				if err != nil {
