@@ -9,6 +9,7 @@ import (
 
 	"github.com/CrowdStrike/csproto"
 	"github.com/CrowdStrike/csproto/example/proto2/googlev2"
+	"github.com/CrowdStrike/csproto/lazyproto"
 )
 
 func BenchmarkEncodeGoogleV2(b *testing.B) {
@@ -79,7 +80,7 @@ func BenchmarkPartialDecodeGoogleV2(b *testing.B) {
 	data, _ := proto.Marshal(evt)
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		_, _ = csproto.DecodePartial(data, def)
+		_, _ = lazyproto.DecodePartial(data, def)
 	}
 }
 
