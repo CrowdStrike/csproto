@@ -12,7 +12,7 @@ var (
 	ErrTagNotFound = fmt.Errorf("the requested tag does not exist in the partial decode result")
 )
 
-var emptyPartialResult DecodeResult
+var emptyResult DecodeResult
 
 // Decode extracts the specified field tags from data without unmarshaling the entire message.
 // The methods on the returned PartialDecodeResult can be used to retrieve the decoded values.
@@ -28,17 +28,17 @@ var emptyPartialResult DecodeResult
 // to use [Unmarshal] instead.
 func Decode(data []byte, def map[int]any) (res DecodeResult, err error) {
 	if len(data) == 0 || len(def) == 0 {
-		return emptyPartialResult, nil
+		return emptyResult, nil
 	}
 	for dec := csproto.NewDecoder(data); dec.More(); {
 		tag, wt, err := dec.DecodeTag()
 		if err != nil {
-			return emptyPartialResult, err
+			return emptyResult, err
 		}
 		dv, want := def[tag]
 		if !want {
 			if _, err := dec.Skip(tag, wt); err != nil {
-				return emptyPartialResult, err
+				return emptyResult, err
 			}
 			continue
 		}
@@ -51,11 +51,11 @@ func Decode(data []byte, def map[int]any) (res DecodeResult, err error) {
 			// . fixed64 -> int32, uint64, float64
 			val, err := dec.Skip(tag, wt)
 			if err != nil {
-				return emptyPartialResult, err
+				return emptyResult, err
 			}
 			fd, err := res.getOrAddFieldData(tag, wt)
 			if err != nil {
-				return emptyPartialResult, err
+				return emptyResult, err
 			}
 			// Skip() returns the entire field contents, both the tag and the value, so we need to skip past the tag
 			val = val[csproto.SizeOfTagKey(tag):]
@@ -63,28 +63,28 @@ func Decode(data []byte, def map[int]any) (res DecodeResult, err error) {
 		case csproto.WireTypeLengthDelimited:
 			val, err := dec.DecodeBytes()
 			if err != nil {
-				return emptyPartialResult, err
+				return emptyResult, err
 			}
 			if subDef, ok := dv.(map[int]any); ok && len(subDef) > 0 {
 				// recurse
 				subResult, err := Decode(val, subDef)
 				if err != nil {
-					return emptyPartialResult, err
+					return emptyResult, err
 				}
 				fd, err := res.getOrAddFieldData(tag, wt)
 				if err != nil {
-					return emptyPartialResult, err
+					return emptyResult, err
 				}
 				fd.data = append(fd.data, subResult.m)
 			} else {
 				fd, err := res.getOrAddFieldData(tag, wt)
 				if err != nil {
-					return emptyPartialResult, err
+					return emptyResult, err
 				}
 				fd.data = append(fd.data, val)
 			}
 		default:
-			return emptyPartialResult, fmt.Errorf("read unknown/unsupported protobuf wire type (%v)", wt)
+			return emptyResult, fmt.Errorf("read unknown/unsupported protobuf wire type (%v)", wt)
 		}
 	}
 	return res, nil
@@ -129,6 +129,8 @@ type DecodeResult struct {
 //	res, _ := csproto.DecodePartial(data, def)
 //	nameData, _ := res.FieldData(2, 1)
 //	descriptionData, _ := res.FieldData(2, 2)
+//	name, _ := nameData.StringValue()
+//	description, _ := descriptionData.StringValue()
 func (r *DecodeResult) FieldData(tags ...int) (*FieldData, error) {
 	if len(tags) == 0 {
 		return nil, fmt.Errorf("at least one tag key must be specified")

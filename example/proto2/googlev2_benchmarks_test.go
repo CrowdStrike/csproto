@@ -64,7 +64,7 @@ func BenchmarkCustomDecodeGoogleV2(b *testing.B) {
 	}
 }
 
-func BenchmarkPartialDecodeGoogleV2(b *testing.B) {
+func BenchmarkLazyDecodeGoogleV2(b *testing.B) {
 	var (
 		evt = createGoogleV2Event(b)
 		def = map[int]any{
@@ -80,7 +80,7 @@ func BenchmarkPartialDecodeGoogleV2(b *testing.B) {
 	data, _ := proto.Marshal(evt)
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		_, _ = lazyproto.DecodePartial(data, def)
+		_, _ = lazyproto.Decode(data, def)
 	}
 }
 

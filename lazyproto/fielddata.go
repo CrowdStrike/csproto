@@ -553,12 +553,6 @@ func rawValueConversionError[T any](from any) *RawValueConversionError {
 	return &err
 }
 
-// rawValueConversionErrorOld constructs a new RawValueConversionError error.
-func rawValueConversionErrorOld[T1, T2 any](from T1, to T2) *RawValueConversionError {
-	err := RawValueConversionError(fmt.Sprintf("unable to convert raw value of type %T to %T", from, to))
-	return &err
-}
-
 // RawValueConversionError is returned when the lazily-decoded value for a Protobuf field could not
 // be converted to the requested Go type.
 type RawValueConversionError string
