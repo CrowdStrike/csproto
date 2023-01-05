@@ -102,35 +102,6 @@ type DecodeResult struct {
 // field to support retreiving fields from nested messages.  Each value is used to retreieve the field
 // data at the corresponding level of nesting, i.e. a value of [1, 2] would return the field data for
 // tag 2 within the nested data for tag 1 at the root.
-//
-// For a Protobuf definition like:
-//
-//	// example.proto
-//	message Example {
-//		int64  id     = 1;
-//		Nested nested = 2;
-//	}
-//	message Nested {
-//		string name        = 1;
-//		string description = 2;
-//	}
-//
-// the fields of the Nested message could be retrieved using:
-//
-//	// data contains the serialized bytes of a Example Protobuf message
-//	def := map[int]any{
-//		// field 2 from the outer message
-//		2: map[int]any{
-//			// fields 1 and 2 from the inner message
-//			1: nil,
-//			2: nil,
-//		},
-//	}
-//	res, _ := csproto.DecodePartial(data, def)
-//	nameData, _ := res.FieldData(2, 1)
-//	descriptionData, _ := res.FieldData(2, 2)
-//	name, _ := nameData.StringValue()
-//	description, _ := descriptionData.StringValue()
 func (r *DecodeResult) FieldData(tags ...int) (*FieldData, error) {
 	if len(tags) == 0 {
 		return nil, fmt.Errorf("at least one tag key must be specified")

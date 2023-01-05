@@ -1,6 +1,7 @@
 package lazyproto
 
 import (
+	"fmt"
 	"math"
 	"testing"
 
@@ -8,6 +9,63 @@ import (
 
 	"github.com/CrowdStrike/csproto"
 )
+
+func ExampleDecodeResult_FieldData() {
+	// data contains the serialized bytes of an Example Protobuf message that is
+	// defined as:
+	//	message Example {
+	//		int64  id     = 1;
+	//		Nested nested = 2;
+	//	}
+	//	message Nested {
+	//		string name        = 1;
+	//		string description = 2;
+	//	}
+	data := []byte{
+		// id: 1
+		(1 << 3), 0x1,
+		// nested: 10 bytes
+		(2 << 3) | 2, 0x0A,
+		// nested.name: foo
+		(1 << 3) | 2, 0x03, 0x66, 0x6f, 0x6f,
+		// nested.description: bar
+		(2 << 3) | 2, 0x03, 0x62, 0x61, 0x72,
+	}
+	def := NewDef()
+	// extract tags 1 and 2 from the nested message at tag 2 in the outer message
+	_ = def.AddNested(2, 1, 2)
+	res, err := Decode(data, def)
+	if err != nil {
+		fmt.Println("error from decode:", err)
+		return
+	}
+	// grab the field data
+	nameData, err := res.FieldData(2, 1)
+	if err != nil {
+		fmt.Println("error accessing field data for 'name':", err)
+		return
+	}
+	descriptionData, err := res.FieldData(2, 2)
+	if err != nil {
+		fmt.Println("error accessing field data for 'description':", err)
+		return
+	}
+	// extract the values
+	name, err := nameData.StringValue()
+	if err != nil {
+		fmt.Println("error retrieving string value for 'name':", err)
+		return
+	}
+	description, err := descriptionData.StringValue()
+	if err != nil {
+		fmt.Println("error retrieving string value for 'description':", err)
+		return
+	}
+	fmt.Printf("name: %s\ndescription: %s", name, description)
+	// Output:
+	// name: foo
+	// description: bar
+}
 
 func TestDecodePartial(t *testing.T) {
 	var sampleMessage = []byte{
