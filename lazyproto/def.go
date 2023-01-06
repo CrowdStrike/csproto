@@ -19,17 +19,17 @@ type Def struct {
 	m map[int]any
 }
 
-// Add adds field tags to the mapping and returns the Def
-func (d *Def) Add(tags ...int) *Def {
+// Tags adds one or more field tags to the mapping, replacing any existing mappings, and returns the Def.
+func (d *Def) Tags(tags ...int) *Def {
 	for _, t := range tags {
 		d.m[t] = nil
 	}
 	return d
 }
 
-// AddNested adds a mapping for tag to a nested Def with the specified field tags for the nested message
-// and returns the nested Def
-func (d *Def) AddNested(tag int, nestedTags ...int) *Def {
+// NestedTag adds a mapping for tag to a nested Def with the specified field tags for the nested message,
+// replacing any existing mapping, and returns the nested Def
+func (d *Def) NestedTag(tag int, nestedTags ...int) *Def {
 	nd := NewDef(nestedTags...)
 	d.m[tag] = nd
 	return nd

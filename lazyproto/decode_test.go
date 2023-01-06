@@ -33,7 +33,7 @@ func ExampleDecodeResult_FieldData() {
 	}
 	def := NewDef()
 	// extract tags 1 and 2 from the nested message at tag 2 in the outer message
-	_ = def.AddNested(2, 1, 2)
+	_ = def.NestedTag(2, 1, 2)
 	res, err := Decode(data, def)
 	if err != nil {
 		fmt.Println("error from decode:", err)
@@ -123,7 +123,7 @@ func TestDecodePartial(t *testing.T) {
 	t.Run("decode with nested def keys", func(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1, 2, 4)
-		_ = def.AddNested(3, 2)
+		_ = def.NestedTag(3, 2)
 		res, err := Decode(sampleMessage, def)
 
 		assert.NoError(t, err)
@@ -134,7 +134,7 @@ func TestDecodePartial(t *testing.T) {
 	t.Run("get field data with nested def keys", func(t *testing.T) {
 		t.Parallel()
 		def := NewDef()
-		_ = def.AddNested(3, 2)
+		_ = def.NestedTag(3, 2)
 		res, err := Decode(sampleMessage, def)
 		assert.NoError(t, err)
 

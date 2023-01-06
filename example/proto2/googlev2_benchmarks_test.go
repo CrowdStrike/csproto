@@ -69,7 +69,7 @@ func BenchmarkLazyDecodeGoogleV2(b *testing.B) {
 		evt = createGoogleV2Event(b)
 		def = lazyproto.NewDef(1, 2, 3, 4)
 	)
-	_ = def.AddNested(100, 1)
+	_ = def.NestedTag(100, 1)
 	data, _ := proto.Marshal(evt)
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {

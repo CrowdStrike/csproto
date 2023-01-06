@@ -19,7 +19,7 @@ import (
 // knowledge to access the fields appropriately.
 //
 // The XxxValue() methods convert the lazily decoded field data into a single value of the appropriate
-// Go type. If the decoded message contained repeated data for the field, the last value is returned.]
+// Go type. If the decoded message contained repeated data for the field, the last value is returned.
 //
 // Similarly, the XxxValues() methods convert the data into a slice of the appropriate Go type. If the
 // decoded message contained only a single value, or the field is not defined as repeated, the methods
@@ -438,10 +438,16 @@ func (fd *FieldData) Float64Values() ([]float64, error) {
 	})
 }
 
+// scalarProtoFieldGoType is a generic constraint that defines the Go types that can be created from
+// encoded Protobuf data.
+type scalarProtoFieldGoType interface {
+	bool | string | []byte | int32 | uint32 | int64 | uint64 | float32 | float64
+}
+
 // scalarValue is a helper to convert the lazily-decoded field data in fd to a scalar value of
 // concrete type T by invoking the provided convertFn.  The wt parameter contains the expected
 // Protobuf wire type for a Go value of type T.
-func scalarValue[T any](fd *FieldData, wt csproto.WireType, convertFn func([]byte) (T, error)) (T, error) {
+func scalarValue[T scalarProtoFieldGoType](fd *FieldData, wt csproto.WireType, convertFn func([]byte) (T, error)) (T, error) {
 	var zero T
 	if fd == nil || len(fd.data) == 0 {
 		return zero, ErrTagNotFound
@@ -469,7 +475,7 @@ func scalarValue[T any](fd *FieldData, wt csproto.WireType, convertFn func([]byt
 // sliceValue is a helper to convert the lazily-decoded field data in fd to a slice of values of
 // concrete type T by successively invoking the provided convertFn to produce each value. The wt parameter
 // contains the expected Protobuf wire type for a Go value of type T.
-func sliceValue[T any](fd *FieldData, wt csproto.WireType, convertFn func([]byte) (T, int, error)) ([]T, error) {
+func sliceValue[T scalarProtoFieldGoType](fd *FieldData, wt csproto.WireType, convertFn func([]byte) (T, int, error)) ([]T, error) {
 	if fd == nil {
 		return nil, ErrTagNotFound
 	}

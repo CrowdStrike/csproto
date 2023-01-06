@@ -50,7 +50,7 @@ func TestDef(t *testing.T) {
 			t.Parallel()
 
 			def := NewDef()
-			def.Add(1)
+			def.Tags(1)
 			assert.Len(t, def.m, 1)
 			assert.Contains(t, def.m, int(1))
 			assert.Nil(t, def.m[1])
@@ -59,7 +59,7 @@ func TestDef(t *testing.T) {
 			t.Parallel()
 
 			def := NewDef()
-			def.Add(1, 2, 3)
+			def.Tags(1, 2, 3)
 			assert.Len(t, def.m, 3)
 			for _, tag := range []int{1, 2, 3} {
 				assert.Contains(t, def.m, tag)
@@ -71,7 +71,7 @@ func TestDef(t *testing.T) {
 				t.Parallel()
 
 				def := NewDef()
-				def.Add(1, 2, 3, 2, 3)
+				def.Tags(1, 2, 3, 2, 3)
 				assert.Len(t, def.m, 3)
 				for _, tag := range []int{1, 2, 3} {
 					assert.Contains(t, def.m, tag)
@@ -81,9 +81,9 @@ func TestDef(t *testing.T) {
 				t.Parallel()
 
 				def := NewDef()
-				def.Add(1, 2, 3)
-				def.Add(2)
-				def.Add(3)
+				def.Tags(1, 2, 3)
+				def.Tags(2)
+				def.Tags(3)
 				assert.Len(t, def.m, 3)
 				for _, tag := range []int{1, 2, 3} {
 					assert.Contains(t, def.m, tag)
@@ -94,7 +94,7 @@ func TestDef(t *testing.T) {
 			t.Parallel()
 
 			def := NewDef()
-			d2 := def.Add(1)
+			d2 := def.Tags(1)
 			assert.Same(t, d2, def)
 		})
 	})
@@ -105,7 +105,7 @@ func TestDef(t *testing.T) {
 			t.Parallel()
 
 			def := NewDef()
-			subdef := def.AddNested(1)
+			subdef := def.NestedTag(1)
 			assert.NotNil(t, subdef)
 			assert.NotSame(t, subdef, def)
 			assert.Empty(t, subdef.m)
@@ -114,7 +114,7 @@ func TestDef(t *testing.T) {
 			t.Parallel()
 
 			def := NewDef()
-			subdef := def.AddNested(1, 1)
+			subdef := def.NestedTag(1, 1)
 			assert.Len(t, subdef.m, 1)
 			assert.Contains(t, subdef.m, int(1))
 		})
@@ -122,7 +122,7 @@ func TestDef(t *testing.T) {
 			t.Parallel()
 
 			def := NewDef()
-			subdef := def.AddNested(1, 1, 2, 3)
+			subdef := def.NestedTag(1, 1, 2, 3)
 			assert.Len(t, subdef.m, 3)
 			for _, tag := range []int{1, 2, 3} {
 				assert.Contains(t, subdef.m, tag)
@@ -132,7 +132,7 @@ func TestDef(t *testing.T) {
 			t.Parallel()
 
 			def := NewDef()
-			subdef := def.AddNested(1, 1, 2, 3, 2, 3)
+			subdef := def.NestedTag(1, 1, 2, 3, 2, 3)
 			assert.Len(t, subdef.m, 3)
 			for _, tag := range []int{1, 2, 3} {
 				assert.Contains(t, subdef.m, tag)
@@ -164,7 +164,7 @@ func TestDef(t *testing.T) {
 			t.Parallel()
 
 			def := NewDef()
-			subdef := def.AddNested(1)
+			subdef := def.NestedTag(1)
 			v, ok := def.Get(1)
 
 			assert.NotNil(t, v)
