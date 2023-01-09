@@ -37,7 +37,8 @@ type FieldData struct {
 	// holds the Protobuf wire type from the source data
 	wt csproto.WireType
 	// holds either:
-	// . one or more []byte values containing the raw bytes from the decoded message for scalar values
+	// . one or more []byte values containing the raw bytes from the decoded message for single or
+	//   repeated scalar values
 	// . a map[int]*FieldData for nested values
 	data []any
 }

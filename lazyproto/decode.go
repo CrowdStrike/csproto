@@ -7,7 +7,7 @@ import (
 )
 
 var (
-	// ErrTagNotFound is returned by PartialDecodeResult.FieldData() when the specified tag(s) do not
+	// ErrTagNotFound is returned by [PartialDecodeResult.FieldData] when the specified tag(s) do not
 	// exist in the result.
 	ErrTagNotFound = fmt.Errorf("the requested tag does not exist in the partial decode result")
 )
@@ -26,9 +26,12 @@ var emptyResult DecodeResult
 // of field values are needed, so [PartialDecodeResult] and [FieldData] only support extracting
 // scalar values or slices of scalar values. Consumers that need to decode entire messages will need
 // to use [Unmarshal] instead.
-func Decode(data []byte, def *Def) (res DecodeResult, err error) {
-	if len(data) == 0 || def == nil || len(def.m) == 0 {
+func Decode(data []byte, def Def) (res DecodeResult, err error) {
+	if len(data) == 0 || len(def) == 0 {
 		return emptyResult, nil
+	}
+	if err := def.Validate(); err != nil {
+		return emptyResult, err
 	}
 	for dec := csproto.NewDecoder(data); dec.More(); {
 		tag, wt, err := dec.DecodeTag()
@@ -65,9 +68,9 @@ func Decode(data []byte, def *Def) (res DecodeResult, err error) {
 			if err != nil {
 				return emptyResult, err
 			}
-			if subDef, ok := dv.(*Def); ok && len(subDef.m) > 0 {
+			if len(dv) > 0 {
 				// recurse
-				subResult, err := Decode(val, subDef)
+				subResult, err := Decode(val, dv)
 				if err != nil {
 					return emptyResult, err
 				}
@@ -103,11 +106,11 @@ type DecodeResult struct {
 // data at the corresponding level of nesting, i.e. a value of [1, 2] would return the field data for
 // tag 2 within the nested data for tag 1 at the root.
 func (r *DecodeResult) FieldData(tags ...int) (*FieldData, error) {
-	if len(tags) == 0 {
-		return nil, fmt.Errorf("at least one tag key must be specified")
-	}
 	if r == nil || len(r.m) == 0 {
 		return nil, ErrTagNotFound
+	}
+	if len(tags) == 0 {
+		return nil, fmt.Errorf("at least one tag key must be specified")
 	}
 	var (
 		fd *FieldData
