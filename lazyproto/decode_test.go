@@ -39,6 +39,11 @@ func ExampleDecodeResult_FieldData() {
 		fmt.Println("error from decode:", err)
 		return
 	}
+	defer func() {
+		if err := res.Close(); err != nil {
+			fmt.Println("error from DecodeResult.Close():", err)
+		}
+	}()
 	// grab the field data
 	nameData, err := res.FieldData(2, 1)
 	if err != nil {
@@ -67,7 +72,7 @@ func ExampleDecodeResult_FieldData() {
 	// description: bar
 }
 
-func TestDecodePartial(t *testing.T) {
+func TestDecode(t *testing.T) {
 	var sampleMessage = []byte{
 		// field 1: varint boolean true
 		(1 << 3), 0x01,
@@ -86,6 +91,7 @@ func TestDecodePartial(t *testing.T) {
 	t.Run("decode empty buffer", func(t *testing.T) {
 		t.Parallel()
 		res, err := Decode([]byte{}, NewDef(1))
+		defer func() { _ = res.Close() }()
 
 		assert.NoError(t, err)
 		assert.Empty(t, res.m)
@@ -93,6 +99,7 @@ func TestDecodePartial(t *testing.T) {
 	t.Run("decode with nil def", func(t *testing.T) {
 		t.Parallel()
 		res, err := Decode([]byte{0x01}, nil)
+		defer func() { _ = res.Close() }()
 
 		assert.NoError(t, err)
 		assert.Empty(t, res.m)
@@ -100,6 +107,7 @@ func TestDecodePartial(t *testing.T) {
 	t.Run("decode with empty def", func(t *testing.T) {
 		t.Parallel()
 		res, err := Decode([]byte{0x01}, NewDef())
+		defer func() { _ = res.Close() }()
 
 		assert.NoError(t, err)
 		assert.Empty(t, res.m)
@@ -108,6 +116,7 @@ func TestDecodePartial(t *testing.T) {
 		t.Parallel()
 		def := NewDef(42, 100)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 
 		assert.NoError(t, err)
 		assert.Empty(t, res.m)
@@ -116,6 +125,7 @@ func TestDecodePartial(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1, 2, 3, 4)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 
 		assert.NoError(t, err)
 		assert.Len(t, res.m, 4, "should have 4 results")
@@ -125,6 +135,7 @@ func TestDecodePartial(t *testing.T) {
 		def := NewDef(1, 2, 4)
 		_ = def.NestedTag(3, 2)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 
 		assert.NoError(t, err)
 		assert.Len(t, res.m, 4, "should have 4 results")
@@ -136,12 +147,178 @@ func TestDecodePartial(t *testing.T) {
 		def := NewDef()
 		_ = def.NestedTag(3, 2)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(3, 2)
 		assert.NoError(t, err)
 		assert.NotNil(t, fd)
 		assert.Len(t, fd.data, 1)
+	})
+	t.Run("fails with invalid def", func(t *testing.T) {
+		t.Parallel()
+		def := NewDef(csproto.MaxTagValue + 1)
+		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
+		assert.Empty(t, res.m)
+		assert.Error(t, err)
+	})
+}
+
+func TestDecodeResultFieldData(t *testing.T) {
+	t.Parallel()
+	var sampleMessage = []byte{
+		// field 1: varint boolean true
+		(1 << 3), 0x01,
+		// field 2: string "testing"
+		(2 << 3) | 2, 0x07, 0x74, 0x65, 0x73, 0x74, 0x69, 0x6e, 0x67,
+		// field 3: nested message (10 bytes)
+		// . field 1: integer 5
+		// . field 2: string "nested"
+		(3 << 3) | 2, 0x0a, (1 << 3), 0x05, (2<<3 | 2), 0x06, 0x6e, 0x65, 0x73, 0x74, 0x65, 0x64,
+		// field 4: fixed32 1138
+		(4 << 3) | 5, 0x72, 0x04, 0x00, 0x00,
+		// field 5: float64 42.1138
+		(5 << 3) | 1, 0x74, 0x24, 0x97, 0xFF, 0x90, 0x0E, 0x45, 0x40,
+	}
+	t.Run("returns nil and not found error for nil result", func(t *testing.T) {
+		t.Parallel()
+
+		var res *DecodeResult
+		fd, err := res.FieldData(1)
+		assert.Nil(t, fd)
+		assert.ErrorIs(t, err, ErrTagNotFound)
+	})
+	t.Run("returns nil and not found error for empty result", func(t *testing.T) {
+		t.Parallel()
+
+		var res DecodeResult
+		fd, err := res.FieldData(1)
+		assert.Nil(t, fd)
+		assert.ErrorIs(t, err, ErrTagNotFound)
+	})
+	t.Run("returns nil and error when passed no tags", func(t *testing.T) {
+		t.Parallel()
+
+		def := NewDef(1)
+		res, _ := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
+		fd, err := res.FieldData()
+		assert.Nil(t, fd)
+		assert.Error(t, err)
+		assert.Contains(t, fmt.Sprint(err), "at least one tag key must be specified")
+	})
+	t.Run("returns nil and error when passed incorrect negative tag", func(t *testing.T) {
+		t.Parallel()
+
+		def := NewDef(1)
+		res, _ := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
+		fd, err := res.FieldData(1, -1, 1)
+		assert.Nil(t, fd)
+		assert.Error(t, err)
+		assert.Contains(t, fmt.Sprint(err), "negative tags must be the last (or only) path item")
+	})
+	t.Run("returns nil and not found error for unmatched path", func(t *testing.T) {
+		t.Parallel()
+
+		def := NewDef()
+		_ = def.NestedTag(3, 1)
+		res, _ := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
+		fd, err := res.FieldData(3, 3)
+		assert.Nil(t, fd)
+		assert.ErrorIs(t, err, ErrTagNotFound)
+	})
+	t.Run("returns zero and not found error for nil field data", func(t *testing.T) {
+		t.Parallel()
+		var fd *FieldData
+
+		// NOTE: dylan.bourque - 2023-01-11
+		// . all the internal logic for all *Value() and *Values() methods is the same so we only need to test one
+		v, err := fd.UInt32Value()
+		assert.Equal(t, uint32(0), v, "scalar method should return 0")
+		assert.ErrorIs(t, err, ErrTagNotFound)
+
+		vs, err := fd.UInt32Values()
+		assert.Nil(t, vs, "slice method should return nil")
+		assert.ErrorIs(t, err, ErrTagNotFound)
+	})
+	t.Run("returns zero and not found error for empty field data", func(t *testing.T) {
+		t.Parallel()
+		var fd FieldData
+
+		// NOTE: dylan.bourque - 2023-01-11
+		// . all the internal logic for all *Value() and *Values() methods is the same so we only need to test one
+		v, err := fd.UInt32Value()
+		assert.Equal(t, uint32(0), v, "scalar method should return 0")
+		assert.ErrorIs(t, err, ErrTagNotFound)
+
+		vs, err := fd.UInt32Values()
+		assert.Nil(t, vs, "slice method should return nil")
+		assert.ErrorIs(t, err, ErrTagNotFound)
+	})
+}
+
+func TestRawFieldData(t *testing.T) {
+	t.Parallel()
+	var sampleMessage = []byte{
+		// field 1: varint boolean true
+		(1 << 3), 0x01,
+		// field 2: string "testing"
+		(2 << 3) | 2, 0x07, 0x74, 0x65, 0x73, 0x74, 0x69, 0x6e, 0x67,
+		// field 3: nested message (10 bytes)
+		// . field 1: integer 5
+		// . field 2: string "nested"
+		(3 << 3) | 2, 0x0a, (1 << 3), 0x05, (2<<3 | 2), 0x06, 0x6e, 0x65, 0x73, 0x74, 0x65, 0x64,
+		// field 4: fixed32 1138
+		(4 << 3) | 5, 0x72, 0x04, 0x00, 0x00,
+		// field 5: float64 42.1138
+		(5 << 3) | 1, 0x74, 0x24, 0x97, 0xFF, 0x90, 0x0E, 0x45, 0x40,
+	}
+	t.Run("with valid tag path", func(t *testing.T) {
+		t.Parallel()
+		def := NewDef()
+		// negative tag for raw data
+		def = def.Tags(-3)
+		// positive tag for individual field(s)
+		_ = def.NestedTag(3, 2)
+		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
+		assert.NoError(t, err)
+		defer res.Close()
+
+		fd, err := res.FieldData(-3)
+		assert.NoError(t, err)
+		assert.NotNil(t, fd)
+
+		d, err := fd.BytesValue()
+		assert.NoError(t, err)
+		assert.Equal(t, sampleMessage[13:23], d)
+	})
+	t.Run("with invalid tag path", func(t *testing.T) {
+		t.Parallel()
+		def := NewDef()
+		// negative tag for raw data
+		def = def.Tags(-3)
+		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
+		assert.NoError(t, err)
+		defer res.Close()
+
+		// negative tags must be the last/only value
+		fd, err := res.FieldData(1, -1, 1)
+		assert.Error(t, err)
+		assert.Nil(t, fd)
+	})
+	t.Run("fails for incorrect wire type", func(t *testing.T) {
+		t.Parallel()
+		def := NewDef(-1)
+		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
+		assert.Error(t, err)
+		assert.Contains(t, fmt.Sprintf("%s", err), "invalid definition: raw mode only supported for length-delimited fields")
+		assert.Empty(t, res.m)
 	})
 }
 
@@ -163,6 +340,7 @@ func TestBooleanFieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(1)
@@ -176,6 +354,7 @@ func TestBooleanFieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(2)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(2)
@@ -192,6 +371,7 @@ func TestBooleanFieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(2)
@@ -203,6 +383,7 @@ func TestBooleanFieldData(t *testing.T) {
 		var expectedErr *WireTypeMismatchError
 		def := NewDef(4)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(4)
@@ -229,6 +410,7 @@ func TestStringFieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(1)
@@ -242,6 +424,7 @@ func TestStringFieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(2)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(2)
@@ -258,6 +441,7 @@ func TestStringFieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(2)
@@ -269,6 +453,7 @@ func TestStringFieldData(t *testing.T) {
 		var expectedErr *WireTypeMismatchError
 		def := NewDef(3)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(3)
@@ -295,6 +480,7 @@ func TestBytesFieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(1)
@@ -308,6 +494,7 @@ func TestBytesFieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(2)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(2)
@@ -324,6 +511,7 @@ func TestBytesFieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(2)
@@ -335,6 +523,7 @@ func TestBytesFieldData(t *testing.T) {
 		var expectedErr *WireTypeMismatchError
 		def := NewDef(3)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(3)
@@ -370,6 +559,7 @@ func TestUInt32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(1)
@@ -383,6 +573,7 @@ func TestUInt32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(2)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(2)
@@ -396,6 +587,7 @@ func TestUInt32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(3)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(3)
@@ -409,6 +601,7 @@ func TestUInt32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(4)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(4)
@@ -425,6 +618,7 @@ func TestUInt32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(5)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(5)
@@ -441,6 +635,7 @@ func TestUInt32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(2)
@@ -452,6 +647,7 @@ func TestUInt32FieldData(t *testing.T) {
 		var expectedErr *WireTypeMismatchError
 		def := NewDef(6)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(6)
@@ -465,6 +661,7 @@ func TestUInt32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(7)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(7)
@@ -504,6 +701,7 @@ func TestInt32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(1)
@@ -517,6 +715,7 @@ func TestInt32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(2)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(2)
@@ -530,6 +729,7 @@ func TestInt32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(3)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(3)
@@ -543,6 +743,7 @@ func TestInt32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(4)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(4)
@@ -556,6 +757,7 @@ func TestInt32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(5)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(5)
@@ -569,6 +771,7 @@ func TestInt32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(6)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(6)
@@ -585,6 +788,7 @@ func TestInt32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(7)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(7)
@@ -601,6 +805,7 @@ func TestInt32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(2)
@@ -612,6 +817,7 @@ func TestInt32FieldData(t *testing.T) {
 		var expectedErr *WireTypeMismatchError
 		def := NewDef(8)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(8)
@@ -625,6 +831,7 @@ func TestInt32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(9)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(9)
@@ -664,6 +871,7 @@ func TestSInt32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(1)
@@ -677,6 +885,7 @@ func TestSInt32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(2)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(2)
@@ -690,6 +899,7 @@ func TestSInt32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(3)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(3)
@@ -703,6 +913,7 @@ func TestSInt32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(4)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(4)
@@ -716,6 +927,7 @@ func TestSInt32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(5)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(5)
@@ -729,6 +941,7 @@ func TestSInt32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(6)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(6)
@@ -745,6 +958,7 @@ func TestSInt32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(7)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(7)
@@ -761,6 +975,7 @@ func TestSInt32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(2)
@@ -772,6 +987,7 @@ func TestSInt32FieldData(t *testing.T) {
 		var expectedErr *WireTypeMismatchError
 		def := NewDef(8)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(8)
@@ -785,6 +1001,7 @@ func TestSInt32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(9)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(9)
@@ -818,6 +1035,7 @@ func TestUInt64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(1)
@@ -831,6 +1049,7 @@ func TestUInt64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(2)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(2)
@@ -844,6 +1063,7 @@ func TestUInt64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(3)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(3)
@@ -857,6 +1077,7 @@ func TestUInt64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(4)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(4)
@@ -873,6 +1094,7 @@ func TestUInt64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(5)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(5)
@@ -889,6 +1111,7 @@ func TestUInt64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(2)
@@ -900,6 +1123,7 @@ func TestUInt64FieldData(t *testing.T) {
 		var expectedErr *WireTypeMismatchError
 		def := NewDef(6)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(6)
@@ -941,6 +1165,7 @@ func TestInt64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(1)
@@ -954,6 +1179,7 @@ func TestInt64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(2)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(2)
@@ -967,6 +1193,7 @@ func TestInt64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(3)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(3)
@@ -980,6 +1207,7 @@ func TestInt64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(4)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(4)
@@ -993,6 +1221,7 @@ func TestInt64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(5)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(5)
@@ -1006,6 +1235,7 @@ func TestInt64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(6)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(6)
@@ -1022,6 +1252,7 @@ func TestInt64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(7)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(7)
@@ -1038,6 +1269,7 @@ func TestInt64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(2)
@@ -1049,6 +1281,7 @@ func TestInt64FieldData(t *testing.T) {
 		var expectedErr *WireTypeMismatchError
 		def := NewDef(8)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(8)
@@ -1062,6 +1295,7 @@ func TestInt64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(9)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(9)
@@ -1075,6 +1309,7 @@ func TestInt64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(10)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(10)
@@ -1116,6 +1351,7 @@ func TestSInt64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(1)
@@ -1129,6 +1365,7 @@ func TestSInt64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(2)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(2)
@@ -1142,6 +1379,7 @@ func TestSInt64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(3)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(3)
@@ -1155,6 +1393,7 @@ func TestSInt64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(4)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(4)
@@ -1168,6 +1407,7 @@ func TestSInt64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(5)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(5)
@@ -1181,6 +1421,7 @@ func TestSInt64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(6)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(6)
@@ -1197,6 +1438,7 @@ func TestSInt64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(7)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(7)
@@ -1213,6 +1455,7 @@ func TestSInt64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(2)
@@ -1224,6 +1467,7 @@ func TestSInt64FieldData(t *testing.T) {
 		var expectedErr *WireTypeMismatchError
 		def := NewDef(8)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(8)
@@ -1237,6 +1481,7 @@ func TestSInt64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(9)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(9)
@@ -1250,6 +1495,7 @@ func TestSInt64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(10)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(10)
@@ -1283,6 +1529,7 @@ func TestFixed32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(1)
@@ -1296,6 +1543,7 @@ func TestFixed32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(2)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(2)
@@ -1309,6 +1557,7 @@ func TestFixed32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(3)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(3)
@@ -1322,6 +1571,7 @@ func TestFixed32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(4)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(4)
@@ -1338,6 +1588,7 @@ func TestFixed32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(5)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(5)
@@ -1354,6 +1605,7 @@ func TestFixed32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(2)
@@ -1365,6 +1617,7 @@ func TestFixed32FieldData(t *testing.T) {
 		var expectedErr *WireTypeMismatchError
 		def := NewDef(6)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(6)
@@ -1401,6 +1654,7 @@ func TestFixed64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(1)
@@ -1414,6 +1668,7 @@ func TestFixed64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(2)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(2)
@@ -1427,6 +1682,7 @@ func TestFixed64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(3)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(3)
@@ -1440,6 +1696,7 @@ func TestFixed64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(4)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(4)
@@ -1456,6 +1713,7 @@ func TestFixed64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(5)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(5)
@@ -1472,6 +1730,7 @@ func TestFixed64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(2)
@@ -1483,6 +1742,7 @@ func TestFixed64FieldData(t *testing.T) {
 		var expectedErr *WireTypeMismatchError
 		def := NewDef(6)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(6)
@@ -1516,6 +1776,7 @@ func TestFloat32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(1)
@@ -1529,6 +1790,7 @@ func TestFloat32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(2)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(2)
@@ -1542,6 +1804,7 @@ func TestFloat32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(3)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(3)
@@ -1555,6 +1818,7 @@ func TestFloat32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(4)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(4)
@@ -1571,6 +1835,7 @@ func TestFloat32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(5)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(5)
@@ -1587,6 +1852,7 @@ func TestFloat32FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(2)
@@ -1598,6 +1864,7 @@ func TestFloat32FieldData(t *testing.T) {
 		var expectedErr *WireTypeMismatchError
 		def := NewDef(6)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(6)
@@ -1634,6 +1901,7 @@ func TestFloat64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(1)
@@ -1647,6 +1915,7 @@ func TestFloat64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(2)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(2)
@@ -1660,6 +1929,7 @@ func TestFloat64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(3)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(3)
@@ -1673,6 +1943,7 @@ func TestFloat64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(4)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(4)
@@ -1689,6 +1960,7 @@ func TestFloat64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(5)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(5)
@@ -1705,6 +1977,7 @@ func TestFloat64FieldData(t *testing.T) {
 		t.Parallel()
 		def := NewDef(1)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(2)
@@ -1716,6 +1989,7 @@ func TestFloat64FieldData(t *testing.T) {
 		var expectedErr *WireTypeMismatchError
 		def := NewDef(6)
 		res, err := Decode(sampleMessage, def)
+		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 
 		fd, err := res.FieldData(6)

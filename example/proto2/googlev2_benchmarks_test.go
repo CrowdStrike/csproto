@@ -73,7 +73,8 @@ func BenchmarkLazyDecodeGoogleV2(b *testing.B) {
 	data, _ := proto.Marshal(evt)
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		_, _ = lazyproto.Decode(data, def)
+		r, _ := lazyproto.Decode(data, def)
+		_ = r.Close()
 	}
 }
 

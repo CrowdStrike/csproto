@@ -8,6 +8,7 @@ import (
 
 	"github.com/CrowdStrike/csproto"
 	"github.com/CrowdStrike/csproto/example/proto3/googlev2"
+	"github.com/CrowdStrike/csproto/lazyproto"
 )
 
 func BenchmarkEncodeGoogleV2(b *testing.B) {
@@ -59,6 +60,20 @@ func BenchmarkCustomDecodeGoogleV2(b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		evt2.Reset()
 		_ = csproto.Unmarshal(data, &evt2)
+	}
+}
+
+func BenchmarkLazyDecodeGoogleV2(b *testing.B) {
+	var (
+		evt = createGoogleV2Event()
+		def = lazyproto.NewDef(1)
+	)
+	_ = def.NestedTag(5, 1)
+	data, _ := proto.Marshal(evt)
+	b.ResetTimer()
+	for n := 0; n < b.N; n++ {
+		r, _ := lazyproto.Decode(data, def)
+		_ = r.Close()
 	}
 }
 

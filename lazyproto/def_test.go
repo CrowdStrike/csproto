@@ -12,40 +12,43 @@ import (
 
 func TestDef(t *testing.T) {
 	t.Parallel()
-	t.Run("new empty def", func(t *testing.T) {
+	t.Run("new def", func(t *testing.T) {
 		t.Parallel()
+		t.Run("new empty def", func(t *testing.T) {
+			t.Parallel()
 
-		def := NewDef()
-		assert.NotNil(t, def)
-		assert.Empty(t, def)
-	})
-	t.Run("new def with single tag", func(t *testing.T) {
-		t.Parallel()
+			def := NewDef()
+			assert.NotNil(t, def)
+			assert.Empty(t, def)
+		})
+		t.Run("new def with single tag", func(t *testing.T) {
+			t.Parallel()
 
-		def := NewDef(1)
-		assert.NotNil(t, def)
-		assert.Len(t, def, 1)
-		assert.Contains(t, def, int(1))
-	})
-	t.Run("new def with multiple tags", func(t *testing.T) {
-		t.Parallel()
+			def := NewDef(1)
+			assert.NotNil(t, def)
+			assert.Len(t, def, 1)
+			assert.Contains(t, def, int(1))
+		})
+		t.Run("new def with multiple tags", func(t *testing.T) {
+			t.Parallel()
 
-		def := NewDef(1, 2, 3)
-		assert.NotNil(t, def)
-		assert.Len(t, def, 3)
-		for _, tag := range []int{1, 2, 3} {
-			assert.Contains(t, def, tag)
-		}
-	})
-	t.Run("new def with duplicate tags", func(t *testing.T) {
-		t.Parallel()
+			def := NewDef(1, 2, 3)
+			assert.NotNil(t, def)
+			assert.Len(t, def, 3)
+			for _, tag := range []int{1, 2, 3} {
+				assert.Contains(t, def, tag)
+			}
+		})
+		t.Run("new def with duplicate tags", func(t *testing.T) {
+			t.Parallel()
 
-		def := NewDef(1, 2, 3, 2, 3)
-		assert.NotNil(t, def)
-		assert.Len(t, def, 3)
-		for _, tag := range []int{1, 2, 3} {
-			assert.Contains(t, def, tag)
-		}
+			def := NewDef(1, 2, 3, 2, 3)
+			assert.NotNil(t, def)
+			assert.Len(t, def, 3)
+			for _, tag := range []int{1, 2, 3} {
+				assert.Contains(t, def, tag)
+			}
+		})
 	})
 	t.Run("add", func(t *testing.T) {
 		t.Parallel()
@@ -142,7 +145,22 @@ func TestDef(t *testing.T) {
 				assert.Contains(t, subdef, tag)
 			}
 		})
+		t.Run("negative tags", func(t *testing.T) {
+			t.Parallel()
+
+			def := NewDef()
+			// negative tag for raw bytes of nested field
+			def = def.Tags(-1)
+			// positive tag to extract nested values
+			subdef := def.NestedTag(1, 1, 2, 3)
+			assert.Len(t, def, 2)
+			assert.Len(t, subdef, 3)
+			for _, tag := range []int{1, 2, 3} {
+				assert.Contains(t, subdef, tag)
+			}
+		})
 	})
+
 	t.Run("get", func(t *testing.T) {
 		t.Parallel()
 
@@ -199,65 +217,68 @@ func TestDefValidation(t *testing.T) {
 		})
 	})
 	t.Run("invalid def", func(t *testing.T) {
+		invalidTags := []int{
+			csproto.MaxTagValue + 1,
+			-1 * (csproto.MaxTagValue + 1),
+		}
+		reservedTags := make([]int, 2*int(protowire.LastReservedNumber-protowire.FirstReservedNumber+1))
+		idx := 0
+		for i := protowire.FirstReservedNumber; i <= protowire.LastReservedNumber; i++ {
+			reservedTags[idx] = int(i)
+			reservedTags[idx+1] = -1 * int(i)
+			idx += 2
+		}
+		caseNames := []string{"positive value", "negative value"}
 		t.Parallel()
-		t.Run("negative tag", func(t *testing.T) {
+		t.Run("value overflow", func(t *testing.T) {
 			t.Parallel()
-			def := NewDef(-1)
-
-			err := def.Validate()
-			assert.Error(t, err)
-			assert.Equal(t, "invalid field tag (-1) at path []", err.Error())
-		})
-		t.Run("positive tag overflow", func(t *testing.T) {
-			t.Parallel()
-			def := NewDef(csproto.MaxTagValue + 1)
-
-			err := def.Validate()
-			assert.Error(t, err)
-			assert.Equal(t, fmt.Sprintf("invalid field tag (%d) at path []", csproto.MaxTagValue+1), err.Error())
+			for i, tag := range invalidTags {
+				t.Run(caseNames[i], func(t *testing.T) {
+					def := NewDef(tag)
+					err := def.Validate()
+					assert.Error(t, err, "tag=%v", tag)
+					assert.Equal(t, fmt.Sprintf("invalid field tag (%d) at path []", tag), fmt.Sprintf("%s", err), "tag=%v", tag)
+				})
+			}
 		})
 		t.Run("reserved tags", func(t *testing.T) {
 			t.Parallel()
-			for i := protowire.FirstReservedNumber; i <= protowire.LastReservedNumber; i++ {
-				def := NewDef(int(i))
-
-				err := def.Validate()
-				assert.Error(t, err)
-				assert.Equal(t, fmt.Sprintf("invalid field tag (%d) at path []", int(i)), err.Error())
+			for i, tag := range reservedTags {
+				t.Run(caseNames[i%2], func(t *testing.T) {
+					def := NewDef(tag)
+					err := def.Validate()
+					assert.Error(t, err, "tag=%v", tag)
+					assert.Equal(t, fmt.Sprintf("invalid field tag (%d) at path []", tag), err.Error(), "tag=%v", tag)
+				})
 			}
 		})
 		t.Run("nested", func(t *testing.T) {
 			t.Parallel()
-			t.Run("negative tag", func(t *testing.T) {
+			t.Run("value overflow", func(t *testing.T) {
 				t.Parallel()
-				def := NewDef()
-				subdef := def.NestedTag(1)
-				_ = subdef.NestedTag(2, -1)
-
-				err := def.Validate()
-				assert.Error(t, err)
-				assert.Equal(t, "invalid field tag (-1) at path [1 2]", err.Error())
-			})
-			t.Run("positive tag overflow", func(t *testing.T) {
-				t.Parallel()
-				def := NewDef()
-				subdef := def.NestedTag(1)
-				_ = subdef.NestedTag(2, csproto.MaxTagValue+1)
-
-				err := def.Validate()
-				assert.Error(t, err)
-				assert.Equal(t, fmt.Sprintf("invalid field tag (%d) at path [1 2]", csproto.MaxTagValue+1), err.Error())
+				for i, tag := range invalidTags {
+					t.Run(caseNames[i], func(t *testing.T) {
+						def := NewDef()
+						subdef := def.NestedTag(1)
+						_ = subdef.NestedTag(2, tag)
+						err := def.Validate()
+						assert.Error(t, err, "tag=%v", tag)
+						assert.Equal(t, fmt.Sprintf("invalid field tag (%d) at path [1 2]", tag), fmt.Sprintf("%s", err), "tag=%v", tag)
+					})
+				}
 			})
 			t.Run("reserved tags", func(t *testing.T) {
 				t.Parallel()
-				for i := protowire.FirstReservedNumber; i <= protowire.LastReservedNumber; i++ {
-					def := NewDef()
-					subdef := def.NestedTag(1)
-					_ = subdef.NestedTag(2, int(i))
-
-					err := def.Validate()
-					assert.Error(t, err)
-					assert.Equal(t, fmt.Sprintf("invalid field tag (%d) at path [1 2]", int(i)), err.Error())
+				caseNames := []string{"positive value", "negative value"}
+				for i, tag := range reservedTags {
+					t.Run(caseNames[i%2], func(t *testing.T) {
+						def := NewDef()
+						subdef := def.NestedTag(1)
+						_ = subdef.NestedTag(2, tag)
+						err := def.Validate()
+						assert.Error(t, err)
+						assert.Equal(t, fmt.Sprintf("invalid field tag (%d) at path [1 2]", tag), err.Error())
+					})
 				}
 			})
 		})

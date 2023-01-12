@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"sort"
 	"strings"
+	"sync"
 
 	"github.com/CrowdStrike/csproto"
 )
@@ -437,6 +438,33 @@ func (fd *FieldData) Float64Values() ([]float64, error) {
 	return sliceValue(fd, csproto.WireTypeFixed64, func(data []byte) (float64, int, error) {
 		return math.Float64frombits(binary.LittleEndian.Uint64(data)), 8, nil
 	})
+}
+
+// close releases all internal resources held by fd.
+//
+// This is unexported because consumers should not call this method directly.  It is called automatically
+// by [DecodeResult.Close].
+func (fd *FieldData) close() {
+	for i, d := range fd.data {
+		if sub, ok := d.(map[int]*FieldData); ok && sub != nil {
+			for k, v := range sub {
+				if v != nil {
+					v.close()
+				}
+				delete(sub, k)
+			}
+			fieldDataMapPool.Put(sub)
+		}
+		fd.data[i] = nil
+	}
+	fd.data = nil
+}
+
+// a sync.Pool of field data maps to cut down on repeated small allocations
+var fieldDataMapPool = sync.Pool{
+	New: func() any {
+		return make(map[int]*FieldData)
+	},
 }
 
 // scalarProtoFieldGoType is a generic constraint that defines the Go types that can be created from

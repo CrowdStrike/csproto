@@ -33,13 +33,25 @@ func Decode(data []byte, def Def) (res DecodeResult, err error) {
 	if err := def.Validate(); err != nil {
 		return emptyResult, err
 	}
+	res.m = fieldDataMapPool.Get().(map[int]*FieldData)
+	defer func() {
+		// call res.Close() on error to clean up field data
+		if err != nil {
+			_ = res.Close()
+		}
+	}()
 	for dec := csproto.NewDecoder(data); dec.More(); {
 		tag, wt, err := dec.DecodeTag()
 		if err != nil {
 			return emptyResult, err
 		}
-		dv, want := def.Get(tag)
-		if !want {
+		var (
+			dv            Def
+			want, wantRaw bool
+		)
+		dv, want = def.Get(tag)
+		_, wantRaw = def.Get(-1 * tag)
+		if !want && !wantRaw {
 			if _, err := dec.Skip(tag, wt); err != nil {
 				return emptyResult, err
 			}
@@ -47,6 +59,9 @@ func Decode(data []byte, def Def) (res DecodeResult, err error) {
 		}
 		switch wt {
 		case csproto.WireTypeVarint, csproto.WireTypeFixed32, csproto.WireTypeFixed64:
+			if wantRaw {
+				return emptyResult, fmt.Errorf("invalid definition: raw mode only supported for length-delimited fields (tag=%d, wire type=%s)", tag, wt)
+			}
 			// varint, fixed32, and fixed64 could be multiple Go types so
 			// grab the raw bytes and defer interpreting them to the consumer/caller
 			// . varint -> int32, int64, uint32, uint64, sint32, sint64, bool, enum
@@ -86,6 +101,13 @@ func Decode(data []byte, def Def) (res DecodeResult, err error) {
 				}
 				fd.data = append(fd.data, val)
 			}
+			if wantRaw {
+				fd, err := res.getOrAddFieldData(-1*tag, wt)
+				if err != nil {
+					return emptyResult, err
+				}
+				fd.data = append(fd.data, val)
+			}
 		default:
 			return emptyResult, fmt.Errorf("read unknown/unsupported protobuf wire type (%v)", wt)
 		}
@@ -97,6 +119,24 @@ func Decode(data []byte, def Def) (res DecodeResult, err error) {
 // which can be used to retrieve typed values for specific Protobuf message fields.
 type DecodeResult struct {
 	m map[int]*FieldData
+}
+
+// Close releases all internal resources held by r.
+//
+// Consumers should always call Close() on instances returned by [Decode] to ensure that internal
+// resources are cleaned up.
+func (r *DecodeResult) Close() error {
+	for k, v := range r.m {
+		if v != nil {
+			v.close()
+		}
+		delete(r.m, k)
+	}
+	if r.m != nil {
+		fieldDataMapPool.Put(r.m)
+	}
+	r.m = nil
+	return nil
 }
 
 // The FieldData method returns a FieldData instance for the specified tag "path", if it exists.
@@ -111,6 +151,16 @@ func (r *DecodeResult) FieldData(tags ...int) (*FieldData, error) {
 	}
 	if len(tags) == 0 {
 		return nil, fmt.Errorf("at least one tag key must be specified")
+	}
+	// special case:
+	// - negative tag values are used to extract the raw bytes of a field, but it must be the only
+	//   (or last) field in the path
+	if len(tags) > 1 {
+		for i := 0; i < len(tags)-1; i++ {
+			if tags[i] < 0 {
+				return nil, fmt.Errorf("invalid tag in path at index %d, negative tags must be the last (or only) path item", i)
+			}
+		}
 	}
 	var (
 		fd *FieldData
@@ -138,9 +188,8 @@ func (r *DecodeResult) getOrAddFieldData(tag int, wt csproto.WireType) (*FieldDa
 		fd := &FieldData{
 			wt: wt,
 		}
-		r.m = map[int]*FieldData{
-			tag: fd,
-		}
+		r.m = fieldDataMapPool.Get().(map[int]*FieldData)
+		r.m[tag] = fd
 		return fd, nil
 	}
 	// if the key doesn't exist, add a new entry
