@@ -250,6 +250,7 @@ func TestProto3GoogleV2MarshalText(t *testing.T) {
 func TestProto3GoogleV2Equal(t *testing.T) {
 	m1 := createTestProto3GoogleV2Message()
 	m2 := createTestProto3GoogleV2Message()
+	m2.Ts = timestamppb.New(m1.Ts.AsTime().Add(time.Second))
 	// m1 and m2 will have different timestamps so should not be equal
 	assert.False(t, csproto.Equal(m1, m2), "messages should not be equal\nm1=%s\nm2=%s", m1.String(), m2.String())
 	// make them equal
