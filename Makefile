@@ -15,6 +15,7 @@ GOGO_WKT_OPTIONS = ,Mgoogle/protobuf/any.proto=github.com/gogo/protobuf/types,Mg
 FASTMARSHAL_WKT_OPTIONS = ,Mgoogle/protobuf/any.proto=github.com/gogo/protobuf/types\;types,Mgoogle/protobuf/duration.proto=github.com/gogo/protobuf/types\;types,Mgoogle/protobuf/struct.proto=github.com/gogo/protobuf/types\;types,Mgoogle/protobuf/timestamp.proto=github.com/gogo/protobuf/types\;types,Mgoogle/protobuf/wrappers.proto=github.com/gogo/protobuf/types\;types
 
 TEST_OPTS ?= -race
+BENCHMARKS_PATTERN ?= .
 
 .PHONY: test
 test:
@@ -26,7 +27,7 @@ test:
 .PHONY: bench
 bench:
 	@cd ${PROJECT_BASE_DIR}/example &&\
-		go test -run='^$$' -bench=. -benchmem ./proto2 ./proto3
+		go test -run='^$$' -bench=${BENCHMARKS_PATTERN} -benchmem ./proto2 ./proto3
 
 GENERATE_TARGETS =\
    example-proto2-gogo example-proto2-googlev1 example-proto2-googlev2\
