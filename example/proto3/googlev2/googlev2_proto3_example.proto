@@ -115,5 +115,29 @@ message Maps {
     map<fixed64, fixed64> fixed64s = 10;
     map<sfixed32, sfixed32> sfixed32s = 11;
     map<sfixed64, sfixed64> sfixed64s = 12;
-    map<string, MapObject> objects = 13;
+    map<string, google.protobuf.NullValue> nulls = 13;
+    map<string, google.protobuf.Struct> structs = 14;
+    map<string, google.protobuf.Timestamp> timestamps = 15;
+    map<string, MapObject> objects = 30;
+}
+
+message OneOfs {
+    oneof thing {
+        bool bools = 1;
+        string strings = 2;
+        int32 int32s = 3;
+        int64 int64s = 4;
+        uint32 uint32s = 5;
+        uint64 uint64s = 6;
+        sint32 sint32s = 7;
+        sint64 sint64s = 8;
+        fixed32 fixed32s = 9;
+        fixed64 fixed64s = 10;
+        sfixed32 sfixed32s = 11;
+        sfixed64 sfixed64s = 12;
+        google.protobuf.NullValue nulls = 13;
+        google.protobuf.Struct structs = 14;
+        google.protobuf.Timestamp timestamps = 15;
+        MapObject objects = 30;
+    }
 }

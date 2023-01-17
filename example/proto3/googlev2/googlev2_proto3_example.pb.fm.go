@@ -1851,6 +1851,42 @@ func (m *Maps) Size() int {
 		sz += csproto.SizeOfTagKey(12) + csproto.SizeOfVarint(uint64(keySize+9)) + keySize + 9
 	}
 
+	// Nulls (message,repeated)
+	for k, v := range m.Nulls {
+		// size of key (always has an internal tag of 1)
+		l = len(k)
+		keySize := 1 + csproto.SizeOfVarint(uint64(l)) + l
+		// size of value (always has an internal tag of 2)
+		valueSize := 1 + csproto.SizeOfVarint(uint64(v))
+		sz += csproto.SizeOfTagKey(13) + csproto.SizeOfVarint(uint64(keySize+valueSize)) + keySize + valueSize
+	}
+
+	// Structs (message,repeated)
+	for k, v := range m.Structs {
+		// size of key (always has an internal tag of 1)
+		l = len(k)
+		keySize := 1 + csproto.SizeOfVarint(uint64(l)) + l
+		// size of value (always has an internal tag of 2)
+		if v != nil {
+			l = csproto.Size(v)
+			valueSize := 1 + csproto.SizeOfVarint(uint64(l)) + l
+			sz += csproto.SizeOfTagKey(14) + csproto.SizeOfVarint(uint64(keySize+valueSize)) + keySize + valueSize
+		}
+	}
+
+	// Timestamps (message,repeated)
+	for k, v := range m.Timestamps {
+		// size of key (always has an internal tag of 1)
+		l = len(k)
+		keySize := 1 + csproto.SizeOfVarint(uint64(l)) + l
+		// size of value (always has an internal tag of 2)
+		if v != nil {
+			l = csproto.Size(v)
+			valueSize := 1 + csproto.SizeOfVarint(uint64(l)) + l
+			sz += csproto.SizeOfTagKey(15) + csproto.SizeOfVarint(uint64(keySize+valueSize)) + keySize + valueSize
+		}
+	}
+
 	// Objects (message,repeated)
 	for k, v := range m.Objects {
 		// size of key (always has an internal tag of 1)
@@ -1860,7 +1896,7 @@ func (m *Maps) Size() int {
 		if v != nil {
 			l = csproto.Size(v)
 			valueSize := 1 + csproto.SizeOfVarint(uint64(l)) + l
-			sz += csproto.SizeOfTagKey(13) + csproto.SizeOfVarint(uint64(keySize+valueSize)) + keySize + valueSize
+			sz += csproto.SizeOfTagKey(30) + csproto.SizeOfVarint(uint64(keySize+valueSize)) + keySize + valueSize
 		}
 	}
 
@@ -2003,7 +2039,45 @@ func (m *Maps) MarshalTo(dest []byte) error {
 		enc.EncodeFixed64(2, uint64(v))
 	}
 
-	// Objects (13,map)
+	// Nulls (13,map)
+	for k, v := range m.Nulls {
+		itemSize := 1 + csproto.SizeOfVarint(uint64(v))
+		keySize := len(k)
+		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
+		enc.EncodeMapEntryHeader(13, itemSize)
+		enc.EncodeString(1, k)
+		enc.EncodeUInt64(2, uint64(v))
+	}
+
+	// Structs (14,map)
+	for k, v := range m.Structs {
+		if v == nil {
+			continue
+		}
+		valueSize := csproto.Size(v)
+		itemSize := 1 + csproto.SizeOfVarint(uint64(valueSize)) + valueSize
+		keySize := len(k)
+		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
+		enc.EncodeMapEntryHeader(14, itemSize)
+		enc.EncodeString(1, k)
+		enc.EncodeNested(2, v)
+	}
+
+	// Timestamps (15,map)
+	for k, v := range m.Timestamps {
+		if v == nil {
+			continue
+		}
+		valueSize := csproto.Size(v)
+		itemSize := 1 + csproto.SizeOfVarint(uint64(valueSize)) + valueSize
+		keySize := len(k)
+		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
+		enc.EncodeMapEntryHeader(15, itemSize)
+		enc.EncodeString(1, k)
+		enc.EncodeNested(2, v)
+	}
+
+	// Objects (30,map)
 	for k, v := range m.Objects {
 		if v == nil {
 			continue
@@ -2012,7 +2086,7 @@ func (m *Maps) MarshalTo(dest []byte) error {
 		itemSize := 1 + csproto.SizeOfVarint(uint64(valueSize)) + valueSize
 		keySize := len(k)
 		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
-		enc.EncodeMapEntryHeader(13, itemSize)
+		enc.EncodeMapEntryHeader(30, itemSize)
 		enc.EncodeString(1, k)
 		enc.EncodeNested(2, v)
 	}
@@ -2557,9 +2631,146 @@ func (m *Maps) Unmarshal(p []byte) error {
 				}
 			}
 			m.Sfixed64S[entryKey] = entryValue
-		case 13: // Objects (map)
+		case 13: // Nulls (map)
 			if wt != csproto.WireTypeLengthDelimited {
-				return fmt.Errorf("incorrect wire type %v for map field 'objects' (tag=13), expected 2 (length-delimited)", wt)
+				return fmt.Errorf("incorrect wire type %v for map field 'nulls' (tag=13), expected 2 (length-delimited)", wt)
+			}
+
+			if m.Nulls == nil {
+				m.Nulls = make(map[string]structpb.NullValue)
+			}
+			// consume the map entry size
+			// TODO - should we validate this?
+			if _, err = dec.DecodeInt32(); err != nil {
+				return err
+			}
+			// always 2 values
+			var (
+				entryKey   string
+				entryValue structpb.NullValue
+			)
+			for i := 0; i < 2; i++ {
+				etag, ewt, err := dec.DecodeTag()
+				if err != nil {
+					return err
+				}
+				switch etag {
+				case 1: // key
+					if ewt != csproto.WireTypeLengthDelimited {
+						return fmt.Errorf("incorrect wire type %v for map key for field 'nulls' (tag=13), expected 2 (length-delimited)", ewt)
+					}
+					if entryKey, err = dec.DecodeString(); err != nil {
+						return err
+					}
+				case 2: // value
+					if ewt != csproto.WireTypeVarint {
+						return fmt.Errorf("incorrect wire type %v for map value for field 'nulls' (tag=13), expected 0 (varint)", ewt)
+					}
+					if v, err := dec.DecodeInt32(); err != nil {
+						return err
+					} else {
+						entryValue = structpb.NullValue(v)
+					}
+				default:
+					return fmt.Errorf("invalid map entry field tag %d, expected 1 or 2", etag)
+				}
+			}
+			m.Nulls[entryKey] = entryValue
+		case 14: // Structs (map)
+			if wt != csproto.WireTypeLengthDelimited {
+				return fmt.Errorf("incorrect wire type %v for map field 'structs' (tag=14), expected 2 (length-delimited)", wt)
+			}
+
+			if m.Structs == nil {
+				m.Structs = make(map[string]*structpb.Struct)
+			}
+			// consume the map entry size
+			// TODO - should we validate this?
+			if _, err = dec.DecodeInt32(); err != nil {
+				return err
+			}
+			// always 2 values
+			var (
+				entryKey   string
+				entryValue *structpb.Struct
+			)
+			for i := 0; i < 2; i++ {
+				etag, ewt, err := dec.DecodeTag()
+				if err != nil {
+					return err
+				}
+				switch etag {
+				case 1: // key
+					if ewt != csproto.WireTypeLengthDelimited {
+						return fmt.Errorf("incorrect wire type %v for map key for field 'structs' (tag=14), expected 2 (length-delimited)", ewt)
+					}
+					if entryKey, err = dec.DecodeString(); err != nil {
+						return err
+					}
+				case 2: // value
+					if ewt != csproto.WireTypeLengthDelimited {
+						return fmt.Errorf("incorrect wire type %v for map value for field 'structs' (tag=14), expected 2 (length-delimited)", ewt)
+					}
+					var v structpb.Struct
+					if err = dec.DecodeNested(&v); err != nil {
+						return err
+					} else {
+						entryValue = &v
+					}
+				default:
+					return fmt.Errorf("invalid map entry field tag %d, expected 1 or 2", etag)
+				}
+			}
+			m.Structs[entryKey] = entryValue
+		case 15: // Timestamps (map)
+			if wt != csproto.WireTypeLengthDelimited {
+				return fmt.Errorf("incorrect wire type %v for map field 'timestamps' (tag=15), expected 2 (length-delimited)", wt)
+			}
+
+			if m.Timestamps == nil {
+				m.Timestamps = make(map[string]*timestamppb.Timestamp)
+			}
+			// consume the map entry size
+			// TODO - should we validate this?
+			if _, err = dec.DecodeInt32(); err != nil {
+				return err
+			}
+			// always 2 values
+			var (
+				entryKey   string
+				entryValue *timestamppb.Timestamp
+			)
+			for i := 0; i < 2; i++ {
+				etag, ewt, err := dec.DecodeTag()
+				if err != nil {
+					return err
+				}
+				switch etag {
+				case 1: // key
+					if ewt != csproto.WireTypeLengthDelimited {
+						return fmt.Errorf("incorrect wire type %v for map key for field 'timestamps' (tag=15), expected 2 (length-delimited)", ewt)
+					}
+					if entryKey, err = dec.DecodeString(); err != nil {
+						return err
+					}
+				case 2: // value
+					if ewt != csproto.WireTypeLengthDelimited {
+						return fmt.Errorf("incorrect wire type %v for map value for field 'timestamps' (tag=15), expected 2 (length-delimited)", ewt)
+					}
+					var v timestamppb.Timestamp
+					if err = dec.DecodeNested(&v); err != nil {
+						return err
+					} else {
+						entryValue = &v
+					}
+				default:
+					return fmt.Errorf("invalid map entry field tag %d, expected 1 or 2", etag)
+				}
+			}
+			m.Timestamps[entryKey] = entryValue
+		case 30: // Objects (map)
+			if wt != csproto.WireTypeLengthDelimited {
+				return fmt.Errorf("incorrect wire type %v for map field 'objects' (tag=30), expected 2 (length-delimited)", wt)
 			}
 
 			if m.Objects == nil {
@@ -2583,14 +2794,14 @@ func (m *Maps) Unmarshal(p []byte) error {
 				switch etag {
 				case 1: // key
 					if ewt != csproto.WireTypeLengthDelimited {
-						return fmt.Errorf("incorrect wire type %v for map key for field 'objects' (tag=13), expected 2 (length-delimited)", ewt)
+						return fmt.Errorf("incorrect wire type %v for map key for field 'objects' (tag=30), expected 2 (length-delimited)", ewt)
 					}
 					if entryKey, err = dec.DecodeString(); err != nil {
 						return err
 					}
 				case 2: // value
 					if ewt != csproto.WireTypeLengthDelimited {
-						return fmt.Errorf("incorrect wire type %v for map value for field 'objects' (tag=13), expected 2 (length-delimited)", ewt)
+						return fmt.Errorf("incorrect wire type %v for map value for field 'objects' (tag=30), expected 2 (length-delimited)", ewt)
 					}
 					var v MapObject
 					if err = dec.DecodeNested(&v); err != nil {
@@ -2604,6 +2815,344 @@ func (m *Maps) Unmarshal(p []byte) error {
 			}
 			m.Objects[entryKey] = entryValue
 
+		default:
+			if skipped, err := dec.Skip(tag, wt); err != nil {
+				return fmt.Errorf("invalid operation skipping tag %v: %w", tag, err)
+			} else {
+				m.unknownFields = append(m.unknownFields, skipped...)
+			}
+		}
+	}
+	return nil
+}
+
+//------------------------------------------------------------------------------
+// Custom Protobuf size/marshal/unmarshal code for OneOfs
+
+// Size calculates and returns the size, in bytes, required to hold the contents of m using the Protobuf
+// binary encoding.
+func (m *OneOfs) Size() int {
+	// nil message is always 0 bytes
+	if m == nil {
+		return 0
+	}
+	// return cached size, if present
+	if csz := int(atomic.LoadInt32(&m.sizeCache)); csz > 0 {
+		return csz
+	}
+	// calculate and cache
+	var sz, l int
+	_ = l // avoid unused variable
+
+	// Thing (oneof)
+	if m.Thing != nil {
+		switch typedVal := m.Thing.(type) {
+		case *OneOfs_Bools: // bools (1,bool)
+			sz += csproto.SizeOfTagKey(1) + 1
+		case *OneOfs_Strings: // strings (2,string)
+			l = len(typedVal.Strings)
+			sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
+		case *OneOfs_Int32S: // int32s (3,int32)
+			sz += csproto.SizeOfTagKey(3) + csproto.SizeOfVarint(uint64(typedVal.Int32S))
+		case *OneOfs_Int64S: // int64s (4,int64)
+			sz += csproto.SizeOfTagKey(4) + csproto.SizeOfVarint(uint64(typedVal.Int64S))
+		case *OneOfs_Uint32S: // uint32s (5,uint32)
+			sz += csproto.SizeOfTagKey(5) + csproto.SizeOfVarint(uint64(typedVal.Uint32S))
+		case *OneOfs_Uint64S: // uint64s (6,uint64)
+			sz += csproto.SizeOfTagKey(6) + csproto.SizeOfVarint(uint64(typedVal.Uint64S))
+		case *OneOfs_Sint32S: // sint32s (7,sint32)
+			sz += csproto.SizeOfTagKey(7) + csproto.SizeOfZigZag(uint64(typedVal.Sint32S))
+		case *OneOfs_Sint64S: // sint64s (8,sint64)
+			sz += csproto.SizeOfTagKey(8) + csproto.SizeOfZigZag(uint64(typedVal.Sint64S))
+		case *OneOfs_Fixed32S: // fixed32s (9,fixed32)
+			sz += csproto.SizeOfTagKey(9) + 4
+		case *OneOfs_Fixed64S: // fixed64s (10,fixed64)
+			sz += csproto.SizeOfTagKey(10) + 8
+		case *OneOfs_Sfixed32S: // sfixed32s (11,sfixed32)
+			sz += csproto.SizeOfTagKey(11) + 4
+		case *OneOfs_Sfixed64S: // sfixed64s (12,sfixed64)
+			sz += csproto.SizeOfTagKey(12) + 8
+		case *OneOfs_Nulls: // nulls (13,enum)
+			sz += csproto.SizeOfTagKey(13) + csproto.SizeOfVarint(uint64(typedVal.Nulls))
+		case *OneOfs_Structs: // structs (14,message)
+			if l = csproto.Size(typedVal.Structs); l > 0 {
+				sz += csproto.SizeOfTagKey(14) + csproto.SizeOfVarint(uint64(l)) + l
+			}
+		case *OneOfs_Timestamps: // timestamps (15,message)
+			if l = csproto.Size(typedVal.Timestamps); l > 0 {
+				sz += csproto.SizeOfTagKey(15) + csproto.SizeOfVarint(uint64(l)) + l
+			}
+		case *OneOfs_Objects: // objects (30,message)
+			if l = csproto.Size(typedVal.Objects); l > 0 {
+				sz += csproto.SizeOfTagKey(30) + csproto.SizeOfVarint(uint64(l)) + l
+			}
+		default:
+			_ = typedVal // ensure no unused variable
+		}
+	}
+
+	// cache the size so it can be re-used in Marshal()/MarshalTo()
+	atomic.StoreInt32(&m.sizeCache, int32(sz))
+	return sz
+}
+
+// Marshal converts the contents of m to the Protobuf binary encoding and returns the result or an error.
+func (m *OneOfs) Marshal() ([]byte, error) {
+	siz := m.Size()
+	buf := make([]byte, siz)
+	err := m.MarshalTo(buf)
+	return buf, err
+}
+
+// MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
+func (m *OneOfs) MarshalTo(dest []byte) error {
+	var (
+		enc    = csproto.NewEncoder(dest)
+		buf    []byte
+		err    error
+		extVal interface{}
+	)
+	// ensure no unused variables
+	_ = enc
+	_ = buf
+	_ = err
+	_ = extVal
+
+	// Thing (oneof)
+	if m.Thing != nil {
+		switch typedVal := m.Thing.(type) {
+		case *OneOfs_Bools: // bools (1,bool)
+			enc.EncodeBool(1, typedVal.Bools)
+		case *OneOfs_Strings: // strings (2,string)
+			enc.EncodeString(2, typedVal.Strings)
+		case *OneOfs_Int32S: // int32s (3,int32)
+			enc.EncodeInt32(3, typedVal.Int32S)
+		case *OneOfs_Int64S: // int64s (4,int64)
+			enc.EncodeInt64(4, typedVal.Int64S)
+		case *OneOfs_Uint32S: // uint32s (5,uint32)
+			enc.EncodeUInt32(5, typedVal.Uint32S)
+		case *OneOfs_Uint64S: // uint64s (6,uint64)
+			enc.EncodeUInt64(6, typedVal.Uint64S)
+		case *OneOfs_Sint32S: // sint32s (7,sint32)
+			enc.EncodeSInt32(7, typedVal.Sint32S)
+		case *OneOfs_Sint64S: // sint64s (8,sint64)
+			enc.EncodeSInt64(8, typedVal.Sint64S)
+		case *OneOfs_Fixed32S: // fixed32s (9,fixed32)
+			enc.EncodeFixed32(9, typedVal.Fixed32S)
+		case *OneOfs_Fixed64S: // fixed64s (10,fixed64)
+			enc.EncodeFixed64(10, typedVal.Fixed64S)
+		case *OneOfs_Sfixed32S: // sfixed32s (11,sfixed32)
+			enc.EncodeFixed32(11, uint32(typedVal.Sfixed32S))
+		case *OneOfs_Sfixed64S: // sfixed64s (12,sfixed64)
+			enc.EncodeFixed64(12, uint64(typedVal.Sfixed64S))
+		case *OneOfs_Nulls: // nulls (13,enum)
+			enc.EncodeInt32(13, int32(typedVal.Nulls))
+		case *OneOfs_Structs: // structs (14,message)
+			enc.EncodeNested(14, typedVal.Structs)
+		case *OneOfs_Timestamps: // timestamps (15,message)
+			enc.EncodeNested(15, typedVal.Timestamps)
+		case *OneOfs_Objects: // objects (30,message)
+			enc.EncodeNested(30, typedVal.Objects)
+		default:
+			_ = typedVal // ensure no unused variable
+		}
+	}
+	return nil
+}
+
+// Unmarshal decodes a binary encoded Protobuf message from p and populates m with the result.
+func (m *OneOfs) Unmarshal(p []byte) error {
+	m.Reset()
+	if len(p) == 0 {
+		return nil
+	}
+	dec := csproto.NewDecoder(p)
+	for dec.More() {
+		tag, wt, err := dec.DecodeTag()
+		if err != nil {
+			return err
+		}
+		switch tag {
+
+		case 1: // thing.bools (oneof,bool)
+			var ov OneOfs_Bools
+			if wt != csproto.WireTypeVarint {
+				return fmt.Errorf("incorrect wire type %v for tag field 'bools' (tag=1), expected 0 (varint)", wt)
+			}
+			if v, err := dec.DecodeBool(); err != nil {
+				return fmt.Errorf("unable to decode boolean value for field 'bools' (tag=1): %w", err)
+			} else {
+				ov.Bools = v
+			}
+			m.Thing = &ov
+		case 2: // thing.strings (oneof,string)
+			var ov OneOfs_Strings
+			if wt != csproto.WireTypeLengthDelimited {
+				return fmt.Errorf("incorrect wire type %v for tag field 'strings' (tag=2), expected 2 (length-delimited)", wt)
+			}
+			if s, err := dec.DecodeString(); err != nil {
+				return fmt.Errorf("unable to decode string value for field 'strings' (tag=2): %w", err)
+			} else {
+				ov.Strings = s
+			}
+			m.Thing = &ov
+		case 3: // thing.int32s (oneof,int32)
+			var ov OneOfs_Int32S
+			if wt != csproto.WireTypeVarint {
+				return fmt.Errorf("incorrect wire type %v for tag field 'int32s' (tag=3), expected 0 (varint)", wt)
+			}
+			if v, err := dec.DecodeInt32(); err != nil {
+				return fmt.Errorf("unable to decode int32 value for field 'int32s' (tag=3): %w", err)
+			} else {
+				ov.Int32S = v
+			}
+			m.Thing = &ov
+		case 4: // thing.int64s (oneof,int64)
+			var ov OneOfs_Int64S
+			if wt != csproto.WireTypeVarint {
+				return fmt.Errorf("incorrect wire type %v for tag field 'int64s' (tag=4), expected 0 (varint)", wt)
+			}
+			if v, err := dec.DecodeInt64(); err != nil {
+				return fmt.Errorf("unable to decode int64 value for field 'int64s' (tag=4): %w", err)
+			} else {
+				ov.Int64S = v
+			}
+			m.Thing = &ov
+		case 5: // thing.uint32s (oneof,uint32)
+			var ov OneOfs_Uint32S
+			if wt != csproto.WireTypeVarint {
+				return fmt.Errorf("incorrect wire type %v for tag field 'uint32s' (tag=5), expected 0 (varint)", wt)
+			}
+			if v, err := dec.DecodeUInt32(); err != nil {
+				return fmt.Errorf("unable to decode uint32 value for field 'uint32s' (tag=5): %w", err)
+			} else {
+				ov.Uint32S = v
+			}
+			m.Thing = &ov
+		case 6: // thing.uint64s (oneof,uint64)
+			var ov OneOfs_Uint64S
+			if wt != csproto.WireTypeVarint {
+				return fmt.Errorf("incorrect wire type %v for tag field 'uint64s' (tag=6), expected 0 (varint)", wt)
+			}
+			if v, err := dec.DecodeUInt64(); err != nil {
+				return fmt.Errorf("unable to decode uint64 value for field 'uint64s' (tag=6): %w", err)
+			} else {
+				ov.Uint64S = v
+			}
+			m.Thing = &ov
+		case 7: // thing.sint32s (oneof,sint32)
+			var ov OneOfs_Sint32S
+			if wt != csproto.WireTypeVarint {
+				return fmt.Errorf("incorrect wire type %v for tag field 'sint32s' (tag=7), expected 0 (varint)", wt)
+			}
+			if v, err := dec.DecodeSInt32(); err != nil {
+				return fmt.Errorf("unable to decode sint32 value for field 'sint32s' (tag=7): %w", err)
+			} else {
+				ov.Sint32S = v
+			}
+			m.Thing = &ov
+		case 8: // thing.sint64s (oneof,sint64)
+			var ov OneOfs_Sint64S
+			if wt != csproto.WireTypeVarint {
+				return fmt.Errorf("incorrect wire type %v for tag field 'sint64s' (tag=8), expected 0 (varint)", wt)
+			}
+			if v, err := dec.DecodeSInt64(); err != nil {
+				return fmt.Errorf("unable to decode sint64 value for field 'sint64s' (tag=8): %w", err)
+			} else {
+				ov.Sint64S = v
+			}
+			m.Thing = &ov
+		case 9: // thing.fixed32s (oneof,fixed32)
+			var ov OneOfs_Fixed32S
+			if wt != csproto.WireTypeFixed32 {
+				return fmt.Errorf("incorrect wire type %v for tag field 'fixed32s' (tag=9), expected 5 (32-bit)", wt)
+			}
+			if v, err := dec.DecodeFixed32(); err != nil {
+				return fmt.Errorf("unable to decode uint32 value for field 'fixed32s' (tag=9): %w", err)
+			} else {
+				ov.Fixed32S = v
+			}
+			m.Thing = &ov
+		case 10: // thing.fixed64s (oneof,fixed64)
+			var ov OneOfs_Fixed64S
+			if wt != csproto.WireTypeFixed64 {
+				return fmt.Errorf("incorrect wire type %v for tag field 'fixed64s' (tag=10), expected 1 (64-bit)", wt)
+			}
+			if v, err := dec.DecodeFixed64(); err != nil {
+				return fmt.Errorf("unable to decode uint64 value for field 'fixed64s' (tag=10): %w", err)
+			} else {
+				ov.Fixed64S = v
+			}
+			m.Thing = &ov
+		case 11: // thing.sfixed32s (oneof,sfixed32)
+			var ov OneOfs_Sfixed32S
+			if wt != csproto.WireTypeFixed32 {
+				return fmt.Errorf("incorrect wire type %v for tag field 'sfixed32s' (tag=11), expected 5 (32-bit)", wt)
+			}
+			if v, err := dec.DecodeFixed32(); err != nil {
+				return fmt.Errorf("unable to decode sfixed32 value for field 'sfixed32s' (tag=11): %w", err)
+			} else {
+				ov.Sfixed32S = int32(v)
+			}
+			m.Thing = &ov
+		case 12: // thing.sfixed64s (oneof,sfixed64)
+			var ov OneOfs_Sfixed64S
+			if wt != csproto.WireTypeFixed64 {
+				return fmt.Errorf("incorrect wire type %v for tag field 'sfixed64s' (tag=12), expected 1 (64-bit)", wt)
+			}
+			if v, err := dec.DecodeFixed64(); err != nil {
+				return fmt.Errorf("unable to decode sfixed64 value for field 'sfixed64s' (tag=12): %w", err)
+			} else {
+				ov.Sfixed64S = int64(v)
+			}
+			m.Thing = &ov
+		case 13: // thing.nulls (oneof,enum)
+			var ov OneOfs_Nulls
+			if wt != csproto.WireTypeVarint {
+				return fmt.Errorf("incorrect wire type %v for tag field 'nulls' (tag=13), expected 0 (varint)", wt)
+			}
+			if v, err := dec.DecodeInt32(); err != nil {
+				return fmt.Errorf("unable to decode int32 value for field 'nulls' (tag=13): %w", err)
+			} else {
+				ov.Nulls = structpb.NullValue(v)
+			}
+			m.Thing = &ov
+		case 14: // thing.structs (oneof,message)
+			var ov OneOfs_Structs
+			if wt != csproto.WireTypeLengthDelimited {
+				return fmt.Errorf("incorrect wire type %v for tag field 'structs' (tag=14), expected 2 (length-delimited)", wt)
+			}
+			var mm_structs structpb.Struct
+			if err = dec.DecodeNested(&mm_structs); err != nil {
+				return fmt.Errorf("unable to decode message value for field 'structs' (tag=14): %w", err)
+			} else {
+				ov.Structs = &mm_structs
+			}
+			m.Thing = &ov
+		case 15: // thing.timestamps (oneof,message)
+			var ov OneOfs_Timestamps
+			if wt != csproto.WireTypeLengthDelimited {
+				return fmt.Errorf("incorrect wire type %v for tag field 'timestamps' (tag=15), expected 2 (length-delimited)", wt)
+			}
+			var mm_timestamps timestamppb.Timestamp
+			if err = dec.DecodeNested(&mm_timestamps); err != nil {
+				return fmt.Errorf("unable to decode message value for field 'timestamps' (tag=15): %w", err)
+			} else {
+				ov.Timestamps = &mm_timestamps
+			}
+			m.Thing = &ov
+		case 30: // thing.objects (oneof,message)
+			var ov OneOfs_Objects
+			if wt != csproto.WireTypeLengthDelimited {
+				return fmt.Errorf("incorrect wire type %v for tag field 'objects' (tag=30), expected 2 (length-delimited)", wt)
+			}
+			var mm_objects MapObject
+			if err = dec.DecodeNested(&mm_objects); err != nil {
+				return fmt.Errorf("unable to decode message value for field 'objects' (tag=30): %w", err)
+			} else {
+				ov.Objects = &mm_objects
+			}
+			m.Thing = &ov
 		default:
 			if skipped, err := dec.Skip(tag, wt); err != nil {
 				return fmt.Errorf("invalid operation skipping tag %v: %w", tag, err)

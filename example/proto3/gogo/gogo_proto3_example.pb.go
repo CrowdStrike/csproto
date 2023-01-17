@@ -56,7 +56,6 @@ type TestEvent struct {
 	Labels    []string       `protobuf:"bytes,4,rep,name=labels,proto3" json:"labels,omitempty"`
 	Embedded  *EmbeddedEvent `protobuf:"bytes,5,opt,name=embedded,proto3" json:"embedded,omitempty"`
 	// Types that are valid to be assigned to Path:
-	//
 	//	*TestEvent_Jedi
 	//	*TestEvent_Sith
 	//	*TestEvent_Other

@@ -618,7 +618,7 @@
             {{ if eq $kind "bool" "int32" "int64" "uint32" "uint64" "sint32" "sint64" "fixed32" "float" "fixed64" "double" }}
             enc.{{ protoNumberEncodeMethod (.Desc.Kind | string) false}}({{.Desc.Number}}, typedVal.{{.GoName | getSafeFieldName}})
             {{ else if eq $kind "sfixed32" "sfixed64" }}
-            {{- $bitSize := (.Desc.Kind | string | trunc -2) -}}
+            {{- $bitSize := (.Desc.Kind | string | trunc -2) }}
             enc.{{ printf "EncodeFixed%s" $bitSize }}({{.Desc.Number}}, {{ printf "uint%s" $bitSize }}(typedVal.{{.GoName | getSafeFieldName}}))
             {{ else if eq $kind "enum" }}
             enc.EncodeInt32({{.Desc.Number}}, int32(typedVal.{{.GoName | getSafeFieldName}}))
@@ -1323,7 +1323,7 @@
             if v, err := dec.DecodeFixed{{$bitSize}}(); err != nil {
                 return fmt.Errorf("unable to decode {{$kind}} value for field '{{.Desc.Name}}' (tag={{.Desc.Number}}): %w", err)
             } else {
-                ov.{{.GoName | getSafeFieldName}}= v
+                ov.{{.GoName | getSafeFieldName}}= int{{$bitSize}}(v)
             }
         {{- else if eq $kind "enum" -}}
             if wt != csproto.WireTypeVarint {
@@ -1332,7 +1332,7 @@
             if v, err := dec.DecodeInt32(); err != nil {
                 return fmt.Errorf("unable to decode int32 value for field '{{.Desc.Name}}' (tag={{.Desc.Number}}): %w", err)
             } else {
-                ov.{{.GoName | getSafeFieldName}}= {{.Enum.GoIdent.GoName | getSafeFieldName}}(v)
+                ov.{{.GoName | getSafeFieldName}}= {{.Enum | getImportPrefix}}{{.Enum.GoIdent.GoName | getSafeFieldName}}(v)
             }
         {{- else if eq $kind "string" -}}
             if wt != csproto.WireTypeLengthDelimited {
