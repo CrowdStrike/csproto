@@ -14,7 +14,7 @@ jobs:
 
       - uses: actions/setup-go@v3
         with:
-          go-version: 1.18
+          go-version: 1.19
 
       - name: lint
         uses: golangci/golangci-lint-action@v3.3.1
@@ -31,7 +31,7 @@ jobs:
 
       - uses: actions/setup-go@v3
         with:
-          go-version: 1.18
+          go-version: 1.19
 
       - name: lint
         uses: golangci/golangci-lint-action@v3.3.1
@@ -50,7 +50,7 @@ jobs:
 
       - uses: actions/setup-go@v3
         with:
-          go-version: 1.18
+          go-version: 1.19
 
       - name: protoc-gen-fastmarshal
         run: go build ./cmd/protoc-gen-fastmarshal
