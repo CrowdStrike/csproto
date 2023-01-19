@@ -2,7 +2,7 @@ package permessage_test
 
 import (
 	"fmt"
-	"os"
+	"strings"
 	"testing"
 
 	"github.com/gogo/protobuf/proto"
@@ -65,11 +65,16 @@ func TestGogoUnmarshalMapFieldsAfterCustomMarshal(t *testing.T) {
 		ToEnum:     map[string]gogo.EventType{"one": gogo.EventType_EVENT_TYPE_ONE, "two": gogo.EventType_EVENT_TYPE_TWO},
 	}
 	data, _ := csproto.Marshal(&msg)
-	fmt.Fprint(os.Stderr, "[")
-	for _, b := range data {
-		fmt.Fprintf(os.Stderr, "0x%x ", b)
+	var sb strings.Builder
+	sb.WriteRune('[')
+	for i, b := range data {
+		if i > 0 {
+			sb.WriteRune(',')
+		}
+		sb.WriteString(fmt.Sprintf("0x%02x", b))
 	}
-	fmt.Fprintf(os.Stderr, "]\n")
+	sb.WriteRune(']')
+	t.Log("data:", sb.String())
 
 	err := proto.Unmarshal(data, &msg2)
 	assert.NoError(t, err)

@@ -137,6 +137,12 @@ func TestEncodeInt32(t *testing.T) {
 			v:        42,
 			expected: []byte{0x18, 0x2A},
 		},
+		{
+			name:     "negative value",
+			fieldNum: 4,
+			v:        -42,
+			expected: []byte{0x20, 0xd6, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x1},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
