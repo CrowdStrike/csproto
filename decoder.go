@@ -217,7 +217,7 @@ func (d *Decoder) DecodeInt32() (int32, error) {
 	if n == 0 {
 		return 0, ErrInvalidVarintData
 	}
-	if v > math.MaxUint32 {
+	if int64(v) > math.MaxInt32 {
 		return 0, ErrValueOverflow
 	}
 	d.offset += n

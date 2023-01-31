@@ -251,9 +251,8 @@
             {{- else if eq $kind "sint32" "sint64" -}}
             sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfZigZag(uint64(typedVal.{{.GoName | getSafeFieldName}}))
             {{- else if eq $kind "message" -}}
-            if l = csproto.Size(typedVal.{{.GoName | getSafeFieldName }}); l > 0 {
-                sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(l)) + l
-            }
+            l = csproto.Size(typedVal.{{.GoName | getSafeFieldName }})
+            sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(l)) + l
             {{- end }}
         {{ end -}}
         default:
@@ -540,8 +539,10 @@
         panic(fmt.Errorf("unknown/unsupported Protobuf field kind '{{$mapKeyKind}}' for map key for field {{$mapField.Desc.Name}} (tag={{$mapField.Desc.Number}})"))
         {{- end }}
         enc.EncodeMapEntryHeader({{$mapField.Desc.Number}}, itemSize)
-        {{ if eq $mapKeyKind "int32" "int64" "uint32" "uint64" -}}
-        enc.EncodeUInt64(1, uint64(k))
+        {{ if eq $mapKeyKind "int32" "int64" -}}
+        enc.EncodeInt{{ $mapKeyKind | trunc -2 }}(1, k)
+        {{- else if eq $mapKeyKind "uint32" "uint64" -}}
+        enc.EncodeUInt{{ $mapKeyKind | trunc -2 }}(1, k)
         {{- else if eq $mapKeyKind "bool" -}}
         enc.EncodeBool(1, k)
         {{- else if eq $mapKeyKind "string" -}}
@@ -551,8 +552,12 @@
         {{- else if eq $mapKeyKind "fixed32" "sfixed32" "fixed64" "sfixed64" -}}
         enc.EncodeFixed{{$mapKeyKind | trunc -2}}(1, uint{{$mapKeyKind | trunc -2}}(k))
         {{- end }}
-        {{ if eq $mapValueKind "int32" "int64" "uint32" "uint64" "enum" -}}
-        enc.EncodeUInt64(2, uint64(v))
+        {{ if eq $mapValueKind "int32" "int64" -}}
+        enc.EncodeInt{{$mapValueKind | trunc -2}}(2, v)
+        {{- else if eq $mapValueKind "enum" -}}
+        enc.EncodeInt32(2, int32(v))
+        {{- else if eq $mapValueKind "uint32" "uint64" -}}
+        enc.EncodeUInt{{$mapValueKind | trunc -2}}(2, v)
         {{- else if eq $mapValueKind "bool" -}}
         enc.EncodeBool(2, v)
         {{- else if eq $mapValueKind "string" "bytes" -}}

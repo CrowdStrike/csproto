@@ -294,6 +294,15 @@ func TestProto2GoogleV2ExtensionFieldNumber(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestProto2GoogleV2Extensions(t *testing.T) {
+	m := createTestProto2GoogleV2Message()
+	csproto.ClearExtension(m, googlev2.E_TestEvent_EventExt)
+
+	ext, err := csproto.GetExtension(m, googlev2.E_TestEvent_EventExt)
+	assert.NoError(t, err)
+	assert.Nil(t, ext)
+}
+
 func createTestProto2GoogleV2Message() *googlev2.BaseEvent {
 	now := uint64(time.Now().UTC().Unix())
 	et := googlev2.EventType_EVENT_TYPE_ONE

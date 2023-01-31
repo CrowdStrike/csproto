@@ -200,6 +200,9 @@ func (m *AllTheMaps) Size() int {
 // Marshal converts the contents of m to the Protobuf binary encoding and returns the result or an error.
 func (m *AllTheMaps) Marshal() ([]byte, error) {
 	siz := m.Size()
+	if siz == 0 {
+		return []byte{}, nil
+	}
 	buf := make([]byte, siz)
 	err := m.MarshalTo(buf)
 	return buf, err
@@ -207,6 +210,10 @@ func (m *AllTheMaps) Marshal() ([]byte, error) {
 
 // MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
 func (m *AllTheMaps) MarshalTo(dest []byte) error {
+	// nil message == no-op
+	if m == nil {
+		return nil
+	}
 	var (
 		enc    = csproto.NewEncoder(dest)
 		buf    []byte
@@ -226,7 +233,7 @@ func (m *AllTheMaps) MarshalTo(dest []byte) error {
 		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
 		enc.EncodeMapEntryHeader(1, itemSize)
 		enc.EncodeString(1, k)
-		enc.EncodeUInt64(2, uint64(v))
+		enc.EncodeInt32(2, v)
 	}
 
 	// ToInt64 (2,map)
@@ -236,7 +243,7 @@ func (m *AllTheMaps) MarshalTo(dest []byte) error {
 		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
 		enc.EncodeMapEntryHeader(2, itemSize)
 		enc.EncodeString(1, k)
-		enc.EncodeUInt64(2, uint64(v))
+		enc.EncodeInt64(2, v)
 	}
 
 	// ToUInt32 (3,map)
@@ -246,7 +253,7 @@ func (m *AllTheMaps) MarshalTo(dest []byte) error {
 		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
 		enc.EncodeMapEntryHeader(3, itemSize)
 		enc.EncodeString(1, k)
-		enc.EncodeUInt64(2, uint64(v))
+		enc.EncodeUInt32(2, v)
 	}
 
 	// ToUInt64 (4,map)
@@ -256,7 +263,7 @@ func (m *AllTheMaps) MarshalTo(dest []byte) error {
 		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
 		enc.EncodeMapEntryHeader(4, itemSize)
 		enc.EncodeString(1, k)
-		enc.EncodeUInt64(2, uint64(v))
+		enc.EncodeUInt64(2, v)
 	}
 
 	// ToString (5,map)
@@ -382,7 +389,7 @@ func (m *AllTheMaps) MarshalTo(dest []byte) error {
 		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
 		enc.EncodeMapEntryHeader(16, itemSize)
 		enc.EncodeString(1, k)
-		enc.EncodeUInt64(2, uint64(v))
+		enc.EncodeInt32(2, int32(v))
 	}
 
 	return nil

@@ -271,6 +271,20 @@ func TestProto2GogoExtensionFieldNumber(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestProto2GogoExtensions(t *testing.T) {
+	m := createTestProto2GogoMessage()
+	has := csproto.HasExtension(m, gogo.E_TestEvent_EventExt)
+	assert.True(t, has)
+
+	csproto.ClearExtension(m, gogo.E_TestEvent_EventExt)
+	has = csproto.HasExtension(m, gogo.E_TestEvent_EventExt)
+	assert.False(t, has)
+
+	m2 := gogo.AllOptionalFields{}
+	err := csproto.SetExtension(m, gogo.E_TestEvent_EventExt, &m2)
+	assert.Error(t, err)
+}
+
 func createTestProto2GogoMessage() *gogo.BaseEvent {
 	now := uint64(time.Now().UTC().Unix())
 	et := gogo.EventType_EVENT_TYPE_ONE
