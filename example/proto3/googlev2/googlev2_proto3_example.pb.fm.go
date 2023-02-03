@@ -84,13 +84,11 @@ func (m *TestEvent) Size() int {
 	if m.Oneofs != nil {
 		switch typedVal := m.Oneofs.(type) {
 		case *TestEvent_Timestamps: // timestamps (12,message)
-			if l = csproto.Size(typedVal.Timestamps); l > 0 {
-				sz += csproto.SizeOfTagKey(12) + csproto.SizeOfVarint(uint64(l)) + l
-			}
+			l = csproto.Size(typedVal.Timestamps)
+			sz += csproto.SizeOfTagKey(12) + csproto.SizeOfVarint(uint64(l)) + l
 		case *TestEvent_Structs: // structs (13,message)
-			if l = csproto.Size(typedVal.Structs); l > 0 {
-				sz += csproto.SizeOfTagKey(13) + csproto.SizeOfVarint(uint64(l)) + l
-			}
+			l = csproto.Size(typedVal.Structs)
+			sz += csproto.SizeOfTagKey(13) + csproto.SizeOfVarint(uint64(l)) + l
 		default:
 			_ = typedVal // ensure no unused variable
 		}
@@ -104,6 +102,9 @@ func (m *TestEvent) Size() int {
 // Marshal converts the contents of m to the Protobuf binary encoding and returns the result or an error.
 func (m *TestEvent) Marshal() ([]byte, error) {
 	siz := m.Size()
+	if siz == 0 {
+		return []byte{}, nil
+	}
 	buf := make([]byte, siz)
 	err := m.MarshalTo(buf)
 	return buf, err
@@ -111,6 +112,10 @@ func (m *TestEvent) Marshal() ([]byte, error) {
 
 // MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
 func (m *TestEvent) MarshalTo(dest []byte) error {
+	// nil message == no-op
+	if m == nil {
+		return nil
+	}
 	var (
 		enc    = csproto.NewEncoder(dest)
 		buf    []byte
@@ -394,6 +399,9 @@ func (m *EmbeddedEvent) Size() int {
 // Marshal converts the contents of m to the Protobuf binary encoding and returns the result or an error.
 func (m *EmbeddedEvent) Marshal() ([]byte, error) {
 	siz := m.Size()
+	if siz == 0 {
+		return []byte{}, nil
+	}
 	buf := make([]byte, siz)
 	err := m.MarshalTo(buf)
 	return buf, err
@@ -401,6 +409,10 @@ func (m *EmbeddedEvent) Marshal() ([]byte, error) {
 
 // MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
 func (m *EmbeddedEvent) MarshalTo(dest []byte) error {
+	// nil message == no-op
+	if m == nil {
+		return nil
+	}
 	var (
 		enc    = csproto.NewEncoder(dest)
 		buf    []byte
@@ -602,6 +614,9 @@ func (m *AllTheThings) Size() int {
 // Marshal converts the contents of m to the Protobuf binary encoding and returns the result or an error.
 func (m *AllTheThings) Marshal() ([]byte, error) {
 	siz := m.Size()
+	if siz == 0 {
+		return []byte{}, nil
+	}
 	buf := make([]byte, siz)
 	err := m.MarshalTo(buf)
 	return buf, err
@@ -609,6 +624,10 @@ func (m *AllTheThings) Marshal() ([]byte, error) {
 
 // MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
 func (m *AllTheThings) MarshalTo(dest []byte) error {
+	// nil message == no-op
+	if m == nil {
+		return nil
+	}
 	var (
 		enc    = csproto.NewEncoder(dest)
 		buf    []byte
@@ -1023,6 +1042,9 @@ func (m *RepeatAllTheThings) Size() int {
 // Marshal converts the contents of m to the Protobuf binary encoding and returns the result or an error.
 func (m *RepeatAllTheThings) Marshal() ([]byte, error) {
 	siz := m.Size()
+	if siz == 0 {
+		return []byte{}, nil
+	}
 	buf := make([]byte, siz)
 	err := m.MarshalTo(buf)
 	return buf, err
@@ -1030,6 +1052,10 @@ func (m *RepeatAllTheThings) Marshal() ([]byte, error) {
 
 // MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
 func (m *RepeatAllTheThings) MarshalTo(dest []byte) error {
+	// nil message == no-op
+	if m == nil {
+		return nil
+	}
 	var (
 		enc    = csproto.NewEncoder(dest)
 		buf    []byte
@@ -1452,6 +1478,9 @@ func (m *EventUsingWKTs) Size() int {
 // Marshal converts the contents of m to the Protobuf binary encoding and returns the result or an error.
 func (m *EventUsingWKTs) Marshal() ([]byte, error) {
 	siz := m.Size()
+	if siz == 0 {
+		return []byte{}, nil
+	}
 	buf := make([]byte, siz)
 	err := m.MarshalTo(buf)
 	return buf, err
@@ -1459,6 +1488,10 @@ func (m *EventUsingWKTs) Marshal() ([]byte, error) {
 
 // MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
 func (m *EventUsingWKTs) MarshalTo(dest []byte) error {
+	// nil message == no-op
+	if m == nil {
+		return nil
+	}
 	var (
 		enc    = csproto.NewEncoder(dest)
 		buf    []byte
@@ -1587,6 +1620,9 @@ func (m *MapObject) Size() int {
 // Marshal converts the contents of m to the Protobuf binary encoding and returns the result or an error.
 func (m *MapObject) Marshal() ([]byte, error) {
 	siz := m.Size()
+	if siz == 0 {
+		return []byte{}, nil
+	}
 	buf := make([]byte, siz)
 	err := m.MarshalTo(buf)
 	return buf, err
@@ -1594,6 +1630,10 @@ func (m *MapObject) Marshal() ([]byte, error) {
 
 // MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
 func (m *MapObject) MarshalTo(dest []byte) error {
+	// nil message == no-op
+	if m == nil {
+		return nil
+	}
 	var (
 		enc    = csproto.NewEncoder(dest)
 		buf    []byte
@@ -1851,6 +1891,26 @@ func (m *Maps) Size() int {
 		sz += csproto.SizeOfTagKey(12) + csproto.SizeOfVarint(uint64(keySize+9)) + keySize + 9
 	}
 
+	// Floats (message,repeated)
+	for k, v := range m.Floats {
+		// size of key (always has an internal tag of 1)
+		l = len(k)
+		keySize := 1 + csproto.SizeOfVarint(uint64(l)) + l
+		// size of value (always has an internal tag of 2)
+		_ = v
+		sz += csproto.SizeOfTagKey(16) + csproto.SizeOfVarint(uint64(keySize+5)) + keySize + 5
+	}
+
+	// Doubles (message,repeated)
+	for k, v := range m.Doubles {
+		// size of key (always has an internal tag of 1)
+		l = len(k)
+		keySize := 1 + csproto.SizeOfVarint(uint64(l)) + l
+		// size of value (always has an internal tag of 2)
+		_ = v
+		sz += csproto.SizeOfTagKey(17) + csproto.SizeOfVarint(uint64(keySize+9)) + keySize + 9
+	}
+
 	// Nulls (message,repeated)
 	for k, v := range m.Nulls {
 		// size of key (always has an internal tag of 1)
@@ -1908,6 +1968,9 @@ func (m *Maps) Size() int {
 // Marshal converts the contents of m to the Protobuf binary encoding and returns the result or an error.
 func (m *Maps) Marshal() ([]byte, error) {
 	siz := m.Size()
+	if siz == 0 {
+		return []byte{}, nil
+	}
 	buf := make([]byte, siz)
 	err := m.MarshalTo(buf)
 	return buf, err
@@ -1915,6 +1978,10 @@ func (m *Maps) Marshal() ([]byte, error) {
 
 // MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
 func (m *Maps) MarshalTo(dest []byte) error {
+	// nil message == no-op
+	if m == nil {
+		return nil
+	}
 	var (
 		enc    = csproto.NewEncoder(dest)
 		buf    []byte
@@ -1954,8 +2021,8 @@ func (m *Maps) MarshalTo(dest []byte) error {
 		itemSize := 1 + csproto.SizeOfVarint(uint64(v))
 		itemSize += 1 + csproto.SizeOfVarint(uint64(k))
 		enc.EncodeMapEntryHeader(3, itemSize)
-		enc.EncodeUInt64(1, uint64(k))
-		enc.EncodeUInt64(2, uint64(v))
+		enc.EncodeInt32(1, k)
+		enc.EncodeInt32(2, v)
 	}
 
 	// Int64S (4,map)
@@ -1963,8 +2030,8 @@ func (m *Maps) MarshalTo(dest []byte) error {
 		itemSize := 1 + csproto.SizeOfVarint(uint64(v))
 		itemSize += 1 + csproto.SizeOfVarint(uint64(k))
 		enc.EncodeMapEntryHeader(4, itemSize)
-		enc.EncodeUInt64(1, uint64(k))
-		enc.EncodeUInt64(2, uint64(v))
+		enc.EncodeInt64(1, k)
+		enc.EncodeInt64(2, v)
 	}
 
 	// Uint32S (5,map)
@@ -1972,8 +2039,8 @@ func (m *Maps) MarshalTo(dest []byte) error {
 		itemSize := 1 + csproto.SizeOfVarint(uint64(v))
 		itemSize += 1 + csproto.SizeOfVarint(uint64(k))
 		enc.EncodeMapEntryHeader(5, itemSize)
-		enc.EncodeUInt64(1, uint64(k))
-		enc.EncodeUInt64(2, uint64(v))
+		enc.EncodeUInt32(1, k)
+		enc.EncodeUInt32(2, v)
 	}
 
 	// Uint64S (6,map)
@@ -1981,8 +2048,8 @@ func (m *Maps) MarshalTo(dest []byte) error {
 		itemSize := 1 + csproto.SizeOfVarint(uint64(v))
 		itemSize += 1 + csproto.SizeOfVarint(uint64(k))
 		enc.EncodeMapEntryHeader(6, itemSize)
-		enc.EncodeUInt64(1, uint64(k))
-		enc.EncodeUInt64(2, uint64(v))
+		enc.EncodeUInt64(1, k)
+		enc.EncodeUInt64(2, v)
 	}
 
 	// Sint32S (7,map)
@@ -2039,6 +2106,26 @@ func (m *Maps) MarshalTo(dest []byte) error {
 		enc.EncodeFixed64(2, uint64(v))
 	}
 
+	// Floats (16,map)
+	for k, v := range m.Floats {
+		itemSize := 5
+		keySize := len(k)
+		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
+		enc.EncodeMapEntryHeader(16, itemSize)
+		enc.EncodeString(1, k)
+		enc.EncodeFloat32(2, v)
+	}
+
+	// Doubles (17,map)
+	for k, v := range m.Doubles {
+		itemSize := 9
+		keySize := len(k)
+		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
+		enc.EncodeMapEntryHeader(17, itemSize)
+		enc.EncodeString(1, k)
+		enc.EncodeFloat64(2, v)
+	}
+
 	// Nulls (13,map)
 	for k, v := range m.Nulls {
 		itemSize := 1 + csproto.SizeOfVarint(uint64(v))
@@ -2046,7 +2133,7 @@ func (m *Maps) MarshalTo(dest []byte) error {
 		itemSize += 1 + csproto.SizeOfVarint(uint64(keySize)) + keySize
 		enc.EncodeMapEntryHeader(13, itemSize)
 		enc.EncodeString(1, k)
-		enc.EncodeUInt64(2, uint64(v))
+		enc.EncodeInt32(2, int32(v))
 	}
 
 	// Structs (14,map)
@@ -2631,6 +2718,92 @@ func (m *Maps) Unmarshal(p []byte) error {
 				}
 			}
 			m.Sfixed64S[entryKey] = entryValue
+		case 16: // Floats (map)
+			if wt != csproto.WireTypeLengthDelimited {
+				return fmt.Errorf("incorrect wire type %v for map field 'floats' (tag=16), expected 2 (length-delimited)", wt)
+			}
+
+			if m.Floats == nil {
+				m.Floats = make(map[string]float32)
+			}
+			// consume the map entry size
+			// TODO - should we validate this?
+			if _, err = dec.DecodeInt32(); err != nil {
+				return err
+			}
+			// always 2 values
+			var (
+				entryKey   string
+				entryValue float32
+			)
+			for i := 0; i < 2; i++ {
+				etag, ewt, err := dec.DecodeTag()
+				if err != nil {
+					return err
+				}
+				switch etag {
+				case 1: // key
+					if ewt != csproto.WireTypeLengthDelimited {
+						return fmt.Errorf("incorrect wire type %v for map key for field 'floats' (tag=16), expected 2 (length-delimited)", ewt)
+					}
+					if entryKey, err = dec.DecodeString(); err != nil {
+						return err
+					}
+				case 2: // value
+					if ewt != csproto.WireTypeFixed32 {
+						return fmt.Errorf("incorrect wire type %v for map value for field 'floats' (tag=16), expected 5 (fixed32)", ewt)
+					}
+					if entryValue, err = dec.DecodeFloat32(); err != nil {
+						return err
+					}
+				default:
+					return fmt.Errorf("invalid map entry field tag %d, expected 1 or 2", etag)
+				}
+			}
+			m.Floats[entryKey] = entryValue
+		case 17: // Doubles (map)
+			if wt != csproto.WireTypeLengthDelimited {
+				return fmt.Errorf("incorrect wire type %v for map field 'doubles' (tag=17), expected 2 (length-delimited)", wt)
+			}
+
+			if m.Doubles == nil {
+				m.Doubles = make(map[string]float64)
+			}
+			// consume the map entry size
+			// TODO - should we validate this?
+			if _, err = dec.DecodeInt32(); err != nil {
+				return err
+			}
+			// always 2 values
+			var (
+				entryKey   string
+				entryValue float64
+			)
+			for i := 0; i < 2; i++ {
+				etag, ewt, err := dec.DecodeTag()
+				if err != nil {
+					return err
+				}
+				switch etag {
+				case 1: // key
+					if ewt != csproto.WireTypeLengthDelimited {
+						return fmt.Errorf("incorrect wire type %v for map key for field 'doubles' (tag=17), expected 2 (length-delimited)", ewt)
+					}
+					if entryKey, err = dec.DecodeString(); err != nil {
+						return err
+					}
+				case 2: // value
+					if ewt != csproto.WireTypeFixed64 {
+						return fmt.Errorf("incorrect wire type %v for map value for field 'doubles' (tag=17), expected 1 (fixed64)", ewt)
+					}
+					if entryValue, err = dec.DecodeFloat64(); err != nil {
+						return err
+					}
+				default:
+					return fmt.Errorf("invalid map entry field tag %d, expected 1 or 2", etag)
+				}
+			}
+			m.Doubles[entryKey] = entryValue
 		case 13: // Nulls (map)
 			if wt != csproto.WireTypeLengthDelimited {
 				return fmt.Errorf("incorrect wire type %v for map field 'nulls' (tag=13), expected 2 (length-delimited)", wt)
@@ -2872,20 +3045,21 @@ func (m *OneOfs) Size() int {
 			sz += csproto.SizeOfTagKey(11) + 4
 		case *OneOfs_Sfixed64S: // sfixed64s (12,sfixed64)
 			sz += csproto.SizeOfTagKey(12) + 8
+		case *OneOfs_Floats: // floats (16,float)
+			sz += csproto.SizeOfTagKey(16) + 4
+		case *OneOfs_Doubles: // doubles (17,double)
+			sz += csproto.SizeOfTagKey(17) + 8
 		case *OneOfs_Nulls: // nulls (13,enum)
 			sz += csproto.SizeOfTagKey(13) + csproto.SizeOfVarint(uint64(typedVal.Nulls))
 		case *OneOfs_Structs: // structs (14,message)
-			if l = csproto.Size(typedVal.Structs); l > 0 {
-				sz += csproto.SizeOfTagKey(14) + csproto.SizeOfVarint(uint64(l)) + l
-			}
+			l = csproto.Size(typedVal.Structs)
+			sz += csproto.SizeOfTagKey(14) + csproto.SizeOfVarint(uint64(l)) + l
 		case *OneOfs_Timestamps: // timestamps (15,message)
-			if l = csproto.Size(typedVal.Timestamps); l > 0 {
-				sz += csproto.SizeOfTagKey(15) + csproto.SizeOfVarint(uint64(l)) + l
-			}
+			l = csproto.Size(typedVal.Timestamps)
+			sz += csproto.SizeOfTagKey(15) + csproto.SizeOfVarint(uint64(l)) + l
 		case *OneOfs_Objects: // objects (30,message)
-			if l = csproto.Size(typedVal.Objects); l > 0 {
-				sz += csproto.SizeOfTagKey(30) + csproto.SizeOfVarint(uint64(l)) + l
-			}
+			l = csproto.Size(typedVal.Objects)
+			sz += csproto.SizeOfTagKey(30) + csproto.SizeOfVarint(uint64(l)) + l
 		default:
 			_ = typedVal // ensure no unused variable
 		}
@@ -2899,6 +3073,9 @@ func (m *OneOfs) Size() int {
 // Marshal converts the contents of m to the Protobuf binary encoding and returns the result or an error.
 func (m *OneOfs) Marshal() ([]byte, error) {
 	siz := m.Size()
+	if siz == 0 {
+		return []byte{}, nil
+	}
 	buf := make([]byte, siz)
 	err := m.MarshalTo(buf)
 	return buf, err
@@ -2906,6 +3083,10 @@ func (m *OneOfs) Marshal() ([]byte, error) {
 
 // MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
 func (m *OneOfs) MarshalTo(dest []byte) error {
+	// nil message == no-op
+	if m == nil {
+		return nil
+	}
 	var (
 		enc    = csproto.NewEncoder(dest)
 		buf    []byte
@@ -2945,6 +3126,10 @@ func (m *OneOfs) MarshalTo(dest []byte) error {
 			enc.EncodeFixed32(11, uint32(typedVal.Sfixed32S))
 		case *OneOfs_Sfixed64S: // sfixed64s (12,sfixed64)
 			enc.EncodeFixed64(12, uint64(typedVal.Sfixed64S))
+		case *OneOfs_Floats: // floats (16,float)
+			enc.EncodeFloat32(16, typedVal.Floats)
+		case *OneOfs_Doubles: // doubles (17,double)
+			enc.EncodeFloat64(17, typedVal.Doubles)
 		case *OneOfs_Nulls: // nulls (13,enum)
 			enc.EncodeInt32(13, int32(typedVal.Nulls))
 		case *OneOfs_Structs: // structs (14,message)
@@ -3106,6 +3291,28 @@ func (m *OneOfs) Unmarshal(p []byte) error {
 				ov.Sfixed64S = int64(v)
 			}
 			m.Thing = &ov
+		case 16: // thing.floats (oneof,float)
+			var ov OneOfs_Floats
+			if wt != csproto.WireTypeFixed32 {
+				return fmt.Errorf("incorrect wire type %v for tag field 'floats' (tag=16), expected 5 (32-bit)", wt)
+			}
+			if v, err := dec.DecodeFloat32(); err != nil {
+				return fmt.Errorf("unable to decode float value for field 'floats' (tag=16): %w", err)
+			} else {
+				ov.Floats = v
+			}
+			m.Thing = &ov
+		case 17: // thing.doubles (oneof,double)
+			var ov OneOfs_Doubles
+			if wt != csproto.WireTypeFixed64 {
+				return fmt.Errorf("incorrect wire type %v for tag field 'doubles' (tag=17), expected 1 (64-bit)", wt)
+			}
+			if v, err := dec.DecodeFloat64(); err != nil {
+				return fmt.Errorf("unable to decode double value for field 'doubles' (tag=17): %w", err)
+			} else {
+				ov.Doubles = v
+			}
+			m.Thing = &ov
 		case 13: // thing.nulls (oneof,enum)
 			var ov OneOfs_Nulls
 			if wt != csproto.WireTypeVarint {
@@ -3194,6 +3401,9 @@ func (m *TestEvent_NestedMsg) Size() int {
 // Marshal converts the contents of m to the Protobuf binary encoding and returns the result or an error.
 func (m *TestEvent_NestedMsg) Marshal() ([]byte, error) {
 	siz := m.Size()
+	if siz == 0 {
+		return []byte{}, nil
+	}
 	buf := make([]byte, siz)
 	err := m.MarshalTo(buf)
 	return buf, err
@@ -3201,6 +3411,10 @@ func (m *TestEvent_NestedMsg) Marshal() ([]byte, error) {
 
 // MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
 func (m *TestEvent_NestedMsg) MarshalTo(dest []byte) error {
+	// nil message == no-op
+	if m == nil {
+		return nil
+	}
 	var (
 		enc    = csproto.NewEncoder(dest)
 		buf    []byte

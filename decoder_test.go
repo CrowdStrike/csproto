@@ -242,6 +242,65 @@ func TestDecodeUInt64(t *testing.T) {
 	}
 }
 
+func TestDecodeInt32(t *testing.T) {
+	cases := []struct {
+		name     string
+		fieldNum int
+		v        []byte
+		wt       csproto.WireType
+		expected int32
+	}{
+		{
+			name:     "zero",
+			fieldNum: 1,
+			v:        []byte{0x8, 0x0},
+			wt:       csproto.WireTypeVarint,
+			expected: 0,
+		},
+		{
+			name:     "max int",
+			fieldNum: 2,
+			v:        []byte{0x10, 0xFF, 0xFF, 0xFF, 0xFF, 0x07},
+			wt:       csproto.WireTypeVarint,
+			expected: math.MaxInt32,
+		},
+		{
+			name:     "regular value",
+			fieldNum: 3,
+			v:        []byte{0x18, 0x2A},
+			wt:       csproto.WireTypeVarint,
+			expected: 42,
+		},
+		{
+			name:     "negative value",
+			fieldNum: 4,
+			v:        []byte{0x20, 0xd6, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x1},
+			wt:       csproto.WireTypeVarint,
+			expected: -42,
+		},
+		{
+			name:     "min int",
+			fieldNum: 5,
+			v:        []byte{0x28, 0x80, 0x80, 0x80, 0x80, 0xf8, 0xff, 0xff, 0xff, 0xff, 0x1},
+			wt:       csproto.WireTypeVarint,
+			expected: math.MinInt32,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dec := csproto.NewDecoder(tc.v)
+			tag, wt, err := dec.DecodeTag()
+			assert.Equal(t, tc.fieldNum, tag, "tag should match")
+			assert.Equal(t, tc.wt, wt, "wire type should match")
+			assert.NoError(t, err, "should not fail")
+
+			got, err := dec.DecodeInt32()
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expected, got)
+		})
+	}
+}
+
 func TestDecodeSInt32(t *testing.T) {
 	cases := []struct {
 		name     string
@@ -295,6 +354,65 @@ func TestDecodeSInt32(t *testing.T) {
 			assert.NoError(t, err, "should not fail")
 
 			got, err := dec.DecodeSInt32()
+			assert.NoError(t, err)
+			assert.Equal(t, tc.expected, got)
+		})
+	}
+}
+
+func TestDecodeInt64(t *testing.T) {
+	cases := []struct {
+		name     string
+		fieldNum int
+		v        []byte
+		wt       csproto.WireType
+		expected int64
+	}{
+		{
+			name:     "zero",
+			fieldNum: 1,
+			v:        []byte{0x8, 0x0},
+			wt:       csproto.WireTypeVarint,
+			expected: 0,
+		},
+		{
+			name:     "max int",
+			fieldNum: 2,
+			v:        []byte{0x10, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F},
+			wt:       csproto.WireTypeVarint,
+			expected: math.MaxInt64,
+		},
+		{
+			name:     "min int",
+			fieldNum: 2,
+			v:        []byte{0x10, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x1},
+			wt:       csproto.WireTypeVarint,
+			expected: math.MinInt64,
+		},
+		{
+			name:     "regular value",
+			fieldNum: 3,
+			v:        []byte{0x18, 0x92, 0xDA, 0x19},
+			wt:       csproto.WireTypeVarint,
+			expected: 421138,
+		},
+		{
+			name:     "negative value",
+			fieldNum: 3,
+			v:        []byte{0x18, 0xee, 0xa5, 0xe6, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x1},
+			wt:       csproto.WireTypeVarint,
+			expected: -421138,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dec := csproto.NewDecoder(tc.v)
+			tag, wt, err := dec.DecodeTag()
+			assert.Equal(t, tc.fieldNum, tag, "tag should match")
+			assert.Equal(t, tc.wt, wt, "wire type should match")
+			assert.NoError(t, err, "should not fail")
+
+			got, err := dec.DecodeInt64()
 			assert.NoError(t, err)
 			assert.Equal(t, tc.expected, got)
 		})

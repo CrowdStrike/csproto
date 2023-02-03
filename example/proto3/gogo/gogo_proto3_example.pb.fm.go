@@ -87,6 +87,9 @@ func (m *TestEvent) Size() int {
 // Marshal converts the contents of m to the Protobuf binary encoding and returns the result or an error.
 func (m *TestEvent) Marshal() ([]byte, error) {
 	siz := m.Size()
+	if siz == 0 {
+		return []byte{}, nil
+	}
 	buf := make([]byte, siz)
 	err := m.MarshalTo(buf)
 	return buf, err
@@ -94,6 +97,10 @@ func (m *TestEvent) Marshal() ([]byte, error) {
 
 // MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
 func (m *TestEvent) MarshalTo(dest []byte) error {
+	// nil message == no-op
+	if m == nil {
+		return nil
+	}
 	var (
 		enc    = csproto.NewEncoder(dest)
 		buf    []byte
@@ -342,6 +349,9 @@ func (m *EmbeddedEvent) Size() int {
 // Marshal converts the contents of m to the Protobuf binary encoding and returns the result or an error.
 func (m *EmbeddedEvent) Marshal() ([]byte, error) {
 	siz := m.Size()
+	if siz == 0 {
+		return []byte{}, nil
+	}
 	buf := make([]byte, siz)
 	err := m.MarshalTo(buf)
 	return buf, err
@@ -349,6 +359,10 @@ func (m *EmbeddedEvent) Marshal() ([]byte, error) {
 
 // MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
 func (m *EmbeddedEvent) MarshalTo(dest []byte) error {
+	// nil message == no-op
+	if m == nil {
+		return nil
+	}
 	var (
 		enc    = csproto.NewEncoder(dest)
 		buf    []byte
@@ -550,6 +564,9 @@ func (m *AllTheThings) Size() int {
 // Marshal converts the contents of m to the Protobuf binary encoding and returns the result or an error.
 func (m *AllTheThings) Marshal() ([]byte, error) {
 	siz := m.Size()
+	if siz == 0 {
+		return []byte{}, nil
+	}
 	buf := make([]byte, siz)
 	err := m.MarshalTo(buf)
 	return buf, err
@@ -557,6 +574,10 @@ func (m *AllTheThings) Marshal() ([]byte, error) {
 
 // MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
 func (m *AllTheThings) MarshalTo(dest []byte) error {
+	// nil message == no-op
+	if m == nil {
+		return nil
+	}
 	var (
 		enc    = csproto.NewEncoder(dest)
 		buf    []byte
@@ -971,6 +992,9 @@ func (m *RepeatAllTheThings) Size() int {
 // Marshal converts the contents of m to the Protobuf binary encoding and returns the result or an error.
 func (m *RepeatAllTheThings) Marshal() ([]byte, error) {
 	siz := m.Size()
+	if siz == 0 {
+		return []byte{}, nil
+	}
 	buf := make([]byte, siz)
 	err := m.MarshalTo(buf)
 	return buf, err
@@ -978,6 +1002,10 @@ func (m *RepeatAllTheThings) Marshal() ([]byte, error) {
 
 // MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
 func (m *RepeatAllTheThings) MarshalTo(dest []byte) error {
+	// nil message == no-op
+	if m == nil {
+		return nil
+	}
 	var (
 		enc    = csproto.NewEncoder(dest)
 		buf    []byte
@@ -1400,6 +1428,9 @@ func (m *EventUsingWKTs) Size() int {
 // Marshal converts the contents of m to the Protobuf binary encoding and returns the result or an error.
 func (m *EventUsingWKTs) Marshal() ([]byte, error) {
 	siz := m.Size()
+	if siz == 0 {
+		return []byte{}, nil
+	}
 	buf := make([]byte, siz)
 	err := m.MarshalTo(buf)
 	return buf, err
@@ -1407,6 +1438,10 @@ func (m *EventUsingWKTs) Marshal() ([]byte, error) {
 
 // MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
 func (m *EventUsingWKTs) MarshalTo(dest []byte) error {
+	// nil message == no-op
+	if m == nil {
+		return nil
+	}
 	var (
 		enc    = csproto.NewEncoder(dest)
 		buf    []byte
@@ -1519,6 +1554,9 @@ func (m *TestEvent_NestedMsg) Size() int {
 // Marshal converts the contents of m to the Protobuf binary encoding and returns the result or an error.
 func (m *TestEvent_NestedMsg) Marshal() ([]byte, error) {
 	siz := m.Size()
+	if siz == 0 {
+		return []byte{}, nil
+	}
 	buf := make([]byte, siz)
 	err := m.MarshalTo(buf)
 	return buf, err
@@ -1526,6 +1564,10 @@ func (m *TestEvent_NestedMsg) Marshal() ([]byte, error) {
 
 // MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
 func (m *TestEvent_NestedMsg) MarshalTo(dest []byte) error {
+	// nil message == no-op
+	if m == nil {
+		return nil
+	}
 	var (
 		enc    = csproto.NewEncoder(dest)
 		buf    []byte

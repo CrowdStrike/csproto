@@ -1,143 +1,148 @@
 syntax = "proto3";
 
 package crowdstrike.csproto.example.proto3.googlev2;
+
+import "google/protobuf/struct.proto";
+import "google/protobuf/timestamp.proto";
+
 option go_package = "github.com/CrowdStrike/csproto/example/proto3/googlev2";
 
-import "google/protobuf/timestamp.proto";
-import "google/protobuf/struct.proto";
-
 enum EventType {
-    EVENT_TYPE_UNDEFINED = 0;
-    EVENT_TYPE_ONE = 1;
-    EVENT_TYPE_TWO = 2;
+  EVENT_TYPE_UNDEFINED = 0;
+  EVENT_TYPE_ONE = 1;
+  EVENT_TYPE_TWO = 2;
 }
 
 message TestEvent {
-    string name = 1;
-    string info = 2;
-    bool isAwesome = 3;
+  string name = 1;
+  string info = 2;
+  bool isAwesome = 3;
 
-    repeated string labels = 4;
+  repeated string labels = 4;
 
-    EmbeddedEvent embedded = 5;
+  EmbeddedEvent embedded = 5;
 
-    oneof path {
-        bool jedi = 6;
-        bool sith = 7;
-        string other = 8;
-    }
+  oneof path {
+    bool jedi = 6;
+    bool sith = 7;
+    string other = 8;
+  }
 
-    message NestedMsg {
-        string details = 1;
-    }
-    NestedMsg nested = 9;
+  message NestedMsg {
+    string details = 1;
+  }
+  NestedMsg nested = 9;
 
-    google.protobuf.Timestamp ts = 10;
-    google.protobuf.NullValue nullVal = 11;
+  google.protobuf.Timestamp ts = 10;
+  google.protobuf.NullValue nullVal = 11;
 
-    oneof oneofs {
-        google.protobuf.Timestamp timestamps = 12;
-        google.protobuf.Struct structs = 13;
-    }
+  oneof oneofs {
+    google.protobuf.Timestamp timestamps = 12;
+    google.protobuf.Struct structs = 13;
+  }
 }
 
 message EmbeddedEvent {
-    int32 ID = 1;
-    string stuff = 2;
-    repeated int32 favoriteNumbers = 3;
-    repeated bytes randomThings = 4;
+  int32 ID = 1;
+  string stuff = 2;
+  repeated int32 favoriteNumbers = 3;
+  repeated bytes randomThings = 4;
 }
 
 message AllTheThings {
-    int32 ID = 1;
-    string theString = 2;
-    bool theBool = 3;
-    int32 theInt32 = 4;
-    int64 theInt64 = 5;
-    uint32 theUInt32 = 6;
-    uint64 theUInt64 = 7;
-    sint32 theSInt32 = 8;
-    sint64 theSInt64 = 9;
-    fixed32 theFixed32 = 10;
-    fixed64 theFixed64 = 11;
-    sfixed32 theSFixed32 = 12;
-    sfixed64 theSFixed64 = 13;
-    float theFloat = 14;
-    double theDouble = 15;
-    EventType theEventType = 16;
-    bytes theBytes = 17;
-    EmbeddedEvent theMessage = 18;
+  int32 ID = 1;
+  string theString = 2;
+  bool theBool = 3;
+  int32 theInt32 = 4;
+  int64 theInt64 = 5;
+  uint32 theUInt32 = 6;
+  uint64 theUInt64 = 7;
+  sint32 theSInt32 = 8;
+  sint64 theSInt64 = 9;
+  fixed32 theFixed32 = 10;
+  fixed64 theFixed64 = 11;
+  sfixed32 theSFixed32 = 12;
+  sfixed64 theSFixed64 = 13;
+  float theFloat = 14;
+  double theDouble = 15;
+  EventType theEventType = 16;
+  bytes theBytes = 17;
+  EmbeddedEvent theMessage = 18;
 }
 
 message RepeatAllTheThings {
-    int32 ID = 1;
-    repeated string theStrings = 2;
-    repeated bool theBools = 3;
-    repeated int32 theInt32s = 4;
-    repeated int64 theInt64s = 5;
-    repeated uint32 theUInt32s = 6;
-    repeated uint64 theUInt64s = 7;
-    repeated sint32 theSInt32s = 8;
-    repeated sint64 theSInt64s = 9;
-    repeated fixed32 theFixed32s = 10;
-    repeated fixed64 theFixed64s = 11;
-    repeated sfixed32 theSFixed32s = 12;
-    repeated sfixed64 theSFixed64s = 13;
-    repeated float theFloats = 14;
-    repeated double theDoubles = 15;
-    repeated EventType theEventTypes = 16;
-    repeated bytes theBytes = 17;
-    repeated EmbeddedEvent theMessages = 18;
+  int32 ID = 1;
+  repeated string theStrings = 2;
+  repeated bool theBools = 3;
+  repeated int32 theInt32s = 4;
+  repeated int64 theInt64s = 5;
+  repeated uint32 theUInt32s = 6;
+  repeated uint64 theUInt64s = 7;
+  repeated sint32 theSInt32s = 8;
+  repeated sint64 theSInt64s = 9;
+  repeated fixed32 theFixed32s = 10;
+  repeated fixed64 theFixed64s = 11;
+  repeated sfixed32 theSFixed32s = 12;
+  repeated sfixed64 theSFixed64s = 13;
+  repeated float theFloats = 14;
+  repeated double theDoubles = 15;
+  repeated EventType theEventTypes = 16;
+  repeated bytes theBytes = 17;
+  repeated EmbeddedEvent theMessages = 18;
 }
 
 message EventUsingWKTs {
-    string name = 1;
-    google.protobuf.Timestamp ts = 2;
-    EventType event_type = 3;
+  string name = 1;
+  google.protobuf.Timestamp ts = 2;
+  EventType event_type = 3;
 }
 
 message MapObject {
-    string name = 1;
-    google.protobuf.Timestamp ts = 2;
-    map<string, string> attributes = 3;
+  string name = 1;
+  google.protobuf.Timestamp ts = 2;
+  map<string, string> attributes = 3;
 }
 
 message Maps {
-    map<string, bool> bools = 1;
-    map<string, string> strings = 2;
-    map<int32, int32> int32s = 3;
-    map<int64, int64> int64s = 4;
-    map<uint32, uint32> uint32s = 5;
-    map<uint64, uint64> uint64s = 6;
-    map<sint32, sint32> sint32s = 7;
-    map<sint64, sint64> sint64s = 8;
-    map<fixed32, fixed32> fixed32s = 9;
-    map<fixed64, fixed64> fixed64s = 10;
-    map<sfixed32, sfixed32> sfixed32s = 11;
-    map<sfixed64, sfixed64> sfixed64s = 12;
-    map<string, google.protobuf.NullValue> nulls = 13;
-    map<string, google.protobuf.Struct> structs = 14;
-    map<string, google.protobuf.Timestamp> timestamps = 15;
-    map<string, MapObject> objects = 30;
+  map<string, bool> bools = 1;
+  map<string, string> strings = 2;
+  map<int32, int32> int32s = 3;
+  map<int64, int64> int64s = 4;
+  map<uint32, uint32> uint32s = 5;
+  map<uint64, uint64> uint64s = 6;
+  map<sint32, sint32> sint32s = 7;
+  map<sint64, sint64> sint64s = 8;
+  map<fixed32, fixed32> fixed32s = 9;
+  map<fixed64, fixed64> fixed64s = 10;
+  map<sfixed32, sfixed32> sfixed32s = 11;
+  map<sfixed64, sfixed64> sfixed64s = 12;
+  map<string, float> floats = 16;
+  map<string, double> doubles = 17;
+  map<string, google.protobuf.NullValue> nulls = 13;
+  map<string, google.protobuf.Struct> structs = 14;
+  map<string, google.protobuf.Timestamp> timestamps = 15;
+  map<string, MapObject> objects = 30;
 }
 
 message OneOfs {
-    oneof thing {
-        bool bools = 1;
-        string strings = 2;
-        int32 int32s = 3;
-        int64 int64s = 4;
-        uint32 uint32s = 5;
-        uint64 uint64s = 6;
-        sint32 sint32s = 7;
-        sint64 sint64s = 8;
-        fixed32 fixed32s = 9;
-        fixed64 fixed64s = 10;
-        sfixed32 sfixed32s = 11;
-        sfixed64 sfixed64s = 12;
-        google.protobuf.NullValue nulls = 13;
-        google.protobuf.Struct structs = 14;
-        google.protobuf.Timestamp timestamps = 15;
-        MapObject objects = 30;
-    }
+  oneof thing {
+    bool bools = 1;
+    string strings = 2;
+    int32 int32s = 3;
+    int64 int64s = 4;
+    uint32 uint32s = 5;
+    uint64 uint64s = 6;
+    sint32 sint32s = 7;
+    sint64 sint64s = 8;
+    fixed32 fixed32s = 9;
+    fixed64 fixed64s = 10;
+    sfixed32 sfixed32s = 11;
+    sfixed64 sfixed64s = 12;
+    float floats = 16;
+    double doubles = 17;
+    google.protobuf.NullValue nulls = 13;
+    google.protobuf.Struct structs = 14;
+    google.protobuf.Timestamp timestamps = 15;
+    MapObject objects = 30;
+  }
 }

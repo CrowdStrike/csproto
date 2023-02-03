@@ -146,6 +146,9 @@ func (m *RepeatAllTheThings) Size() int {
 // Marshal converts the contents of m to the Protobuf binary encoding and returns the result or an error.
 func (m *RepeatAllTheThings) Marshal() ([]byte, error) {
 	siz := m.Size()
+	if siz == 0 {
+		return []byte{}, nil
+	}
 	buf := make([]byte, siz)
 	err := m.MarshalTo(buf)
 	return buf, err
@@ -153,6 +156,10 @@ func (m *RepeatAllTheThings) Marshal() ([]byte, error) {
 
 // MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
 func (m *RepeatAllTheThings) MarshalTo(dest []byte) error {
+	// nil message == no-op
+	if m == nil {
+		return nil
+	}
 	var (
 		enc    = csproto.NewEncoder(dest)
 		buf    []byte

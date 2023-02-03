@@ -132,6 +132,12 @@ func TestEncodeInt32(t *testing.T) {
 			expected: []byte{0x10, 0xFF, 0xFF, 0xFF, 0xFF, 0x07},
 		},
 		{
+			name:     "min int",
+			fieldNum: 2,
+			v:        math.MinInt32,
+			expected: []byte{0x10, 0x80, 0x80, 0x80, 0x80, 0xf8, 0xff, 0xff, 0xff, 0xff, 0x1},
+		},
+		{
 			name:     "regular value",
 			fieldNum: 3,
 			v:        42,
@@ -187,16 +193,28 @@ func TestEncodeInt64(t *testing.T) {
 			expected: []byte{0x8, 0x0},
 		},
 		{
-			name:     "max uint",
+			name:     "max int",
 			fieldNum: 2,
 			v:        math.MaxInt64,
 			expected: []byte{0x10, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x7F},
+		},
+		{
+			name:     "min int",
+			fieldNum: 2,
+			v:        math.MinInt64,
+			expected: []byte{0x10, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x1},
 		},
 		{
 			name:     "regular value",
 			fieldNum: 3,
 			v:        421138,
 			expected: []byte{0x18, 0x92, 0xDA, 0x19},
+		},
+		{
+			name:     "negative value",
+			fieldNum: 3,
+			v:        -421138,
+			expected: []byte{0x18, 0xee, 0xa5, 0xe6, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x1},
 		},
 	}
 	for _, tc := range cases {
@@ -737,24 +755,38 @@ func TestEncodePackedFloat64(t *testing.T) {
 }
 
 func TestEncodeNested(t *testing.T) {
-	var (
-		name           = "test"
-		val      int32 = 42
-		expected       = []byte{0xa, 0x8, 0xa, 0x4, 0x74, 0x65, 0x73, 0x74, 0x10, 0x2a}
-	)
-	m := testNestedMsg{
-		Name:  &name,
-		Value: &val,
-	}
+	t.Run("valid message", func(t *testing.T) {
+		var (
+			name           = "test"
+			val      int32 = 42
+			expected       = []byte{0xa, 0x8, 0xa, 0x4, 0x74, 0x65, 0x73, 0x74, 0x10, 0x2a}
+		)
+		m := testNestedMsg{
+			Name:  &name,
+			Value: &val,
+		}
 
-	sz := m.Size()
-	buf := make([]byte, 1+csproto.SizeOfVarint(uint64(sz))+sz)
-	enc := csproto.NewEncoder(buf)
+		sz := m.Size()
+		buf := make([]byte, 1+csproto.SizeOfVarint(uint64(sz))+sz)
+		enc := csproto.NewEncoder(buf)
 
-	err := enc.EncodeNested(1, &m)
+		err := enc.EncodeNested(1, &m)
 
-	assert.NoError(t, err)
-	assert.Equal(t, expected, buf)
+		assert.NoError(t, err)
+		assert.Equal(t, expected, buf)
+	})
+	t.Run("nil message", func(t *testing.T) {
+		t.Skip()
+		var m *testNestedMsg
+
+		buf := make([]byte, 10)
+		enc := csproto.NewEncoder(buf)
+
+		err := enc.EncodeNested(1, m)
+
+		assert.NoError(t, err)
+		assert.Equal(t, []byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 0}, buf)
+	})
 }
 
 func TestEncodeRaw(t *testing.T) {
@@ -776,6 +808,9 @@ type testNestedMsg struct {
 }
 
 func (m *testNestedMsg) Size() int {
+	if m == nil {
+		return 0
+	}
 	var (
 		sz = 0
 		l  int
