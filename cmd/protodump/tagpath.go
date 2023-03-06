@@ -94,16 +94,21 @@ func (v *tagPaths) Set(value string) error {
 		var thisPath tagPath
 		tokens := strings.Split(p, ".")
 		for _, t := range tokens {
+			if t == "" {
+				continue
+			}
 			tag, err := strconv.Atoi(t)
 			if err != nil {
-				return fmt.Errorf("invalid tag token, must be a positive integer or \"*\"")
+				return fmt.Errorf("invalid tag token %q, must be a valid integer Protobuf field tag", t)
 			}
 			if tag < 0 || tag > csproto.MaxTagValue {
 				return fmt.Errorf("invalid protobuf tag value: %d", tag)
 			}
 			thisPath = append(thisPath, tag)
 		}
-		v.paths = append(v.paths, thisPath)
+		if len(thisPath) > 0 {
+			v.paths = append(v.paths, thisPath)
+		}
 	}
 	return nil
 }
