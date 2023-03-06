@@ -182,46 +182,46 @@ func dumpProto(w io.Writer, dec *csproto.Decoder, parentTagPath tagPath, conf du
 
 		thisTagPath := append(parentTagPath, tag)
 
-		bw.WriteString(fmt.Sprintf("%stag: %d, wire type: %s\n", prefix, tag, wireType))
+		_, _ = bw.WriteString(fmt.Sprintf("%stag: %d, wire type: %s\n", prefix, tag, wireType))
 		switch wireType {
 		case csproto.WireTypeVarint:
 			vv, err := dec.DecodeInt64()
 			if err != nil {
 				return err
 			}
-			bw.WriteString(fmt.Sprintf("%s  varint: %d\n", prefix, vv))
+			_, _ = bw.WriteString(fmt.Sprintf("%s  varint: %d\n", prefix, vv))
 		case csproto.WireTypeFixed32:
 			f32, err := dec.DecodeFixed32()
 			if err != nil {
 				return err
 			}
-			bw.WriteString(fmt.Sprintf("%s  fixed32: %d\n", prefix, f32))
+			_, _ = bw.WriteString(fmt.Sprintf("%s  fixed32: %d\n", prefix, f32))
 		case csproto.WireTypeFixed64:
 			f64, err := dec.DecodeFixed64()
 			if err != nil {
 				return err
 			}
-			bw.WriteString(fmt.Sprintf("%s  fixed64: %d\n", prefix, f64))
+			_, _ = bw.WriteString(fmt.Sprintf("%s  fixed64: %d\n", prefix, f64))
 		case csproto.WireTypeLengthDelimited:
 			ldv, err := dec.DecodeBytes()
 			if err != nil {
 				return err
 			}
-			bw.WriteString(fmt.Sprintf("%s  length: %d\n", prefix, len(ldv)))
+			_, _ = bw.WriteString(fmt.Sprintf("%s  length: %d\n", prefix, len(ldv)))
 			switch {
 			case conf.isStringField(thisTagPath):
-				bw.WriteString(fmt.Sprintf("%s  string: %s\n", prefix, string(ldv)))
+				_, _ = bw.WriteString(fmt.Sprintf("%s  string: %s\n", prefix, string(ldv)))
 			default:
-				bw.WriteString(fmt.Sprintf("%s  [", prefix))
+				_, _ = bw.WriteString(fmt.Sprintf("%s  [", prefix))
 				for i, b := range ldv {
 					if i > 0 {
-						bw.WriteRune(',')
+						_, _ = bw.WriteRune(',')
 					}
-					bw.WriteString(fmt.Sprintf("0x%02X", b))
+					_, _ = bw.WriteString(fmt.Sprintf("0x%02X", b))
 				}
-				bw.WriteString("]\n")
+				_, _ = bw.WriteString("]\n")
 				if conf.shouldExpand(thisTagPath) {
-					bw.Flush()
+					_ = bw.Flush()
 					conf.indent++
 					err = dumpProto(w, csproto.NewDecoder(ldv), thisTagPath, conf)
 					conf.indent--
@@ -231,7 +231,7 @@ func dumpProto(w io.Writer, dec *csproto.Decoder, parentTagPath tagPath, conf du
 				}
 			}
 		default:
-			dec.Skip(tag, wireType)
+			_, _ = dec.Skip(tag, wireType)
 			return fmt.Errorf("unrecognized proto wire type (%d)", int(wireType))
 		}
 	}
