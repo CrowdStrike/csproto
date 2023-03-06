@@ -81,6 +81,11 @@ func (d *Decoder) More() bool {
 	return d.offset < len(d.p)
 }
 
+// Offset returns the current read offset
+func (d *Decoder) Offset() int {
+	return d.offset
+}
+
 // DecodeTag decodes a field tag and Protobuf wire type from the stream and returns the values.
 //
 // io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
@@ -90,10 +95,10 @@ func (d *Decoder) DecodeTag() (tag int, wireType WireType, err error) {
 	}
 	v, n, err := DecodeVarint(d.p[d.offset:])
 	if err != nil {
-		return 0, -1, err
+		return 0, -1, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 	}
-	if n < 1 || n > MaxTagValue {
-		return 0, -1, ErrInvalidFieldTag
+	if n < 1 || v < 1 || v > MaxTagValue {
+		return 0, -1, fmt.Errorf("invalid tag value (%d) at byte %d: %w", v, d.offset, ErrInvalidFieldTag)
 	}
 	d.offset += n
 	return int(v >> 3), WireType(v & 0x7), nil
@@ -108,10 +113,10 @@ func (d *Decoder) DecodeBool() (b bool, err error) {
 	}
 	v, n, err := DecodeVarint(d.p[d.offset:])
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 	}
 	if n == 0 {
-		return false, ErrInvalidVarintData
+		return false, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 	}
 	d.offset += n
 	return (v != 0), nil
@@ -126,7 +131,7 @@ func (d *Decoder) DecodeString() (string, error) {
 	}
 	b, err := d.DecodeBytes()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 	}
 	switch d.mode {
 	case DecoderModeFast:
@@ -147,10 +152,10 @@ func (d *Decoder) DecodeBytes() ([]byte, error) {
 	}
 	l, n, err := DecodeVarint(d.p[d.offset:])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 	}
 	if n == 0 {
-		return nil, ErrInvalidVarintData
+		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 	}
 	nb := int(l)
 	if nb < 0 {
@@ -173,10 +178,10 @@ func (d *Decoder) DecodeUInt32() (uint32, error) {
 	}
 	v, n, err := DecodeVarint(d.p[d.offset:])
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 	}
 	if n == 0 {
-		return 0, ErrInvalidVarintData
+		return 0, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 	}
 	if v > math.MaxUint32 {
 		return 0, ErrValueOverflow
@@ -194,10 +199,10 @@ func (d *Decoder) DecodeUInt64() (uint64, error) {
 	}
 	v, n, err := DecodeVarint(d.p[d.offset:])
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 	}
 	if n == 0 {
-		return 0, ErrInvalidVarintData
+		return 0, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 	}
 	d.offset += n
 	return v, nil
@@ -212,10 +217,10 @@ func (d *Decoder) DecodeInt32() (int32, error) {
 	}
 	v, n, err := DecodeVarint(d.p[d.offset:])
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 	}
 	if n == 0 {
-		return 0, ErrInvalidVarintData
+		return 0, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 	}
 	if int64(v) > math.MaxInt32 {
 		return 0, ErrValueOverflow
@@ -233,10 +238,10 @@ func (d *Decoder) DecodeInt64() (int64, error) {
 	}
 	v, n, err := DecodeVarint(d.p[d.offset:])
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 	}
 	if n == 0 {
-		return 0, ErrInvalidVarintData
+		return 0, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 	}
 	d.offset += n
 	return int64(v), nil
@@ -251,10 +256,10 @@ func (d *Decoder) DecodeSInt32() (int32, error) {
 	}
 	v, n, err := DecodeZigZag32(d.p[d.offset:])
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 	}
 	if n == 0 {
-		return 0, ErrInvalidZigZagData
+		return 0, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidZigZagData)
 	}
 	d.offset += n
 	return v, nil
@@ -269,10 +274,10 @@ func (d *Decoder) DecodeSInt64() (int64, error) {
 	}
 	v, n, err := DecodeZigZag64(d.p[d.offset:])
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 	}
 	if n == 0 {
-		return 0, ErrInvalidZigZagData
+		return 0, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidZigZagData)
 	}
 	d.offset += n
 	return v, nil
@@ -287,10 +292,10 @@ func (d *Decoder) DecodeFixed32() (uint32, error) {
 	}
 	v, n, err := DecodeFixed32(d.p[d.offset:])
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 	}
 	if n == 0 {
-		return 0, ErrInvalidFixed32Data
+		return 0, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidFixed32Data)
 	}
 	d.offset += n
 	return v, nil
@@ -305,10 +310,10 @@ func (d *Decoder) DecodeFixed64() (uint64, error) {
 	}
 	v, n, err := DecodeFixed64(d.p[d.offset:])
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 	}
 	if n == 0 {
-		return 0, ErrInvalidFixed64Data
+		return 0, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidFixed64Data)
 	}
 	d.offset += n
 	return v, nil
@@ -355,29 +360,30 @@ func (d *Decoder) DecodePackedBool() ([]bool, error) {
 	)
 	l, n, err = DecodeVarint(d.p[d.offset:])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 	}
 	if n == 0 {
-		return nil, ErrInvalidVarintData
+		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 	}
 	d.offset += n
+	packedDataStart := d.offset
 	for nRead < l {
 		if d.offset >= len(d.p) {
 			return nil, io.ErrUnexpectedEOF
 		}
 		v, n, err := DecodeVarint(d.p[d.offset:])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 		}
 		if n == 0 {
-			return nil, ErrInvalidVarintData
+			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 		}
 		nRead += uint64(n)
 		d.offset += n
 		res = append(res, (v != 0))
 	}
 	if nRead != l {
-		return nil, ErrInvalidPackedData
+		return nil, fmt.Errorf("invalid packed data at byte %d: %w", packedDataStart, ErrInvalidPackedData)
 	}
 	return res, nil
 }
@@ -397,32 +403,33 @@ func (d *Decoder) DecodePackedInt32() ([]int32, error) { //nolint: dupl // FALSE
 	)
 	l, n, err = DecodeVarint(d.p[d.offset:])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 	}
 	if n == 0 {
-		return nil, ErrInvalidVarintData
+		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 	}
 	d.offset += n
+	packedDataStart := d.offset
 	for nRead < l {
 		if d.offset >= len(d.p) {
 			return nil, io.ErrUnexpectedEOF
 		}
 		v, n, err := DecodeVarint(d.p[d.offset:])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 		}
 		if n == 0 {
-			return nil, ErrInvalidVarintData
+			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 		}
 		if v > math.MaxInt32 {
-			return nil, ErrValueOverflow
+			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrValueOverflow)
 		}
 		nRead += uint64(n)
 		d.offset += n
 		res = append(res, int32(v))
 	}
 	if nRead != l {
-		return nil, ErrInvalidPackedData
+		return nil, fmt.Errorf("invalid packed data at byte %d: %w", packedDataStart, ErrInvalidPackedData)
 	}
 	return res, nil
 }
@@ -442,32 +449,33 @@ func (d *Decoder) DecodePackedInt64() ([]int64, error) { //nolint: dupl // FALSE
 	)
 	l, n, err = DecodeVarint(d.p[d.offset:])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 	}
 	if n == 0 {
-		return nil, ErrInvalidVarintData
+		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 	}
 	d.offset += n
+	packedDataStart := d.offset
 	for nRead < l {
 		if d.offset >= len(d.p) {
 			return nil, io.ErrUnexpectedEOF
 		}
 		v, n, err := DecodeVarint(d.p[d.offset:])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 		}
 		if n == 0 {
-			return nil, ErrInvalidVarintData
+			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 		}
 		if v > math.MaxInt64 {
-			return nil, ErrValueOverflow
+			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrValueOverflow)
 		}
 		nRead += uint64(n)
 		d.offset += n
 		res = append(res, int64(v))
 	}
 	if nRead != l {
-		return nil, ErrInvalidPackedData
+		return nil, fmt.Errorf("invalid packed data at byte %d: %w", packedDataStart, ErrInvalidPackedData)
 	}
 	return res, nil
 }
@@ -488,32 +496,33 @@ func (d *Decoder) DecodePackedUint32() ([]uint32, error) { //nolint: dupl // FAL
 	)
 	l, n, err = DecodeVarint(d.p[d.offset:])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 	}
 	if n == 0 {
-		return nil, ErrInvalidVarintData
+		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 	}
 	d.offset += n
+	packedDataStart := d.offset
 	for nRead < l {
 		if d.offset >= len(d.p) {
 			return nil, io.ErrUnexpectedEOF
 		}
 		v, n, err := DecodeVarint(d.p[d.offset:])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 		}
 		if n == 0 {
-			return nil, ErrInvalidVarintData
+			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 		}
 		if v > math.MaxUint32 {
-			return nil, ErrValueOverflow
+			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrValueOverflow)
 		}
 		nRead += uint64(n)
 		d.offset += n
 		res = append(res, uint32(v))
 	}
 	if nRead != l {
-		return nil, ErrInvalidPackedData
+		return nil, fmt.Errorf("invalid packed data at byte %d: %w", packedDataStart, ErrInvalidPackedData)
 	}
 	return res, nil
 }
@@ -534,29 +543,30 @@ func (d *Decoder) DecodePackedUint64() ([]uint64, error) { //nolint: dupl // FAL
 	)
 	l, n, err = DecodeVarint(d.p[d.offset:])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 	}
 	if n == 0 {
-		return nil, ErrInvalidVarintData
+		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 	}
 	d.offset += n
+	packedDataStart := d.offset
 	for nRead < l {
 		if d.offset >= len(d.p) {
 			return nil, io.ErrUnexpectedEOF
 		}
 		v, n, err := DecodeVarint(d.p[d.offset:])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 		}
 		if n == 0 {
-			return nil, ErrInvalidVarintData
+			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 		}
 		nRead += uint64(n)
 		d.offset += n
 		res = append(res, v)
 	}
 	if nRead != l {
-		return nil, ErrInvalidPackedData
+		return nil, fmt.Errorf("invalid packed data at byte %d: %w", packedDataStart, ErrInvalidPackedData)
 	}
 	return res, nil
 }
@@ -577,29 +587,30 @@ func (d *Decoder) DecodePackedSint32() ([]int32, error) { //nolint: dupl // FALS
 	)
 	l, n, err = DecodeVarint(d.p[d.offset:])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 	}
 	if n == 0 {
-		return nil, ErrInvalidVarintData
+		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 	}
 	d.offset += n
+	packedDataStart := d.offset
 	for nRead < l {
 		if d.offset >= len(d.p) {
 			return nil, io.ErrUnexpectedEOF
 		}
 		v, n, err := DecodeZigZag32(d.p[d.offset:])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 		}
 		if n == 0 {
-			return nil, ErrInvalidVarintData
+			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 		}
 		nRead += uint64(n)
 		d.offset += n
 		res = append(res, v)
 	}
 	if nRead != l {
-		return nil, ErrInvalidPackedData
+		return nil, fmt.Errorf("invalid packed data at byte %d: %w", packedDataStart, ErrInvalidPackedData)
 	}
 	return res, nil
 }
@@ -620,29 +631,30 @@ func (d *Decoder) DecodePackedSint64() ([]int64, error) { //nolint: dupl // FALS
 	)
 	l, n, err = DecodeVarint(d.p[d.offset:])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 	}
 	if n == 0 {
-		return nil, ErrInvalidVarintData
+		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 	}
 	d.offset += n
+	packedDataStart := d.offset
 	for nRead < l {
 		if d.offset >= len(d.p) {
 			return nil, io.ErrUnexpectedEOF
 		}
 		v, n, err := DecodeZigZag64(d.p[d.offset:])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 		}
 		if n == 0 {
-			return nil, ErrInvalidVarintData
+			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 		}
 		nRead += uint64(n)
 		d.offset += n
 		res = append(res, v)
 	}
 	if nRead != l {
-		return nil, ErrInvalidPackedData
+		return nil, fmt.Errorf("invalid packed data at byte %d: %w", packedDataStart, ErrInvalidPackedData)
 	}
 	return res, nil
 }
@@ -663,29 +675,30 @@ func (d *Decoder) DecodePackedFixed32() ([]uint32, error) { //nolint: dupl // FA
 	)
 	l, n, err = DecodeVarint(d.p[d.offset:])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 	}
 	if n == 0 {
-		return nil, ErrInvalidVarintData
+		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 	}
 	d.offset += n
+	packedDataStart := d.offset
 	for nRead < l {
 		if d.offset >= len(d.p) {
 			return nil, io.ErrUnexpectedEOF
 		}
 		v, n, err := DecodeFixed32(d.p[d.offset:])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 		}
 		if n == 0 {
-			return nil, ErrInvalidVarintData
+			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 		}
 		nRead += uint64(n)
 		d.offset += n
 		res = append(res, v)
 	}
 	if nRead != l {
-		return nil, ErrInvalidPackedData
+		return nil, fmt.Errorf("invalid packed data at byte %d: %w", packedDataStart, ErrInvalidPackedData)
 	}
 	return res, nil
 }
@@ -706,29 +719,30 @@ func (d *Decoder) DecodePackedFixed64() ([]uint64, error) { //nolint: dupl // FA
 	)
 	l, n, err = DecodeVarint(d.p[d.offset:])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 	}
 	if n == 0 {
-		return nil, ErrInvalidVarintData
+		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 	}
 	d.offset += n
+	packedDataStart := d.offset
 	for nRead < l {
 		if d.offset >= len(d.p) {
 			return nil, io.ErrUnexpectedEOF
 		}
 		v, n, err := DecodeFixed64(d.p[d.offset:])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 		}
 		if n == 0 {
-			return nil, ErrInvalidVarintData
+			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 		}
 		nRead += uint64(n)
 		d.offset += n
 		res = append(res, v)
 	}
 	if nRead != l {
-		return nil, ErrInvalidPackedData
+		return nil, fmt.Errorf("invalid packed data at byte %d: %w", packedDataStart, ErrInvalidPackedData)
 	}
 	return res, nil
 }
@@ -749,12 +763,13 @@ func (d *Decoder) DecodePackedFloat32() ([]float32, error) { //nolint: dupl // F
 	)
 	l, n, err = DecodeVarint(d.p[d.offset:])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 	}
 	if n == 0 {
-		return nil, ErrInvalidVarintData
+		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 	}
 	d.offset += n
+	packedDataStart := d.offset
 	res = make([]float32, 0, l/4)
 	for nRead < l {
 		if d.offset >= len(d.p) {
@@ -766,7 +781,7 @@ func (d *Decoder) DecodePackedFloat32() ([]float32, error) { //nolint: dupl // F
 		res = append(res, math.Float32frombits(v))
 	}
 	if nRead != l {
-		return nil, ErrInvalidPackedData
+		return nil, fmt.Errorf("invalid packed data at byte %d: %w", packedDataStart, ErrInvalidPackedData)
 	}
 	return res, nil
 }
@@ -787,12 +802,13 @@ func (d *Decoder) DecodePackedFloat64() ([]float64, error) {
 	)
 	l, n, err = DecodeVarint(d.p[d.offset:])
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 	}
 	if n == 0 {
-		return nil, ErrInvalidVarintData
+		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 	}
 	d.offset += n
+	packedDataStart := d.offset
 	for nRead < l {
 		if d.offset >= len(d.p) {
 			return nil, io.ErrUnexpectedEOF
@@ -803,7 +819,7 @@ func (d *Decoder) DecodePackedFloat64() ([]float64, error) {
 		res = append(res, math.Float64frombits(v))
 	}
 	if nRead != l {
-		return nil, ErrInvalidPackedData
+		return nil, fmt.Errorf("invalid packed data at byte %d: %w", packedDataStart, ErrInvalidPackedData)
 	}
 	return res, nil
 }
@@ -818,14 +834,14 @@ func (d *Decoder) DecodeNested(m interface{}) error {
 	}
 	l, n, err := DecodeVarint(d.p[d.offset:])
 	if err != nil {
-		return err
+		return fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 	}
 	if n == 0 {
-		return ErrInvalidVarintData
+		return fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 	}
 	nb := int(l)
 	if nb < 0 {
-		return fmt.Errorf("csproto: bad byte length %d", nb)
+		return fmt.Errorf("csproto: bad byte length %d at byte %d", nb, d.offset)
 	}
 	if d.offset+n+nb > len(d.p) {
 		return io.ErrUnexpectedEOF
@@ -866,10 +882,10 @@ func (d *Decoder) Skip(tag int, wt WireType) ([]byte, error) {
 	if d.mode == DecoderModeSafe {
 		v, n, err := DecodeVarint(d.p[bof:])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid data at byte %d: %w", bof, err)
 		}
 		if n != sz {
-			return nil, ErrInvalidVarintData
+			return nil, fmt.Errorf("invalid data at byte %d: %w", bof, ErrInvalidVarintData)
 		}
 		if int(v>>3) != tag || WireType(v&0x7) != wt {
 			return nil, &DecoderSkipError{
@@ -885,7 +901,7 @@ func (d *Decoder) Skip(tag int, wt WireType) ([]byte, error) {
 	case WireTypeVarint:
 		_, n, err := DecodeVarint(d.p[d.offset:])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 		}
 		skipped = n
 	case WireTypeFixed64:
@@ -893,16 +909,16 @@ func (d *Decoder) Skip(tag int, wt WireType) ([]byte, error) {
 	case WireTypeLengthDelimited:
 		l, n, err := DecodeVarint(d.p[d.offset:])
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 		}
 		if n == 0 {
-			return nil, ErrInvalidVarintData
+			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 		}
 		skipped = n + int(l)
 	case WireTypeFixed32:
 		skipped = 4
 	default:
-		return nil, fmt.Errorf("unsupported wire type value: %v", wt)
+		return nil, fmt.Errorf("unsupported wire type value %v at byte %d", wt, d.offset)
 	}
 	if d.offset+skipped > len(d.p) {
 		return nil, io.ErrUnexpectedEOF
