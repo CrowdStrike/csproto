@@ -54,3 +54,6 @@ jobs:
 
       - name: protoc-gen-fastmarshal
         run: go build ./cmd/protoc-gen-fastmarshal
+
+      - name: protodump
+        run: go build ./cmd/protodump

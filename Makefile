@@ -2,6 +2,15 @@ PROJECT_BASE_DIR := $(realpath $(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
 # prepend the project-local bin/ folder to $PATH so that we find build-time tools there
 PATH := ${PROJECT_BASE_DIR}/bin:${PATH}
 
+# metadata for generating "version" info for local builds
+CURRENT_USER ?= $(shell whoami)
+CURRENT_DATE ?= $(shell date -u +'%FT%R:%SZ')
+CURRENT_DATE_DIGITS_ONLY ?= $(shell date -u +'%Y%m%d%H%M%S')
+CURRENT_COMMIT ?= $(shell git rev-parse HEAD)
+CURRENT_COMMIT_SHORT ?= $(shell git rev-parse --short HEAD)
+LOCAL_DEV_VERSION ?= "v0.0.0-devel-${CURRENT_USER}-${CURRENT_DATE_DIGITS_ONLY}-${CURRENT_COMMIT_SHORT}"
+LOCAL_LDFLAGS = -ldflags="-X main.version=${LOCAL_DEV_VERSION} -X main.commit=${CURRENT_COMMIT} -X main.builtBy=${CURRENT_USER} -X main.date=${CURRENT_DATE}"
+
 PROTOC_GEN_GOGO  = github.com/gogo/protobuf/protoc-gen-gogo@$(shell go list -f '{{.Version}}' -m github.com/gogo/protobuf)
 PROTOC_GEN_GO_V1 = github.com/golang/protobuf/protoc-gen-go@$(shell go list -f '{{.Version}}' -m github.com/golang/protobuf)
 PROTOC_GEN_GO_V2 = google.golang.org/protobuf/cmd/protoc-gen-go@$(shell go list -f '{{.Version}}' -m google.golang.org/protobuf)
@@ -99,7 +108,7 @@ protoc-gen-fastmarshal: export GOBIN=${PROJECT_BASE_DIR}/bin
 protoc-gen-fastmarshal: create-local-bin-dir
 	$(info Building protoc-gen-fastmarshal ...)
 	@cd ${PROJECT_BASE_DIR}/cmd/protoc-gen-fastmarshal &&\
-		go install
+		go install ${LOCAL_LDFLAGS}
 
 .PHONY: install-protoc-gen-gogo
 install-protoc-gen-gogo: export GOBIN=${PROJECT_BASE_DIR}/bin
@@ -120,6 +129,13 @@ install-protoc-gen-go-v2: create-local-bin-dir
 	$(info Installing ${PROTOC_GEN_GO_V2} to ${PROJECT_BASE_DIR}/bin/protoc-gen-go-v2 ...)
 	@go install ${PROTOC_GEN_GO_V2}
 	@mv ${PROJECT_BASE_DIR}/bin/protoc-gen-go ${PROJECT_BASE_DIR}/bin/protoc-gen-go-v2
+
+.PHONY: protodump
+protodump: export GOBIN=${PROJECT_BASE_DIR}/bin
+protodump: create-local-bin-dir
+	$(info Building protodump ...)
+	@cd ${PROJECT_BASE_DIR}/cmd/protodump &&\
+		go install ${LOCAL_LDFLAGS}
 
 .PHONY: create-local-bin-dir
 create-local-bin-dir:

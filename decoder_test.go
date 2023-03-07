@@ -1192,6 +1192,8 @@ func FuzzDecodeTag(f *testing.F) {
 				// valid error
 			case errors.Is(err, csproto.ErrInvalidVarintData):
 				// valid error
+			case errors.Is(err, csproto.ErrInvalidFieldTag):
+				// valid error
 			default:
 				t.Errorf("unexpected error from DecodeTag(): %v", err)
 			}
