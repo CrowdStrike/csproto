@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/Masterminds/sprig/v3 v3.2.3
 	github.com/gogo/protobuf v1.3.2
-	github.com/golang/protobuf v1.5.2
+	github.com/golang/protobuf v1.5.3
 	github.com/huandu/xstrings v1.4.0
 	github.com/stretchr/testify v1.8.2
 	google.golang.org/protobuf v1.29.0
