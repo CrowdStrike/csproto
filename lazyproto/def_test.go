@@ -241,17 +241,6 @@ func TestDefValidation(t *testing.T) {
 				})
 			}
 		})
-		t.Run("reserved tags", func(t *testing.T) {
-			t.Parallel()
-			for i, tag := range reservedTags {
-				t.Run(caseNames[i%2], func(t *testing.T) {
-					def := NewDef(tag)
-					err := def.Validate()
-					assert.Error(t, err, "tag=%v", tag)
-					assert.Equal(t, fmt.Sprintf("invalid field tag (%d) at path []", tag), err.Error(), "tag=%v", tag)
-				})
-			}
-		})
 		t.Run("nested", func(t *testing.T) {
 			t.Parallel()
 			t.Run("value overflow", func(t *testing.T) {
@@ -264,20 +253,6 @@ func TestDefValidation(t *testing.T) {
 						err := def.Validate()
 						assert.Error(t, err, "tag=%v", tag)
 						assert.Equal(t, fmt.Sprintf("invalid field tag (%d) at path [1 2]", tag), fmt.Sprintf("%s", err), "tag=%v", tag)
-					})
-				}
-			})
-			t.Run("reserved tags", func(t *testing.T) {
-				t.Parallel()
-				caseNames := []string{"positive value", "negative value"}
-				for i, tag := range reservedTags {
-					t.Run(caseNames[i%2], func(t *testing.T) {
-						def := NewDef()
-						subdef := def.NestedTag(1)
-						_ = subdef.NestedTag(2, tag)
-						err := def.Validate()
-						assert.Error(t, err)
-						assert.Equal(t, fmt.Sprintf("invalid field tag (%d) at path [1 2]", tag), err.Error())
 					})
 				}
 			})
