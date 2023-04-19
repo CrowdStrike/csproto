@@ -49,7 +49,7 @@ func RangeExtensions(msg interface{}, fn func(value interface{}, name string, fi
 				string(t.TypeDescriptor().FullName()),
 				int32(t.TypeDescriptor().Descriptor().Number()),
 			)
-			return err != nil
+			return err == nil
 		})
 		return err
 	case MessageTypeUnknown:
