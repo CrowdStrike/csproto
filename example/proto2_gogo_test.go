@@ -285,6 +285,35 @@ func TestProto2GogoExtensions(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestProto2GogoRangeExtensions(t *testing.T) {
+	m := createTestProto2GogoMessage()
+	t.Run("enumerate all", func(t *testing.T) {
+		nCalls := 0
+		err := csproto.RangeExtensions(m, func(value interface{}, name string, field int32) error {
+			t.Logf("name=%s, field=%d, value=%v", name, field, value)
+			nCalls++
+			return nil
+		})
+
+		assert.NoError(t, err)
+		assert.Equal(t, 1, nCalls, "range callback should have been called 1 time")
+	})
+	t.Run("enumeration error", func(t *testing.T) {
+		var (
+			testErr = fmt.Errorf("something went wrong")
+			nCalls  = 0
+		)
+		err := csproto.RangeExtensions(m, func(value interface{}, name string, field int32) error {
+			nCalls++
+			return testErr
+		})
+
+		assert.Error(t, err)
+		assert.Equal(t, testErr, err)
+		assert.Equal(t, 1, nCalls, "range callback should have been called 1 time")
+	})
+}
+
 func createTestProto2GogoMessage() *gogo.BaseEvent {
 	now := uint64(time.Now().UTC().Unix())
 	et := gogo.EventType_EVENT_TYPE_ONE
