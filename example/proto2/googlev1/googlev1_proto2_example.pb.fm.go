@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"github.com/CrowdStrike/csproto"
-	"google.golang.org/protobuf/types/known/timestamppb"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 )
 
 //------------------------------------------------------------------------------
