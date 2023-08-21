@@ -17,7 +17,6 @@ import (
 )
 
 {{ range allMessages }}
-{{- $msgDef := . -}}
 
 //------------------------------------------------------------------------------
 // Custom Protobuf size/marshal/unmarshal code for {{ .GoIdent.GoName }}
