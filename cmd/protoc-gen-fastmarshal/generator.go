@@ -38,7 +38,7 @@ func generateSingle(plugin *protogen.Plugin, req generateRequest) error {
 		name, content string
 		err           error
 	)
-	funcs := codeGenFunctions(req.ProtoDesc, req.SpecialNames)
+	funcs := codeGenFunctions(req.ProtoDesc, req.SpecialNames, plugin)
 	for k, v := range req.Funcs {
 		funcs[k] = v
 	}
@@ -77,7 +77,7 @@ func generatePerMessage(plugin *protogen.Plugin, req generateRequest) error {
 		EnableUnsafeDecode bool
 	}
 
-	funcs := codeGenFunctions(req.ProtoDesc, req.SpecialNames)
+	funcs := codeGenFunctions(req.ProtoDesc, req.SpecialNames, plugin)
 	for k, v := range req.Funcs {
 		funcs[k] = v
 	}

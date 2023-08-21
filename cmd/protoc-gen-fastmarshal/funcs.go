@@ -169,11 +169,11 @@ var (
 //
 // This function is a shortcut for creating a template.FuncMap then calling AddStandardFunctions(),
 // AddSprigFunctions(), and AddProtoFunctions() sequentially.
-func codeGenFunctions(protoFile *protogen.File, names specialNames) template.FuncMap {
+func codeGenFunctions(protoFile *protogen.File, names specialNames, plugin *protogen.Plugin) template.FuncMap {
 	fm := make(template.FuncMap)
 	fm = addStandardFunctions(fm)
 	fm = addSprigFunctions(fm)
-	fm = addProtoFunctions(fm, protoFile, names)
+	fm = addProtoFunctions(fm, protoFile, names, plugin)
 	return fm
 }
 
@@ -196,13 +196,13 @@ func addSprigFunctions(fm template.FuncMap) template.FuncMap {
 
 // addProtoFunctions extends the passed-in set of template functions by registering several common
 // functions for retrieving Protobuf definitions from the provided Protobuf descriptor.
-func addProtoFunctions(fm template.FuncMap, protoFile *protogen.File, names specialNames) template.FuncMap {
+func addProtoFunctions(fm template.FuncMap, protoFile *protogen.File, names specialNames, plugin *protogen.Plugin) template.FuncMap {
 	fm["protoNumberEncodeMethod"] = protoNumberEncodeMethod
 	fm["getExtensions"] = getExtensions(protoFile)
 	fm["allMessages"] = allMessages(protoFile)
-	fm["getAdditionalImports"] = getAdditionalImports(protoFile)
-	fm["getImportPrefix"] = getImportPrefix(protoFile)
-	fm["mapFieldGoType"] = mapFieldGoType(protoFile)
+	fm["getAdditionalImports"] = getAdditionalImports(protoFile, plugin)
+	fm["getImportPrefix"] = getImportPrefix(protoFile, plugin)
+	fm["mapFieldGoType"] = mapFieldGoType(protoFile, plugin)
 	fm["hasRequiredFields"] = hasRequiredFields(protoFile)
 	fm["getSafeFieldName"] = getSafeFieldName(names)
 	return fm
@@ -275,17 +275,17 @@ func allMessages(protoFile *protogen.File) func() []*protogen.Message {
 
 // getAdditionalImports returns a list of distinct imports paths required by the fields of v, which
 // must be either a single protogen.Message or a slice of messages.
-func getAdditionalImports(protoFile *protogen.File) func(v interface{}) []string {
+func getAdditionalImports(protoFile *protogen.File, plugin *protogen.Plugin) func(v interface{}) []string {
 	return func(v interface{}) []string {
 		paths := make(map[string]struct{})
 		switch tv := v.(type) {
 		case *protogen.Message:
-			for _, p := range additionalImportsForType(protoFile.GoImportPath, tv) {
+			for _, p := range additionalImportsForType(protoFile.GoImportPath, tv, plugin) {
 				paths[p] = struct{}{}
 			}
 		case []*protogen.Message:
 			for _, m := range tv {
-				for _, p := range additionalImportsForType(protoFile.GoImportPath, m) {
+				for _, p := range additionalImportsForType(protoFile.GoImportPath, m, plugin) {
 					paths[p] = struct{}{}
 				}
 			}
@@ -302,17 +302,19 @@ func getAdditionalImports(protoFile *protogen.File) func(v interface{}) []string
 
 // additionalImportsForType returns a list of import paths referenced by the fields of m that are
 // distinct from the package declared by p.
-func additionalImportsForType(p protogen.GoImportPath, m *protogen.Message) []string {
+func additionalImportsForType(importPath protogen.GoImportPath, m *protogen.Message, plugin *protogen.Plugin) []string {
 	var res []string
 	for _, fld := range m.Fields {
 		switch fld.Desc.Kind() {
 		case protoreflect.MessageKind:
-			if ip := fld.Message.GoIdent.GoImportPath; ip != p {
-				res = append(res, ip.String())
+			if ip := fld.Message.GoIdent.GoImportPath; ip != importPath {
+				packageName := plugin.FilesByPath[fld.Message.Desc.ParentFile().Path()].GoPackageName
+				res = append(res, string(packageName)+" "+ip.String())
 			}
 		case protoreflect.EnumKind:
-			if ip := fld.Enum.GoIdent.GoImportPath; ip != p {
-				res = append(res, ip.String())
+			if ip := fld.Enum.GoIdent.GoImportPath; ip != importPath {
+				packageName := plugin.FilesByPath[fld.Enum.Desc.ParentFile().Path()].GoPackageName
+				res = append(res, string(packageName)+" "+ip.String())
 			}
 		default:
 			// nothing to do
@@ -327,18 +329,16 @@ func additionalImportsForType(p protogen.GoImportPath, m *protogen.Message) []st
 // Ex: For a field called Ts that is a google.protobuf.timestamp.Timestamp, the Go package is
 // "google.golang.org/protobuf/types/known/timestamppb" so a local variable must be declared as timestamppb.Ts.
 // This function returns "timestamppb.".
-func getImportPrefix(protoFile *protogen.File) func(v interface{}) string {
+func getImportPrefix(protoFile *protogen.File, plugin *protogen.Plugin) func(v interface{}) string {
 	return func(v interface{}) string {
 		switch tv := v.(type) {
 		case *protogen.Message:
 			if tv.GoIdent.GoImportPath != protoFile.GoImportPath {
-				toks := strings.Split(string(tv.GoIdent.GoImportPath), "/")
-				return toks[len(toks)-1] + "."
+				return string(plugin.FilesByPath[tv.Desc.ParentFile().Path()].GoPackageName) + "."
 			}
 		case *protogen.Enum:
 			if tv.GoIdent.GoImportPath != protoFile.GoImportPath {
-				toks := strings.Split(string(tv.GoIdent.GoImportPath), "/")
-				return toks[len(toks)-1] + "."
+				return string(plugin.FilesByPath[tv.Desc.ParentFile().Path()].GoPackageName) + "."
 			}
 		default:
 			return ""
@@ -348,7 +348,7 @@ func getImportPrefix(protoFile *protogen.File) func(v interface{}) string {
 }
 
 // mapFieldGoType returns the Go type definition for a given field descriptor that represents a map entry
-func mapFieldGoType(protoFile *protogen.File) func(*protogen.Field) string {
+func mapFieldGoType(protoFile *protogen.File, plugin *protogen.Plugin) func(*protogen.Field) string {
 	return func(field *protogen.Field) string {
 		if !field.Desc.IsMap() {
 			return "<<invalid>> /* field is not a map entry */"
@@ -394,13 +394,13 @@ func mapFieldGoType(protoFile *protogen.File) func(*protogen.Field) string {
 			// is the value field always the 2nd item?  or do we need to loop and check the
 			// number on the descriptor?
 			f := field.Message.Fields[1]
-			vtype = getImportPrefix(protoFile)(f.Enum) + f.Enum.GoIdent.GoName
+			vtype = getImportPrefix(protoFile, plugin)(f.Enum) + f.Enum.GoIdent.GoName
 		case protoreflect.MessageKind:
 			// TODO: dbourque - 2022-04-08
 			// is the value field always the 2nd item?  or do we need to loop and check the
 			// number on the descriptor?
 			f := field.Message.Fields[1]
-			vtype = "*" + getImportPrefix(protoFile)(f.Message) + f.Message.GoIdent.GoName
+			vtype = "*" + getImportPrefix(protoFile, plugin)(f.Message) + f.Message.GoIdent.GoName
 		default:
 			vtype = fmt.Sprintf("<<invalid>> /*%v*/", vd.Kind())
 		}

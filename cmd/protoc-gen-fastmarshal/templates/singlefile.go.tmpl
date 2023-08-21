@@ -7,6 +7,7 @@
 
 package {{ .ProtoDesc.GoPackageName }}
 
+{{if allMessages}}
 import (
     "fmt"{{if and (eq $protoSyntax "proto2") (hasRequiredFields nil)}}
     "strings"{{end}}
@@ -15,6 +16,7 @@ import (
     {{range (allMessages | getAdditionalImports)}}{{.}}
     {{end}}
 )
+{{end}}
 
 {{ range allMessages }}
 {{- $msgDef := . -}}
