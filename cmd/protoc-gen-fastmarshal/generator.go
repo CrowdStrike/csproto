@@ -38,7 +38,11 @@ func generateSingle(plugin *protogen.Plugin, req generateRequest) error {
 		name, content string
 		err           error
 	)
-	funcs := codeGenFunctions(req.ProtoDesc, req.SpecialNames)
+	goPackageForFile := make(map[string]string, len(plugin.Files))
+	for _, f := range plugin.Files {
+		goPackageForFile[f.Desc.Path()] = string(f.GoPackageName)
+	}
+	funcs := codeGenFunctions(req.ProtoDesc, req.SpecialNames, goPackageForFile)
 	for k, v := range req.Funcs {
 		funcs[k] = v
 	}
@@ -77,7 +81,11 @@ func generatePerMessage(plugin *protogen.Plugin, req generateRequest) error {
 		EnableUnsafeDecode bool
 	}
 
-	funcs := codeGenFunctions(req.ProtoDesc, req.SpecialNames)
+	goPackageForFile := make(map[string]string, len(plugin.Files))
+	for _, f := range plugin.Files {
+		goPackageForFile[f.Desc.Path()] = string(f.GoPackageName)
+	}
+	funcs := codeGenFunctions(req.ProtoDesc, req.SpecialNames, goPackageForFile)
 	for k, v := range req.Funcs {
 		funcs[k] = v
 	}

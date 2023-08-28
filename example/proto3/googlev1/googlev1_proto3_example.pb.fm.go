@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"sync/atomic"
 	"github.com/CrowdStrike/csproto"
-	"google.golang.org/protobuf/types/known/structpb"
-	"google.golang.org/protobuf/types/known/timestamppb"
+	structpb "google.golang.org/protobuf/types/known/structpb"
+	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 )
 
 //------------------------------------------------------------------------------

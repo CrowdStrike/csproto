@@ -12,7 +12,7 @@ import (
     "strings"{{end}}
     "sync/atomic"
     "github.com/CrowdStrike/csproto"
-    {{range (.Message | getAdditionalImports)}}{{.}}
+    {{range $path, $alias := (.Message | getAdditionalImports)}}{{ (printf "%s %s" $alias $path) | trimspace}}
     {{end}}
 )
 

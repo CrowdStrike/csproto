@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"github.com/CrowdStrike/csproto"
-	"github.com/gogo/protobuf/types"
+	types "github.com/gogo/protobuf/types"
 )
 
 //------------------------------------------------------------------------------
