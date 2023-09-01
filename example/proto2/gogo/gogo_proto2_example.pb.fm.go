@@ -8,7 +8,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"github.com/CrowdStrike/csproto"
-	"github.com/gogo/protobuf/types"
+	types "github.com/gogo/protobuf/types"
 )
 
 //------------------------------------------------------------------------------
@@ -313,6 +313,7 @@ func (m *TestEvent) Size() int {
 		l = csproto.Size(m.Nested)
 		sz += csproto.SizeOfTagKey(9) + csproto.SizeOfVarint(uint64(l)) + l
 	}
+
 	// Path (oneof)
 	if m.Path != nil {
 		switch typedVal := m.Path.(type) {
@@ -392,6 +393,7 @@ func (m *TestEvent) MarshalTo(dest []byte) error {
 		}
 	}
 	// Path (oneof)
+
 	if m.Path != nil {
 		switch typedVal := m.Path.(type) {
 		case *TestEvent_Jedi: // jedi (6,bool)
@@ -2073,6 +2075,247 @@ func (m *EventUsingWKTs) csprotoCheckRequiredFields() error {
 }
 
 //------------------------------------------------------------------------------
+// Custom Protobuf size/marshal/unmarshal code for I18NVariable
+
+// Size calculates and returns the size, in bytes, required to hold the contents of m using the Protobuf
+// binary encoding.
+func (m *I18NVariable) Size() int {
+	// nil message is always 0 bytes
+	if m == nil {
+		return 0
+	}
+	// return cached size, if present
+	if csz := int(atomic.LoadInt32(&m.XXX_sizecache)); csz > 0 {
+		return csz
+	}
+	// calculate and cache
+	var sz, l int
+	_ = l // avoid unused variable
+
+	// OneOfValues (oneof)
+	if m.OneOfValues != nil {
+		switch typedVal := m.OneOfValues.(type) {
+		case *I18NVariable_OptOne: // opt_one (1,string)
+			l = len(typedVal.OptOne)
+			sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(l)) + l
+		case *I18NVariable_OptTwo: // opt_two (2,string)
+			l = len(typedVal.OptTwo)
+			sz += csproto.SizeOfTagKey(2) + csproto.SizeOfVarint(uint64(l)) + l
+		default:
+			_ = typedVal // ensure no unused variable
+		}
+	}
+
+	// cache the size so it can be re-used in Marshal()/MarshalTo()
+	atomic.StoreInt32(&m.XXX_sizecache, int32(sz))
+	return sz
+}
+
+// Marshal converts the contents of m to the Protobuf binary encoding and returns the result or an error.
+func (m *I18NVariable) Marshal() ([]byte, error) {
+	siz := m.Size()
+	if siz == 0 {
+		return []byte{}, nil
+	}
+	buf := make([]byte, siz)
+	err := m.MarshalTo(buf)
+	return buf, err
+}
+
+// MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
+func (m *I18NVariable) MarshalTo(dest []byte) error {
+	// nil message == no-op
+	if m == nil {
+		return nil
+	}
+	var (
+		enc    = csproto.NewEncoder(dest)
+		buf    []byte
+		err    error
+		extVal interface{}
+	)
+	// ensure no unused variables
+	_ = enc
+	_ = buf
+	_ = err
+	_ = extVal
+
+	// OneOfValues (oneof)
+
+	if m.OneOfValues != nil {
+		switch typedVal := m.OneOfValues.(type) {
+		case *I18NVariable_OptOne: // opt_one (1,string)
+			enc.EncodeString(1, typedVal.OptOne)
+		case *I18NVariable_OptTwo: // opt_two (2,string)
+			enc.EncodeString(2, typedVal.OptTwo)
+		default:
+			_ = typedVal // ensure no unused variable
+		}
+	}
+	return nil
+}
+
+// Unmarshal decodes a binary encoded Protobuf message from p and populates m with the result.
+func (m *I18NVariable) Unmarshal(p []byte) error {
+	m.Reset()
+	if len(p) == 0 {
+		return nil
+	}
+	dec := csproto.NewDecoder(p)
+	for dec.More() {
+		tag, wt, err := dec.DecodeTag()
+		if err != nil {
+			return err
+		}
+		switch tag {
+
+		case 1: // one_of_values.opt_one (oneof,string)
+			var ov I18NVariable_OptOne
+			if wt != csproto.WireTypeLengthDelimited {
+				return fmt.Errorf("incorrect wire type %v for tag field 'opt_one' (tag=1), expected 2 (length-delimited)", wt)
+			}
+			if s, err := dec.DecodeString(); err != nil {
+				return fmt.Errorf("unable to decode string value for field 'opt_one' (tag=1): %w", err)
+			} else {
+				ov.OptOne = s
+			}
+			m.OneOfValues = &ov
+		case 2: // one_of_values.opt_two (oneof,string)
+			var ov I18NVariable_OptTwo
+			if wt != csproto.WireTypeLengthDelimited {
+				return fmt.Errorf("incorrect wire type %v for tag field 'opt_two' (tag=2), expected 2 (length-delimited)", wt)
+			}
+			if s, err := dec.DecodeString(); err != nil {
+				return fmt.Errorf("unable to decode string value for field 'opt_two' (tag=2): %w", err)
+			} else {
+				ov.OptTwo = s
+			}
+			m.OneOfValues = &ov
+		default:
+			if skipped, err := dec.Skip(tag, wt); err != nil {
+				return fmt.Errorf("invalid operation skipping tag %v: %w", tag, err)
+			} else {
+				m.XXX_unrecognized = append(m.XXX_unrecognized, skipped...)
+			}
+		}
+	}
+	return nil
+}
+
+//------------------------------------------------------------------------------
+// Custom Protobuf size/marshal/unmarshal code for Msg
+
+// Size calculates and returns the size, in bytes, required to hold the contents of m using the Protobuf
+// binary encoding.
+func (m *Msg) Size() int {
+	// nil message is always 0 bytes
+	if m == nil {
+		return 0
+	}
+	// return cached size, if present
+	if csz := int(atomic.LoadInt32(&m.XXX_sizecache)); csz > 0 {
+		return csz
+	}
+	// calculate and cache
+	var sz, l int
+	_ = l // avoid unused variable
+
+	// OneOfValues (oneof)
+	if m.OneOfValues != nil {
+		switch typedVal := m.OneOfValues.(type) {
+		case *Msg_Tags_: // tags (1,message)
+			l = csproto.Size(typedVal.Tags)
+			sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(l)) + l
+		default:
+			_ = typedVal // ensure no unused variable
+		}
+	}
+
+	// cache the size so it can be re-used in Marshal()/MarshalTo()
+	atomic.StoreInt32(&m.XXX_sizecache, int32(sz))
+	return sz
+}
+
+// Marshal converts the contents of m to the Protobuf binary encoding and returns the result or an error.
+func (m *Msg) Marshal() ([]byte, error) {
+	siz := m.Size()
+	if siz == 0 {
+		return []byte{}, nil
+	}
+	buf := make([]byte, siz)
+	err := m.MarshalTo(buf)
+	return buf, err
+}
+
+// MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
+func (m *Msg) MarshalTo(dest []byte) error {
+	// nil message == no-op
+	if m == nil {
+		return nil
+	}
+	var (
+		enc    = csproto.NewEncoder(dest)
+		buf    []byte
+		err    error
+		extVal interface{}
+	)
+	// ensure no unused variables
+	_ = enc
+	_ = buf
+	_ = err
+	_ = extVal
+
+	// OneOfValues (oneof)
+
+	if m.OneOfValues != nil {
+		switch typedVal := m.OneOfValues.(type) {
+		case *Msg_Tags_: // tags (1,message)
+			enc.EncodeNested(1, typedVal.Tags)
+		default:
+			_ = typedVal // ensure no unused variable
+		}
+	}
+	return nil
+}
+
+// Unmarshal decodes a binary encoded Protobuf message from p and populates m with the result.
+func (m *Msg) Unmarshal(p []byte) error {
+	m.Reset()
+	if len(p) == 0 {
+		return nil
+	}
+	dec := csproto.NewDecoder(p)
+	for dec.More() {
+		tag, wt, err := dec.DecodeTag()
+		if err != nil {
+			return err
+		}
+		switch tag {
+
+		case 1: // one_of_values.tags (oneof,message)
+			var ov Msg_Tags_
+			if wt != csproto.WireTypeLengthDelimited {
+				return fmt.Errorf("incorrect wire type %v for tag field 'tags' (tag=1), expected 2 (length-delimited)", wt)
+			}
+			var mm_tags Msg_Tags
+			if err = dec.DecodeNested(&mm_tags); err != nil {
+				return fmt.Errorf("unable to decode message value for field 'tags' (tag=1): %w", err)
+			} else {
+				ov.Tags = &mm_tags
+			}
+			m.OneOfValues = &ov
+		default:
+			if skipped, err := dec.Skip(tag, wt); err != nil {
+				return fmt.Errorf("invalid operation skipping tag %v: %w", tag, err)
+			} else {
+				m.XXX_unrecognized = append(m.XXX_unrecognized, skipped...)
+			}
+		}
+	}
+	return nil
+}
+
+//------------------------------------------------------------------------------
 // Custom Protobuf size/marshal/unmarshal code for TestEvent_NestedMsg
 
 // Size calculates and returns the size, in bytes, required to hold the contents of m using the Protobuf
@@ -2157,6 +2400,104 @@ func (m *TestEvent_NestedMsg) Unmarshal(p []byte) error {
 				return fmt.Errorf("unable to decode string value for field 'details' (tag=1): %w", err)
 			} else {
 				m.Details = csproto.String(s)
+			}
+
+		default:
+			if skipped, err := dec.Skip(tag, wt); err != nil {
+				return fmt.Errorf("invalid operation skipping tag %v: %w", tag, err)
+			} else {
+				m.XXX_unrecognized = append(m.XXX_unrecognized, skipped...)
+			}
+		}
+	}
+	return nil
+}
+
+//------------------------------------------------------------------------------
+// Custom Protobuf size/marshal/unmarshal code for Msg_Tags
+
+// Size calculates and returns the size, in bytes, required to hold the contents of m using the Protobuf
+// binary encoding.
+func (m *Msg_Tags) Size() int {
+	// nil message is always 0 bytes
+	if m == nil {
+		return 0
+	}
+	// return cached size, if present
+	if csz := int(atomic.LoadInt32(&m.XXX_sizecache)); csz > 0 {
+		return csz
+	}
+	// calculate and cache
+	var sz, l int
+	_ = l // avoid unused variable
+
+	// Tags (string,repeated)
+	for _, sv := range m.Tags {
+		l = len(sv)
+		sz += csproto.SizeOfTagKey(1) + csproto.SizeOfVarint(uint64(l)) + l
+	}
+	// cache the size so it can be re-used in Marshal()/MarshalTo()
+	atomic.StoreInt32(&m.XXX_sizecache, int32(sz))
+	return sz
+}
+
+// Marshal converts the contents of m to the Protobuf binary encoding and returns the result or an error.
+func (m *Msg_Tags) Marshal() ([]byte, error) {
+	siz := m.Size()
+	if siz == 0 {
+		return []byte{}, nil
+	}
+	buf := make([]byte, siz)
+	err := m.MarshalTo(buf)
+	return buf, err
+}
+
+// MarshalTo converts the contents of m to the Protobuf binary encoding and writes the result to dest.
+func (m *Msg_Tags) MarshalTo(dest []byte) error {
+	// nil message == no-op
+	if m == nil {
+		return nil
+	}
+	var (
+		enc    = csproto.NewEncoder(dest)
+		buf    []byte
+		err    error
+		extVal interface{}
+	)
+	// ensure no unused variables
+	_ = enc
+	_ = buf
+	_ = err
+	_ = extVal
+
+	// Tags (1,string,repeated)
+	for _, val := range m.Tags {
+		enc.EncodeString(1, val)
+	}
+	return nil
+}
+
+// Unmarshal decodes a binary encoded Protobuf message from p and populates m with the result.
+func (m *Msg_Tags) Unmarshal(p []byte) error {
+	m.Reset()
+	if len(p) == 0 {
+		return nil
+	}
+	dec := csproto.NewDecoder(p)
+	for dec.More() {
+		tag, wt, err := dec.DecodeTag()
+		if err != nil {
+			return err
+		}
+		switch tag {
+		case 1: // Tags (string,repeated)
+			if wt != csproto.WireTypeLengthDelimited {
+				return fmt.Errorf("incorrect wire type %v for field 'tags' (tag=1), expected 2 (length-delimited)", wt)
+			}
+			if s, err := dec.DecodeString(); err != nil {
+				return fmt.Errorf("unable to decode string value for field 'tags' (tag=1): %w", err)
+			} else {
+				m.Tags = append(m.Tags, s)
 			}
 
 		default:

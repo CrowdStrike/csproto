@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"sync/atomic"
 	"github.com/CrowdStrike/csproto"
-	"github.com/gogo/protobuf/types"
+	types "github.com/gogo/protobuf/types"
 )
 
 //------------------------------------------------------------------------------
@@ -60,6 +60,7 @@ func (m *TestEvent) Size() int {
 		l = csproto.Size(m.Ts)
 		sz += csproto.SizeOfTagKey(10) + csproto.SizeOfVarint(uint64(l)) + l
 	}
+
 	// Path (oneof)
 	if m.Path != nil {
 		switch typedVal := m.Path.(type) {
@@ -144,6 +145,7 @@ func (m *TestEvent) MarshalTo(dest []byte) error {
 		}
 	}
 	// Path (oneof)
+
 	if m.Path != nil {
 		switch typedVal := m.Path.(type) {
 		case *TestEvent_Jedi: // jedi (6,bool)
