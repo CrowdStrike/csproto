@@ -230,11 +230,10 @@
 {{ end }}
 {{/* SizeOfOneOf - calculate the size of a oneof field */}}
 {{ define "SizeOfOneOf" }}
-{{- $msgDef := .Parent -}}
     // {{.GoName | getSafeFieldName}} (oneof)
     if m.{{.GoName | getSafeFieldName}} != nil {
         switch typedVal := m.{{.GoName | getSafeFieldName}}.(type) {
-        {{ range .Fields }}case *{{ $msgDef.Desc.Name }}_{{.GoName | getSafeFieldName}}:
+        {{ range .Fields }}case *{{.GoIdent.GoName | getSafeFieldName}}:
             {{- $kind := (.Desc.Kind | string) -}}
             // {{.Desc.Name}} ({{.Desc.Number}},{{.Desc.Kind}})
             {{ if eq $kind "bool" -}}
@@ -615,10 +614,9 @@
 {{ end }}
 {{/* MarshalOneOf - generates the snippet to marshal a oneof field */}}
 {{ define "MarshalOneOf" }}
-{{- $msgDef := .Parent -}}
     if m.{{.GoName | getSafeFieldName}} != nil {
         switch typedVal := m.{{.GoName | getSafeFieldName}}.(type) {
-        {{ range .Fields }}case *{{ $msgDef.Desc.Name }}_{{.GoName | getSafeFieldName}}: // {{.Desc.Name}} ({{.Desc.Number}},{{.Desc.Kind}})
+        {{ range .Fields }}case *{{.GoIdent.GoName | getSafeFieldName}}: // {{.Desc.Name}} ({{.Desc.Number}},{{.Desc.Kind}})
             {{- $kind := (.Desc.Kind | string) -}}
             {{ if eq $kind "bool" "int32" "int64" "uint32" "uint64" "sint32" "sint64" "fixed32" "float" "fixed64" "double" }}
             enc.{{ protoNumberEncodeMethod (.Desc.Kind | string) false}}({{.Desc.Number}}, typedVal.{{.GoName | getSafeFieldName}})
@@ -1230,12 +1228,11 @@
 {{ end }}
 {{/* UnmarshalOneOf - generates the snippet to unmarshal a oneof field */}}
 {{ define "UnmarshalOneOf" }}
-{{- $msgDef := .Parent -}}
 {{- $oneOf := . -}}
     {{- range .Fields -}}
         {{- $kind := (.Desc.Kind | string) -}}
         case {{.Desc.Number}}: // {{$oneOf.Desc.Name}}.{{.Desc.Name}} (oneof,{{.Desc.Kind}})
-            var ov {{$msgDef.Desc.Name}}_{{.GoName | getSafeFieldName}}
+            var ov {{.GoIdent.GoName | getSafeFieldName}}
         {{ if eq $kind "bool" -}}
             if wt != csproto.WireTypeVarint {
                 return fmt.Errorf("incorrect wire type %v for tag field '{{.Desc.Name}}' (tag={{.Desc.Number}}), expected 0 (varint)", wt)

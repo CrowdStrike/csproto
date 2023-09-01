@@ -115,3 +115,22 @@ message EventUsingWKTs {
     optional google.protobuf.Timestamp ts = 2;
     optional EventType event_type = 3;
 }
+
+// see https://github.com/CrowdStrike/csproto/pull/124
+message I18nVariable {
+    oneof one_of_values {
+        string opt_one = 1;
+        string opt_two = 2;
+    }
+}
+
+message Msg {
+    oneof one_of_values {
+        Msg.Tags tags = 1;
+    }
+
+    message Tags {
+        repeated string tags = 1;
+    }
+}
+
