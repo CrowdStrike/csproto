@@ -66,9 +66,42 @@ func NewDecoder(p []byte) *Decoder {
 	}
 }
 
+// Mode returns the current decoding mode, safe vs fastest.
+func (d *Decoder) Mode() DecoderMode {
+	return d.mode
+}
+
 // SetMode configures the decoding behavior, safe vs fastest.
 func (d *Decoder) SetMode(m DecoderMode) {
 	d.mode = m
+}
+
+// Seek sets the position of the next read operation to [offset], interpreted according to [whence]:
+// [io.SeekStart] means relative to the start of the data, [io.SeekCurrent] means relative to the
+// current offset, and [io.SeekEnd] means relative to the end.
+//
+// This low-level operation is provided to support advanced/custom usages of the decoder and it is up
+// to the caller to ensure that the resulting offset will point to a valid location in the data stream.
+func (d *Decoder) Seek(offset int64, whence int) (int64, error) {
+	pos := int(offset)
+	switch whence {
+	case io.SeekStart:
+		// no adjustment needed
+	case io.SeekCurrent:
+		// shift relative to current read offset
+		pos += d.offset
+	case io.SeekEnd:
+		// shift relative to EOF
+		pos += len(d.p)
+	default:
+		return int64(d.offset), fmt.Errorf("invalid value (%d) for whence", whence)
+	}
+	// verify bounds then update the read position
+	if pos < 0 || pos > len(d.p) {
+		return int64(d.offset), fmt.Errorf("seek position (%d) out of bounds", pos)
+	}
+	d.offset = pos
+	return int64(d.offset), nil
 }
 
 // Reset moves the read offset back to the beginning of the encoded data

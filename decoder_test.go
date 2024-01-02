@@ -11,6 +11,151 @@ import (
 	"github.com/CrowdStrike/csproto"
 )
 
+func TestDecoderSeek(t *testing.T) {
+	testData := []byte{0x08, 0x01, 0x10, 0x00, 0x1A, 0xE, 0x74, 0x68, 0x69, 0x73, 0x20, 0x69, 0x73, 0x20, 0x61, 0x20, 0x74, 0x65, 0x73, 0x74}
+	dec := csproto.NewDecoder(testData)
+
+	t.Run("seek start", func(t *testing.T) {
+		t.Run("negative seek", func(t *testing.T) {
+			dec.Reset()
+			_, _, _ = dec.DecodeTag()
+			_, _ = dec.DecodeBool()
+
+			startPos := int64(dec.Offset())
+			pos, err := dec.Seek(-1, io.SeekStart)
+			assert.Error(t, err, "cannot seek to before BOF")
+			assert.Equal(t, startPos, pos, "read position should not change")
+		})
+		t.Run("zero seek", func(t *testing.T) {
+			dec.Reset()
+			_, _, _ = dec.DecodeTag()
+			_, _ = dec.DecodeBool()
+
+			pos, err := dec.Seek(0, io.SeekStart)
+			assert.NoError(t, err)
+			assert.Equal(t, int64(0), pos, "new read position should be BOF")
+		})
+		t.Run("invalid positive seek", func(t *testing.T) {
+			dec.Reset()
+			_, _, _ = dec.DecodeTag()
+			_, _ = dec.DecodeBool()
+
+			startPos := int64(dec.Offset())
+			pos, err := dec.Seek(int64(len(testData)+1), io.SeekStart)
+			assert.Error(t, err, "cannot seek to after EOF")
+			assert.Equal(t, startPos, pos, "read position should not change")
+		})
+		t.Run("valid positive seek", func(t *testing.T) {
+			dec.Reset()
+
+			pos, err := dec.Seek(2, io.SeekStart)
+			assert.NoError(t, err)
+			assert.Equal(t, int(pos), dec.Offset())
+			assert.True(t, dec.More())
+		})
+	})
+	t.Run("seek current", func(t *testing.T) {
+		t.Run("invalid negative seek", func(t *testing.T) {
+			dec.Reset()
+			_, _, _ = dec.DecodeTag()
+			_, _ = dec.DecodeBool()
+
+			startPos := int64(dec.Offset())
+			pos, err := dec.Seek(-1*(startPos+1), io.SeekCurrent)
+			assert.Error(t, err, "cannot seek to before BOF")
+			assert.Equal(t, startPos, pos, "read position should not change")
+		})
+		t.Run("valid negative seek", func(t *testing.T) {
+			dec.Reset()
+			_, _, _ = dec.DecodeTag()
+			_, _ = dec.DecodeBool()
+
+			startPos := int64(dec.Offset())
+			pos, err := dec.Seek(-1*startPos, io.SeekCurrent)
+			assert.NoError(t, err)
+			assert.Equal(t, int64(0), pos)
+		})
+		t.Run("zero seek", func(t *testing.T) {
+			dec.Reset()
+			_, _, _ = dec.DecodeTag()
+			_, _ = dec.DecodeBool()
+
+			startPos := int64(dec.Offset())
+			pos, err := dec.Seek(0, io.SeekCurrent)
+			assert.NoError(t, err)
+			assert.Equal(t, int64(startPos), pos)
+		})
+		t.Run("invalid positive seek", func(t *testing.T) {
+			dec.Reset()
+			_, _, _ = dec.DecodeTag()
+			_, _ = dec.DecodeBool()
+
+			startPos := int64(dec.Offset())
+			pos, err := dec.Seek(int64(len(testData)), io.SeekCurrent)
+			assert.Error(t, err, "cannot seek to after EOF")
+			assert.Equal(t, startPos, pos, "read position should not change")
+		})
+		t.Run("valid positive seek", func(t *testing.T) {
+			dec.Reset()
+			_, _, _ = dec.DecodeTag()
+			_, _ = dec.DecodeBool()
+
+			pos, err := dec.Seek(2, io.SeekCurrent)
+			assert.NoError(t, err)
+			assert.Equal(t, int(pos), dec.Offset())
+			assert.True(t, dec.More())
+		})
+	})
+	t.Run("seek end", func(t *testing.T) {
+		t.Run("positive seek", func(t *testing.T) {
+			dec.Reset()
+			_, _, _ = dec.DecodeTag()
+			_, _ = dec.DecodeBool()
+			startPos := dec.Offset()
+
+			pos, err := dec.Seek(1, io.SeekEnd)
+			assert.Error(t, err, "cannot seek to after EOF")
+			assert.Equal(t, int64(startPos), pos, "read position should not change")
+		})
+		t.Run("zero seek", func(t *testing.T) {
+			dec.Reset()
+			_, _, _ = dec.DecodeTag()
+			_, _ = dec.DecodeBool()
+
+			pos, err := dec.Seek(0, io.SeekEnd)
+			assert.NoError(t, err)
+			assert.Equal(t, int64(len(testData)), pos, "read position should be at EOF")
+			assert.False(t, dec.More())
+		})
+		t.Run("invalid negative seek", func(t *testing.T) {
+			dec.Reset()
+			_, _, _ = dec.DecodeTag()
+			_, _ = dec.DecodeBool()
+			startPos := dec.Offset()
+
+			pos, err := dec.Seek(int64(-1*(len(testData)+1)), io.SeekEnd)
+			assert.Error(t, err, "cannot seek to before BOF")
+			assert.Equal(t, int64(startPos), pos, "read position should be at EOF")
+		})
+		t.Run("valid negative seek", func(t *testing.T) {
+			dec.Reset()
+			_, _, _ = dec.DecodeTag()
+			_, _ = dec.DecodeBool()
+
+			pos, err := dec.Seek(-16, io.SeekEnd)
+			assert.NoError(t, err)
+			assert.Equal(t, int64(4), pos, "read position should be at EOF")
+		})
+	})
+	t.Run("invalid whence", func(t *testing.T) {
+		dec.Reset()
+		startPos := dec.Offset()
+		pos, err := dec.Seek(0, 1138)
+		assert.Error(t, err, "cannot seek with invalid 'whence'")
+		assert.Equal(t, int64(startPos), pos, "read position should not change")
+	})
+}
+
 func TestDecodeBool(t *testing.T) {
 	cases := []struct {
 		name     string
