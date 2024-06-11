@@ -6,7 +6,7 @@ require (
 	github.com/Masterminds/sprig/v3 v3.2.3
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/protobuf v1.5.4
-	github.com/huandu/xstrings v1.4.0
+	github.com/huandu/xstrings v1.5.0
 	github.com/stretchr/testify v1.9.0
 	google.golang.org/protobuf v1.33.0
 )
