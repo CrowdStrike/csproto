@@ -1,6 +1,6 @@
 module github.com/CrowdStrike/csproto
 
-go 1.19
+go 1.21
 
 require (
 	github.com/Masterminds/sprig/v3 v3.2.3
@@ -8,7 +8,7 @@ require (
 	github.com/golang/protobuf v1.5.4
 	github.com/huandu/xstrings v1.5.0
 	github.com/stretchr/testify v1.9.0
-	google.golang.org/protobuf v1.33.0
+	google.golang.org/protobuf v1.34.2
 )
 
 require (
