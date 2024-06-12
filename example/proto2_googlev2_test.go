@@ -16,8 +16,8 @@ import (
 )
 
 func TestProto2GoogleV2Message(t *testing.T) {
-	msg := createTestProto2GoogleV2Message()
 	t.Run("google_marshal/csproto_unmarshal", func(t *testing.T) {
+		msg := createTestProto2GoogleV2Message()
 		data, err := proto.Marshal(msg)
 		if err != nil {
 			t.Errorf("Error marshaling data using golang/protobuf: %v", err)
@@ -33,6 +33,7 @@ func TestProto2GoogleV2Message(t *testing.T) {
 		}
 	})
 	t.Run("csproto_marshal/google_unmarshal", func(t *testing.T) {
+		msg := createTestProto2GoogleV2Message()
 		data, err := csproto.Marshal(msg)
 		if err != nil {
 			t.Errorf("Error marshaling data using csproto: %v", err)

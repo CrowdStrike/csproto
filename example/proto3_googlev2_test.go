@@ -21,9 +21,8 @@ import (
 )
 
 func TestProto3GoogleV2Message(t *testing.T) {
-	msg := createTestProto3GoogleV2Message()
-
 	t.Run("google_marshal/csproto_unmarshal", func(t *testing.T) {
+		msg := createTestProto3GoogleV2Message()
 		data, err := proto.Marshal(msg)
 		if err != nil {
 			t.Errorf("Error marshaling data using golang/protobuf: %v", err)
@@ -38,6 +37,7 @@ func TestProto3GoogleV2Message(t *testing.T) {
 		}
 	})
 	t.Run("csproto_marshal/google_unmarshal", func(t *testing.T) {
+		msg := createTestProto3GoogleV2Message()
 		data, err := csproto.Marshal(msg)
 		if err != nil {
 			t.Errorf("Error marshaling data using csproto: %v", err)
@@ -259,7 +259,7 @@ func TestProto3GoogleV2Equal(t *testing.T) {
 	// m1 and m2 will have different timestamps so should not be equal
 	assert.False(t, csproto.Equal(m1, m2), "messages should not be equal\nm1=%s\nm2=%s", m1.String(), m2.String())
 	// make them equal
-	*m2.Ts = *m1.Ts
+	m2.Ts, _ = csproto.Clone(m1.Ts).(*timestamppb.Timestamp)
 	assert.True(t, csproto.Equal(m1, m2), "messages should be equal\nm1=%s\nm2=%s", m1.String(), m2.String())
 }
 
