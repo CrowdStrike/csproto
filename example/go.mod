@@ -1,18 +1,15 @@
 module github.com/CrowdStrike/csproto/example
 
-go 1.18
+go 1.21
 
 require (
 	github.com/CrowdStrike/csproto v0.0.0
 	github.com/gofrs/uuid v4.4.0+incompatible
 	github.com/gogo/protobuf v1.3.2
-	google.golang.org/protobuf v1.33.0
-)
-
-require (
 	github.com/golang/protobuf v1.5.4
 	github.com/google/go-cmp v0.6.0
 	github.com/stretchr/testify v1.9.0
+	google.golang.org/protobuf v1.34.2
 )
 
 require (
