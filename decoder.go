@@ -16,6 +16,8 @@ var (
 	ErrInvalidVarintData = errors.New("unable to read protobuf varint value")
 	// ErrValueOverflow is returned by DecodeUInt32() or DecodeInt32() when the decoded value is too large for a 32-bit value.
 	ErrValueOverflow = errors.New("value overflow trying to read protobuf varint value")
+	// ErrLenOverflow is returned when the LEN portion of a length-delimited field is larger than 2GB
+	ErrLenOverflow = errors.New("field length cannot be more than 2GB")
 	// ErrInvalidZigZagData is returned by the decoder when it fails to read a zigzag-encoded value.
 	ErrInvalidZigZagData = errors.New("unable to read protobuf zigzag value")
 	// ErrInvalidFixed32Data is returned by the decoder when it fails to read a fixed-size 32-bit value.
@@ -28,6 +30,9 @@ var (
 
 // MaxTagValue is the largest supported protobuf field tag, which is 2^29 - 1 (or 536,870,911)
 const MaxTagValue = 536870911
+
+// length-delimited fields cannot contain more than 2GB
+const maxFieldLen = math.MaxInt32
 
 // DecoderMode defines the behavior of the decoder (safe vs fastest).
 type DecoderMode int
@@ -183,17 +188,20 @@ func (d *Decoder) DecodeBytes() ([]byte, error) {
 	if d.offset >= len(d.p) {
 		return nil, io.ErrUnexpectedEOF
 	}
+
 	l, n, err := DecodeVarint(d.p[d.offset:])
-	if err != nil {
+	switch {
+	case err != nil:
 		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
-	}
-	if n == 0 {
+	case n == 0:
 		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
+	case l > maxFieldLen:
+		return nil, fmt.Errorf("invalid length (%d) for length-delimited field at byte %d: %w", l, d.offset, ErrLenOverflow)
+	default:
+		// length is good
 	}
+
 	nb := int(l)
-	if nb < 0 {
-		return nil, fmt.Errorf("csproto: bad byte length %d", nb)
-	}
 	if d.offset+n+nb > len(d.p) {
 		return nil, io.ErrUnexpectedEOF
 	}
@@ -865,13 +873,19 @@ func (d *Decoder) DecodeNested(m interface{}) error {
 	if d.offset >= len(d.p) {
 		return io.ErrUnexpectedEOF
 	}
+
 	l, n, err := DecodeVarint(d.p[d.offset:])
-	if err != nil {
+	switch {
+	case err != nil:
 		return fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
-	}
-	if n == 0 {
+	case n == 0:
 		return fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
+	case l > maxFieldLen:
+		return fmt.Errorf("invalid length (%d) for length-delimited field at byte %d: %w", l, d.offset, ErrLenOverflow)
+	default:
+		// length is good
 	}
+
 	nb := int(l)
 	if nb < 0 {
 		return fmt.Errorf("csproto: bad byte length %d at byte %d", nb, d.offset)
@@ -941,13 +955,19 @@ func (d *Decoder) Skip(tag int, wt WireType) ([]byte, error) {
 		skipped = 8
 	case WireTypeLengthDelimited:
 		l, n, err := DecodeVarint(d.p[d.offset:])
-		if err != nil {
+		switch {
+		case err != nil:
 			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
-		}
-		if n == 0 {
+		case n == 0:
 			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
+		case l > maxFieldLen:
+			return nil, fmt.Errorf("invalid length (%d) for length-delimited field at byte %d: %w", l, d.offset, ErrLenOverflow)
+		default:
+			// length is good
 		}
+
 		skipped = n + int(l)
+
 	case WireTypeFixed32:
 		skipped = 4
 	default:

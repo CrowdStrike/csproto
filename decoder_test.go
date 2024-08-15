@@ -83,7 +83,7 @@ func TestDecoderSeek(t *testing.T) {
 			startPos := int64(dec.Offset())
 			pos, err := dec.Seek(0, io.SeekCurrent)
 			assert.NoError(t, err)
-			assert.Equal(t, int64(startPos), pos)
+			assert.Equal(t, startPos, pos)
 		})
 		t.Run("invalid positive seek", func(t *testing.T) {
 			dec.Reset()
@@ -288,6 +288,15 @@ func TestDecodeBytes(t *testing.T) {
 		t.Run("negative length", func(t *testing.T) {
 			// length-delimited field value with a length of -50
 			data := []byte{0xCE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x3, 0x42, 0x11, 0x38}
+			dec := csproto.NewDecoder(data)
+
+			got, err := dec.DecodeBytes()
+			assert.Error(t, err)
+			assert.Nil(t, got)
+		})
+		t.Run("length overflow", func(t *testing.T) {
+			// field length greater than 2GB
+			data := []byte{0x80, 0x80, 0x80, 0x80, 0x08}
 			dec := csproto.NewDecoder(data)
 
 			got, err := dec.DecodeBytes()
@@ -1195,6 +1204,39 @@ func TestDecoderInvalidSkip(t *testing.T) {
 		_, err := dec.Skip(1, wt)
 		assert.ErrorAs(t, err, &skipErr)
 	}
+
+	t.Run("corrupt messages", func(t *testing.T) {
+		t.Run("truncated data", func(t *testing.T) {
+			// length-delimited field value with a length of 3 but only 2 bytes
+			data := []byte{0x0A, 0x3, 0x42, 0x11}
+			dec := csproto.NewDecoder(data)
+
+			tag, wt, _ := dec.DecodeTag()
+			got, err := dec.Skip(tag, wt)
+			assert.Error(t, err)
+			assert.Nil(t, got)
+		})
+		t.Run("negative length", func(t *testing.T) {
+			// length-delimited field value with a length of -50
+			data := []byte{0x0A, 0xCE, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x01, 0x3, 0x42, 0x11, 0x38}
+			dec := csproto.NewDecoder(data)
+
+			tag, wt, _ := dec.DecodeTag()
+			got, err := dec.Skip(tag, wt)
+			assert.Error(t, err)
+			assert.Nil(t, got)
+		})
+		t.Run("length overflow", func(t *testing.T) {
+			// length-delimited field with length greater than 2GB
+			data := []byte{0x0A, 0x80, 0x80, 0x80, 0x80, 0x08}
+			dec := csproto.NewDecoder(data)
+
+			tag, wt, _ := dec.DecodeTag()
+			got, err := dec.Skip(tag, wt)
+			assert.Error(t, err)
+			assert.Nil(t, got)
+		})
+	})
 }
 
 func TestDecodePastEndOfBuffer(t *testing.T) {
