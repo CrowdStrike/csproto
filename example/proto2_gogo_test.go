@@ -135,7 +135,7 @@ func TestProto2GogoMarshalJSON(t *testing.T) {
 			Name:      csproto.String("enable-all"),
 			EventType: &etype,
 		}
-		expected := fmt.Sprintf("{\n  \"eventType\":0,\"name\":\"enable-all\",\n  \"ts\":null\n}")
+		expected := "{\n  \"eventType\":0,\"name\":\"enable-all\",\n  \"ts\":null\n}"
 
 		opts := []csproto.JSONOption{
 			csproto.JSONIndent("  "),
@@ -233,7 +233,29 @@ func TestProto2GogoMarshalText(t *testing.T) {
 	// - this string matches gogo/protobuf@v1.3.2
 	// - if this test breaks after updating gogo/protobuf, then update the expected string
 	//   accordingly
-	expected := "eventID: \"test-event\"\nsourceID: \"test-source\"\ntimestamp: 946688523\neventType: EVENT_TYPE_ONE\ndata: \"\"\n[crowdstrike.csproto.example.proto2.gogo.TestEvent.eventExt]: <\n  name: \"test\"\n  info: \"\"\n  labels: \"one\"\n  labels: \"two\"\n  labels: \"three\"\n  embedded: <\n    ID: 42\n    stuff: \"some stuff\"\n    favoriteNumbers: 42\n    favoriteNumbers: 1138\n  >\n  jedi: true\n  nested: <\n    details: \"these are some nested details\"\n  >\n>\n"
+	expected := `eventID: "test-event"
+sourceID: "test-source"
+timestamp: 946688523
+eventType: EVENT_TYPE_ONE
+data: ""
+[crowdstrike.csproto.example.proto2.gogo.TestEvent.eventExt]: <
+  name: "test"
+  info: ""
+  labels: "one"
+  labels: "two"
+  labels: "three"
+  embedded: <
+    ID: 42
+    stuff: "some stuff"
+    favoriteNumbers: 42
+    favoriteNumbers: 1138
+  >
+  jedi: true
+  nested: <
+    details: "these are some nested details"
+  >
+>
+`
 
 	s, err := csproto.MarshalText(msg)
 

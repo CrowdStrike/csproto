@@ -3,9 +3,18 @@ run:
   modules-download-mode: readonly
   deadline: 10m
   timeout: 10m
-  skip-files:
-    - ".*\\.pb.*\\.go"
-    - ".*_test\\.go"
+
+issues:
+  exclude-rules:
+    # ignore code duplication in tests
+    - path: _test\.go
+      linters:
+        - dupl
+    # ignore deprecation warnings for golang/protobuf
+    - path: \.go
+      linters:
+        - staticcheck
+      text: '"github.com/golang/protobuf/proto" is deprecated'
 
 # output configuration options
 output:

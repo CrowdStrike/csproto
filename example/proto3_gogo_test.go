@@ -117,7 +117,7 @@ func TestProto3GogoMarshalJSON(t *testing.T) {
 			Name:      "enable-all",
 			EventType: etype,
 		}
-		expected := fmt.Sprintf("{\n  \"name\": \"enable-all\",\n  \"ts\": null,\n  \"eventType\": 0\n}")
+		expected := "{\n  \"name\": \"enable-all\",\n  \"ts\": null,\n  \"eventType\": 0\n}"
 
 		opts := []csproto.JSONOption{
 			csproto.JSONIndent("  "),
@@ -231,7 +231,24 @@ func TestProto3GogoMarshalText(t *testing.T) {
 	// - this string matches gogo/protobuf@v1.3.2
 	// - if this test breaks after updating gogo/protobuf, then update the expected string
 	//   accordingly
-	expected := "name: \"test\"\nlabels: \"one\"\nlabels: \"two\"\nlabels: \"three\"\nembedded: <\n  ID: 42\n  stuff: \"some stuff\"\n  favoriteNumbers: 42\n  favoriteNumbers: 1138\n>\njedi: true\nnested: <\n  details: \"these are some nested details\"\n>\nts: <\n  seconds: 946688523\n>\n"
+	expected := `name: "test"
+labels: "one"
+labels: "two"
+labels: "three"
+embedded: <
+  ID: 42
+  stuff: "some stuff"
+  favoriteNumbers: 42
+  favoriteNumbers: 1138
+>
+jedi: true
+nested: <
+  details: "these are some nested details"
+>
+ts: <
+  seconds: 946688523
+>
+`
 
 	s, err := csproto.MarshalText(msg)
 
