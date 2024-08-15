@@ -6,8 +6,10 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/CrowdStrike/csproto"
+	"github.com/CrowdStrike/csproto/prototest"
 )
 
 func ExampleDecodeResult_FieldData() {
@@ -1999,4 +2001,89 @@ func TestFloat64FieldData(t *testing.T) {
 		assert.Equal(t, float64(0), v, "should return 0")
 		assert.ErrorAs(t, err, &expectedErr, "should return a WireTypeMismatchError error")
 	})
+}
+
+func Test_Issue158(t *testing.T) {
+	// this test verified the bug, and subsequent fix, for Issue #159 (https://github.com/CrowdStrike/csproto/issues/158)
+
+	// This is the encoded content of a representative message that led to the panic noted in the
+	// linked issue. Roughly, there is an outer "envelope" message with a type discriminant where
+	// the "payload" data is defined by a proto2 extension field.  In this case, the payload contains
+	// a bytes field that is itself an encoded proto message.
+	//
+	// In broad terms, the messages look like this:
+	//	enum MessageType {
+	//		...
+	//	}
+	//	message Envelope {
+	//		extensions 100 to max;
+	//		required MessageType messageType = 1;
+	//		...
+	//	}
+	//	message WrappedMessagePayload {
+	//		extend Envelope {
+	//			optional WrappedMessagePayload payload = 100;
+	//		}
+	//		required uint32 eventTypeID = 1;
+	//		required bytes dataBytes = 2;
+	//		...
+	//	}
+	//
+	// And the wrapped message looks like:
+	//	message InnerMessage {
+	//		...
+	//		optional uint64 processID = 6;
+	//		...
+	//		optional uint32 patternID = 74;
+	//		...
+	//		optional string metadata = 503;
+	//		...
+	//		optional uint32 templateID = 744;
+	//		...
+	//	}
+	//
+	// Specifically for this bug, the upstream system generated a corrupted message where the length of
+	// the InnerMessage.metadata field was very large, which resulted in a negative value when converted
+	// from uint64 to int.  That negative value was then used inside of Skip() to update the decoder's
+	// read offset and, subseqeuently, to extract the sub-slice containing the skipped field.
+	const data = `; envelope
+08 ; tag=1 (messageType), varint
+  64 ; value=100 (payload type = WrappedMessagePayload)
+A2 06 ; tag=100 (WrappedMessagePayload extension), length-delimited
+  1B ; len=27
+  08 ; tag=1 (eventTypeId), varint
+    01 ; value=1
+  12 ; tag=2 (dataBytes), length-delimited
+  	17 ; len=23
+  	; InnerMessage
+    30 ; tag=6 (processID), varint
+      01 ; value=1
+    D0 04 ; tag=74 (patternID), varint
+      01 ; value=1
+    BA 1F ; tag=503 (metadata), length-delimited
+      ; * CORRUPT VALUE *
+      ; 11,686,238,624,781,661,536 is a valid varint value but overflows the range of int and
+      ; becomes negative when converted from uint64
+      E0 EA BD B4 CE 83 F7 96 A2 01 ; len=11x10^18
+      66 6F 6F ; "foo"
+    C0 2E ; tag=744 (templateID), varint
+      01 ; value=1`
+
+	bb, _ := prototest.ParseAnnotatedHex(data)
+	def := NewDef()
+	def.NestedTag(100, 2)
+	res, err := Decode(bb, def)
+	require.NoError(t, err, "error from first Decode()")
+
+	fd, err := res.FieldData(100, 2)
+	require.NoError(t, err, "error extracting field data from extension")
+
+	evt, err := fd.BytesValue()
+	require.NoError(t, err, "error extracting bytes from field data")
+
+	// these Decode() calls should fail due to the corrupt field length
+	_, err = Decode(evt, NewDef(74))
+	assert.Error(t, err, "expected error from Decode() when data is corrupted")
+	_, err = Decode(evt, NewDef(744))
+	assert.Error(t, err, "expected error from Decode() when data is corrupted")
 }
