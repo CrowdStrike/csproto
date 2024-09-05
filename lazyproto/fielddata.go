@@ -124,6 +124,7 @@ func (fd *FieldData) UInt32Value() (uint32, error) {
 		if value > math.MaxUint32 {
 			return 0, csproto.ErrValueOverflow
 		}
+		//nolint: gosec // no overflow given the range check above
 		return uint32(value), nil
 	})
 }
@@ -140,6 +141,7 @@ func (fd *FieldData) UInt32Values() ([]uint32, error) {
 		if value > math.MaxUint32 {
 			return 0, 0, csproto.ErrValueOverflow
 		}
+		//nolint: gosec // no overflow given the range check above
 		return uint32(value), n, nil
 	})
 }
@@ -159,9 +161,12 @@ func (fd *FieldData) Int32Value() (int32, error) {
 		if err != nil {
 			return 0, err
 		}
-		if int64(value) > math.MaxInt32 {
+		// ensure the result is within [-math.MaxInt32, math.MaxInt32] when converted to a signed value
+		//nolint: gosec // overflow == error
+		if i64 := int64(value); i64 > math.MaxInt32 || i64 < math.MinInt32 {
 			return 0, csproto.ErrValueOverflow
 		}
+		//nolint: gosec // no overflow given the range check above
 		return int32(value), nil
 	})
 }
@@ -181,9 +186,11 @@ func (fd *FieldData) Int32Values() ([]int32, error) {
 		if err != nil {
 			return 0, 0, err
 		}
+		// ensure the result is within [-math.MaxInt32, math.MaxInt32] when converted to a signed value
 		if value > math.MaxUint32 {
 			return 0, 0, csproto.ErrValueOverflow
 		}
+		//nolint: gosec // no overflow given the range check above
 		return int32(value), n, nil
 	})
 }
@@ -267,6 +274,7 @@ func (fd *FieldData) Int64Value() (int64, error) {
 		if err != nil {
 			return 0, err
 		}
+		//nolint: gosec // no overflow, intentionally converting from uint64 to int64
 		return int64(value), nil
 	})
 }
@@ -286,6 +294,7 @@ func (fd *FieldData) Int64Values() ([]int64, error) {
 		if err != nil {
 			return 0, 0, err
 		}
+		//nolint: gosec // no overflow, intentionally converting from uint64 to int64
 		return int64(value), n, nil
 	})
 }
