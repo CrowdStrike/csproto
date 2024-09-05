@@ -2,6 +2,7 @@ package lazyproto
 
 import (
 	"fmt"
+	"math"
 
 	"google.golang.org/protobuf/encoding/protowire"
 )
@@ -84,6 +85,10 @@ func (d Def) validate(path ...int) error {
 		if n < 0 {
 			n = -1 * n
 		}
+		if n > math.MaxInt32 {
+			return fmt.Errorf("invalid field tag (%v) at path %v", k, path)
+		}
+		//nolint: gosec // no overflow given the range check above
 		if !protowire.Number(n).IsValid() {
 			return fmt.Errorf("invalid field tag (%v) at path %v", k, path)
 		}

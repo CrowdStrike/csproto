@@ -406,10 +406,12 @@ func EncodeTag(dest []byte, tag int, wireType WireType) int {
 func EncodeVarint(dest []byte, v uint64) int {
 	n := 0
 	for v >= 1<<7 {
+		//nolint: gosec // v & 0x7f cannot overflow uint8
 		dest[n] = uint8(v&0x7f | 0x80)
 		v >>= 7
 		n++
 	}
+	//nolint: gosec // no overflow, the loop above ensures that v <= 2^7
 	dest[n] = uint8(v)
 	return n + 1
 }

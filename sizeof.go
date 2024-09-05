@@ -18,6 +18,7 @@ func SizeOfVarint(v uint64) int {
 
 // SizeOfZigZag returns the number of bytes required to hold the zig zag encoding of v.
 func SizeOfZigZag(v uint64) int {
+	//nolint: gosec // overflow is only theoretical
 	return SizeOfVarint((v << 1) ^ uint64((int64(v) >> 63)))
 }
 
