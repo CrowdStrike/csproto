@@ -88,7 +88,6 @@ func (d Def) validate(path ...int) error {
 		if n > math.MaxInt32 {
 			return fmt.Errorf("invalid field tag (%v) at path %v", k, path)
 		}
-		//nolint: gosec // no overflow given the range check above
 		if !protowire.Number(n).IsValid() {
 			return fmt.Errorf("invalid field tag (%v) at path %v", k, path)
 		}

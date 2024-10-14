@@ -60,3 +60,10 @@ linters-settings:
   revive:
     ignore-generated-header: true
     min-confidence: 0
+  gosec:
+    excludes:
+      # disable "Potential integer overflow when converting between integer types"
+      # - we have to do A LOT of conversions between integer types when encoding/decoding so there
+      #   are lots of _potential_ overflows
+      # - more efficient to disable this check globally than for each line
+      - G115
