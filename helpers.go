@@ -7,7 +7,6 @@ func Bool(v bool) *bool {
 
 // Int returns a pointer to v as an int32 value (for use when assigning pointer fields on Protobuf message types)
 func Int(v int) *int32 {
-	//nolint: gosec // intentionally converting from int to int32
 	p := int32(v)
 	return &p
 }

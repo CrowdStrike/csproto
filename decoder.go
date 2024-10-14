@@ -139,7 +139,6 @@ func (d *Decoder) DecodeTag() (tag int, wireType WireType, err error) {
 		return 0, -1, fmt.Errorf("invalid tag value (%d) at byte %d: %w", v, d.offset, ErrInvalidFieldTag)
 	}
 	d.offset += n
-	//nolint: gosec // no overflow given the range check above
 	return int(v >> 3), WireType(v & 0x7), nil
 }
 
@@ -202,7 +201,6 @@ func (d *Decoder) DecodeBytes() ([]byte, error) {
 		// length is good
 	}
 
-	//nolint: gosec // no overflow, all values <= maxFieldLen will fit in an int
 	nb := int(l)
 	if d.offset+n+nb > len(d.p) {
 		return nil, io.ErrUnexpectedEOF
@@ -230,7 +228,6 @@ func (d *Decoder) DecodeUInt32() (uint32, error) {
 		return 0, ErrValueOverflow
 	}
 	d.offset += n
-	//nolint: gosec // no overflow given the range check above
 	return uint32(v), nil
 }
 
@@ -267,12 +264,10 @@ func (d *Decoder) DecodeInt32() (int32, error) {
 		return 0, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 	}
 	// ensure the result is within [-math.MaxInt32, math.MaxInt32] when converted to a signed value
-	//nolint: gosec // overflow == error
 	if i64 := int64(v); i64 > math.MaxInt32 || i64 < math.MinInt32 {
 		return 0, ErrValueOverflow
 	}
 	d.offset += n
-	//nolint: gosec // no overflow given the range check above
 	return int32(v), nil
 }
 
@@ -291,7 +286,6 @@ func (d *Decoder) DecodeInt64() (int64, error) {
 		return 0, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
 	}
 	d.offset += n
-	//nolint: gosec // no overflow, intentionally converting from uint64 to int64
 	return int64(v), nil
 }
 
@@ -475,7 +469,6 @@ func (d *Decoder) DecodePackedInt32() ([]int32, error) { //nolint: dupl // FALSE
 		}
 		nRead += uint64(n)
 		d.offset += n
-		//nolint: gosec // no overflow given the range check above
 		res = append(res, int32(v))
 	}
 	if nRead != l {
@@ -522,7 +515,6 @@ func (d *Decoder) DecodePackedInt64() ([]int64, error) { //nolint: dupl // FALSE
 		}
 		nRead += uint64(n)
 		d.offset += n
-		//nolint: gosec // no overflow given the range check above
 		res = append(res, int64(v))
 	}
 	if nRead != l {
@@ -571,7 +563,6 @@ func (d *Decoder) DecodePackedUint32() ([]uint32, error) { //nolint: dupl // FAL
 		}
 		nRead += uint64(n)
 		d.offset += n
-		//nolint: gosec // no overflow given the range check above
 		res = append(res, uint32(v))
 	}
 	if nRead != l {
@@ -898,7 +889,6 @@ func (d *Decoder) DecodeNested(m interface{}) error {
 		// length is good
 	}
 
-	//nolint: gosec // no overflow, all values <= maxFieldLen fit into an int
 	nb := int(l)
 	if nb < 0 {
 		return fmt.Errorf("csproto: bad byte length %d at byte %d", nb, d.offset)
@@ -947,7 +937,6 @@ func (d *Decoder) Skip(tag int, wt WireType) ([]byte, error) {
 		if n != sz {
 			return nil, fmt.Errorf("invalid data at byte %d: %w", bof, ErrInvalidVarintData)
 		}
-		//nolint: gosec // no overflow, all valid tags fit into an int and *anything* & 0x7 fits into WireType
 		thisTag, thisWireType := int(v>>3), WireType(v&0x7)
 		if thisTag != tag || thisWireType != wt {
 			return nil, &DecoderSkipError{
@@ -981,7 +970,6 @@ func (d *Decoder) Skip(tag int, wt WireType) ([]byte, error) {
 			// length is good
 		}
 
-		//nolint: gosec // no overflow, all values <= maxFieldLen fit into an int
 		skipped = n + int(l)
 
 	case WireTypeFixed32:
@@ -1049,9 +1037,7 @@ func DecodeZigZag32(p []byte) (v int32, n int, err error) {
 	if n == 0 {
 		return 0, 0, ErrInvalidVarintData
 	}
-	//nolint: gosec // no overflow, just undoing the zig-zag encoding
 	dv = uint64((uint32(dv) >> 1) ^ uint32((int32(dv&1)<<31)>>31))
-	//nolint: gosec // no overflow, see above
 	return int32(dv), n, nil
 }
 
@@ -1068,9 +1054,7 @@ func DecodeZigZag64(p []byte) (v int64, n int, err error) {
 	if n == 0 {
 		return 0, 0, ErrInvalidVarintData
 	}
-	//nolint: gosec // no overflow, just undoing the zig-zag encoding
 	dv = (dv >> 1) ^ uint64((int64(dv&1)<<63)>>63)
-	//nolint: gosec // no overflow, see above
 	return int64(dv), n, nil
 }
 
