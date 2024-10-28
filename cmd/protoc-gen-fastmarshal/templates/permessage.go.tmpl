@@ -38,13 +38,15 @@ func (m *{{ .Message.GoIdent.GoName }}) Size() int {
     var sz, l int
     _ = l // avoid unused variable
 {{ range .Message.Fields }}
-{{- if eq .Desc.ContainingOneof nil }}
+{{- if or (eq .Desc.ContainingOneof nil) (eq .Desc.ContainingOneof.IsSynthetic true) }}
     // {{ .GoName }} ({{.Desc.Kind}},{{.Desc.Cardinality}}{{if .Desc.IsPacked }},packed{{ end }})
     {{ template "SizeOfField" . }}
 {{- end -}}
 {{ end }}
 {{ range .Message.Oneofs }}
-    {{- template "SizeOfOneOf" . }}
+{{- if eq .Desc.IsSynthetic false }}
+    {{ template "SizeOfOneOf" . }}
+{{ end -}}
 {{ end }}
 {{- if eq $protoSyntax "proto2" -}}
 {{ range getExtensions .Message }}
@@ -89,14 +91,16 @@ func (m *{{ .Message.GoIdent.GoName }}) MarshalTo(dest []byte) error {
     _ = err
     _ = extVal
 {{ range .Message.Fields }}
-{{- if eq .Desc.ContainingOneof nil }}
+{{- if or (eq .Desc.ContainingOneof nil) (eq .Desc.ContainingOneof.IsSynthetic true) }}
     // {{ .GoName }} ({{.Desc.Number}},{{if .Desc.IsMap}}map{{else}}{{.Desc.Kind}},{{.Desc.Cardinality}}{{if .Desc.IsPacked }},packed{{ end }}{{end}})
     {{ template "MarshalField" . }}
 {{- end -}}
 {{ end }}
 {{ range .Message.Oneofs -}}
+{{- if eq .Desc.IsSynthetic false -}}
     // {{.GoName}} (oneof)
     {{ template "MarshalOneOf" . -}}
+{{- end -}}
 {{ end }}
 {{- if eq $protoSyntax "proto2" -}}
 {{ range getExtensions .Message }}
@@ -124,11 +128,13 @@ func (m *{{ .Message.GoIdent.GoName}}) Unmarshal(p []byte) error {
 		}
 		switch tag {
         {{- range .Message.Fields -}}
-        {{ if eq .Desc.ContainingOneof nil }}case {{ .Desc.Number }}: // {{ .GoName }} ({{if .Desc.IsMap}}map{{else}}{{.Desc.Kind}},{{.Desc.Cardinality}}{{if .Desc.IsPacked }},packed{{ end }}{{end}})
+        {{ if or (eq .Desc.ContainingOneof nil) (eq .Desc.ContainingOneof.IsSynthetic true) }}case {{ .Desc.Number }}: // {{ .GoName }} ({{if .Desc.IsMap}}map{{else}}{{.Desc.Kind}},{{.Desc.Cardinality}}{{if .Desc.IsPacked }},packed{{ end }}{{end}})
         {{ template "UnmarshalField" . }}{{ end }}
         {{ end }}
         {{ range .Message.Oneofs -}}
+        {{- if eq .Desc.IsSynthetic false -}}
         {{ template "UnmarshalOneOf" . -}}
+        {{- end -}}
         {{ end }}
         {{- if eq $protoSyntax "proto2" -}}
         {{ range getExtensions . }}

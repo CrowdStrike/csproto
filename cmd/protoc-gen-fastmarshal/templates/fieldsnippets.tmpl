@@ -1,7 +1,7 @@
 {{/* SizeOfString - calculate the encoded size of a string field */}}
 {{ define "SizeOfString" }}
 {{- if ne (.Desc.Cardinality | string) "repeated" -}}
-    {{- if eq (.Desc.Syntax | string) "proto2" -}}
+    {{- if or (eq (.Desc.Syntax | string) "proto2") (ne .Desc.ContainingOneof nil) -}}
     if m.{{ .GoName | getSafeFieldName }} != nil {
         l = len(*m.{{ .GoName | getSafeFieldName }})
         sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(l)) + l
@@ -39,7 +39,7 @@
 {{/* SizeOfInt - calculate the encoded size of an integer field */}}
 {{ define "SizeOfInt" }}
 {{- if ne (.Desc.Cardinality | string) "repeated" -}}
-    {{- if eq (.Desc.Syntax | string) "proto2" -}}
+    {{- if or (eq (.Desc.Syntax | string) "proto2") (ne .Desc.ContainingOneof nil) -}}
     if m.{{.GoName | getSafeFieldName}} != nil {
         sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfVarint(uint64(*m.{{.GoName | getSafeFieldName}}))
     }
@@ -66,7 +66,7 @@
 {{/* SizeOfBool - calculate the encoded size of a boolean field */}}
 {{ define "SizeOfBool" }}
 {{- if ne (.Desc.Cardinality | string) "repeated" -}}
-    {{- if eq (.Desc.Syntax | string) "proto2" -}}
+    {{- if or (eq (.Desc.Syntax | string) "proto2") (ne .Desc.ContainingOneof nil) -}}
     if m.{{.GoName | getSafeFieldName}} != nil {
         sz += csproto.SizeOfTagKey({{.Desc.Number}}) + 1
     }
@@ -88,7 +88,7 @@
 {{/* SizeOfSInt - calculate the encoded size of a sint32 or sint64 field */}}
 {{ define "SizeOfSInt" }}
 {{- if ne (.Desc.Cardinality | string) "repeated" -}}
-    {{- if eq (.Desc.Syntax | string) "proto2" -}}
+    {{- if or (eq (.Desc.Syntax | string) "proto2") (ne .Desc.ContainingOneof nil) -}}
     if m.{{.GoName | getSafeFieldName}} != nil {
         sz += csproto.SizeOfTagKey({{.Desc.Number}}) + csproto.SizeOfZigZag(uint64(*m.{{.GoName | getSafeFieldName}}))
     }
@@ -115,7 +115,7 @@
 {{/* SizeOfFixed - calculate the encoded size of a fixed-width field */}}
 {{ define "SizeOfFixed" }}
 {{- if ne (.Desc.Cardinality | string) "repeated" -}}
-    {{- if eq (.Desc.Syntax | string) "proto2" -}}
+    {{- if or (eq (.Desc.Syntax | string) "proto2") (ne .Desc.ContainingOneof nil) -}}
     if m.{{.GoName | getSafeFieldName}} != nil {
         sz += csproto.SizeOfTagKey({{.Desc.Number}}) + {{if eq (.Desc.Kind | string) "fixed32" "sfixed32" "float"}}4{{else}}8{{end}}
     }
@@ -330,8 +330,12 @@
     }
         {{- end -}}
     {{- else -}}
+    {{- if eq .Desc.ContainingOneof nil -}}
     if m.{{.GoName | getSafeFieldName }} != 0 {
-        enc.{{$method}}({{.Desc.Number}}, m.{{.GoName | getSafeFieldName}})
+    {{- else -}}
+    if m.{{.GoName | getSafeFieldName }} != nil {
+    {{- end -}}
+        enc.{{$method}}({{.Desc.Number}}, {{if ne .Desc.ContainingOneof nil}}*{{end}}m.{{.GoName | getSafeFieldName}})
     }
     {{- end -}}
 {{- end -}}
@@ -362,8 +366,12 @@
     }
         {{- end -}}
     {{- else -}}
+    {{- if eq .Desc.ContainingOneof nil -}}
     if m.{{.GoName | getSafeFieldName}} {
-        enc.EncodeBool({{.Desc.Number}}, m.{{.GoName | getSafeFieldName}})
+    {{- else -}}
+    if m.{{.GoName | getSafeFieldName }} != nil {
+    {{- end -}}
+        enc.EncodeBool({{.Desc.Number}}, {{if ne .Desc.ContainingOneof nil}}*{{end}}m.{{.GoName | getSafeFieldName}})
     }
     {{- end -}}
 {{- end -}}
@@ -388,8 +396,12 @@
     }
         {{- end -}}
     {{- else -}}
+    {{- if eq .Desc.ContainingOneof nil -}}
     if len(m.{{.GoName | getSafeFieldName }}) > 0 {
-        enc.EncodeString({{.Desc.Number}}, m.{{.GoName | getSafeFieldName}})
+    {{- else -}}
+    if m.{{.GoName | getSafeFieldName }} != nil {
+    {{- end -}}
+        enc.EncodeString({{.Desc.Number}}, {{if ne .Desc.ContainingOneof nil}}*{{end}}m.{{.GoName | getSafeFieldName}})
     }
     {{- end -}}
 {{- end -}}
@@ -451,7 +463,7 @@
     }
         {{- end -}}
     {{- else -}}
-    enc.{{ $method }}({{.Desc.Number}}, {{$cast}}(m.{{.GoName | getSafeFieldName}}))
+    enc.{{ $method }}({{.Desc.Number}}, {{$cast}}({{if ne .Desc.ContainingOneof nil}}*{{end}}m.{{.GoName | getSafeFieldName}}))
     {{- end -}}
 {{- end -}}
 {{ end }}
@@ -485,8 +497,12 @@
     }
         {{- end -}}
     {{- else -}}
+    {{- if eq .Desc.ContainingOneof nil -}}
     if m.{{.GoName | getSafeFieldName}} != 0 {
-        enc.EncodeInt32({{.Desc.Number}}, int32(m.{{.GoName | getSafeFieldName}}))
+    {{- else -}}
+    if m.{{.GoName | getSafeFieldName }} != nil {
+    {{- end -}}
+        enc.EncodeInt32({{.Desc.Number}}, int32({{if ne .Desc.ContainingOneof nil}}*{{end}}m.{{.GoName | getSafeFieldName}}))
     }
     {{- end -}}
 {{- end -}}
@@ -685,6 +701,7 @@
 {{- $syntax := (.Desc.Syntax | string) -}}
 {{- $kind := (.Desc.Kind | string) -}}
 {{- $cardinality := (.Desc.Cardinality | string) -}}
+{{- $isOptional := or (eq $syntax "proto2") (ne .Desc.ContainingOneof nil) -}}
 {{- if eq $kind "bool" -}}
     {{- if eq $cardinality "repeated" -}}
         switch wt {
@@ -710,7 +727,7 @@
         if v, err := dec.DecodeBool(); err != nil {
             return fmt.Errorf("unable to decode boolean value for field '{{.Desc.Name}}' (tag={{.Desc.Number}}): %w", err)
         } else {
-            m.{{.GoName | getSafeFieldName}} = {{if eq $syntax "proto2"}}csproto.Bool(v){{else}}v{{end}}
+            m.{{.GoName | getSafeFieldName}} = {{if eq $isOptional true}}csproto.Bool(v){{else}}v{{end}}
         }
     {{- end -}}
 {{- else if eq $kind "int32" -}}
@@ -738,7 +755,7 @@
         if v, err := dec.DecodeInt32(); err != nil {
             return fmt.Errorf("unable to decode int32 value for field '{{.Desc.Name}}' (tag={{.Desc.Number}}): %w", err)
         } else {
-            m.{{.GoName | getSafeFieldName}} = {{if eq $syntax "proto2"}}csproto.Int32(v){{else}}v{{end}}
+            m.{{.GoName | getSafeFieldName}} = {{if eq $isOptional true}}csproto.Int32(v){{else}}v{{end}}
         }
     {{- end -}}
 {{- else if eq $kind "int64" -}}
@@ -766,7 +783,7 @@
         if v, err := dec.DecodeInt64(); err != nil {
             return fmt.Errorf("unable to decode int64 value for field '{{.Desc.Name}}' (tag={{.Desc.Number}}): %w", err)
         } else {
-            m.{{.GoName | getSafeFieldName}} = {{if eq $syntax "proto2"}}csproto.Int64(v){{else}}v{{end}}
+            m.{{.GoName | getSafeFieldName}} = {{if eq $isOptional true}}csproto.Int64(v){{else}}v{{end}}
         }
     {{- end -}}
 {{- else if eq $kind "uint32" -}}
@@ -794,7 +811,7 @@
         if v, err := dec.DecodeUInt32(); err != nil {
             return fmt.Errorf("unable to decode int32 value for field '{{.Desc.Name}}' (tag={{.Desc.Number}}): %w", err)
         } else {
-            m.{{.GoName | getSafeFieldName}} = {{if eq $syntax "proto2"}}csproto.Uint32(v){{else}}v{{end}}
+            m.{{.GoName | getSafeFieldName}} = {{if eq $isOptional true}}csproto.Uint32(v){{else}}v{{end}}
         }
     {{- end -}}
 {{- else if eq $kind "uint64" -}}
@@ -822,7 +839,7 @@
         if v, err := dec.DecodeUInt64(); err != nil {
             return fmt.Errorf("unable to decode uint64 value for field '{{.Desc.Name}}' (tag={{.Desc.Number}}): %w", err)
         } else {
-            m.{{.GoName | getSafeFieldName}} = {{if eq $syntax "proto2"}}csproto.Uint64(v){{else}}v{{end}}
+            m.{{.GoName | getSafeFieldName}} = {{if eq $isOptional true}}csproto.Uint64(v){{else}}v{{end}}
         }
     {{- end -}}
 {{- else if eq $kind "enum" -}}
@@ -852,7 +869,7 @@
         if v, err := dec.DecodeInt32(); err != nil {
             return fmt.Errorf("unable to decode int32 enum value for field '{{.Desc.Name}}' (tag={{.Desc.Number}}): %w", err)
         } else {
-        {{- if eq $syntax "proto2" -}}
+        {{- if eq $isOptional true -}}
             ev := {{.Enum | getImportPrefix }}{{.Enum.GoIdent.GoName | getSafeFieldName}}(v)
             m.{{.GoName | getSafeFieldName}} = &ev
         {{- else -}}
@@ -886,7 +903,7 @@
         if v, err := dec.DecodeFixed{{$bitSize}}(); err != nil {
             return fmt.Errorf("unable to decode uint{{$bitSize}} value for field '{{.Desc.Name}}' (tag={{.Desc.Number}}): %w", err)
         } else {
-            m.{{.GoName | getSafeFieldName}} = {{if eq $syntax "proto2"}}csproto.Uint{{$bitSize}}(v){{else}}v{{end}}
+            m.{{.GoName | getSafeFieldName}} = {{if eq $isOptional true}}csproto.Uint{{$bitSize}}(v){{else}}v{{end}}
         }
     {{- end -}}
 {{- else if eq $kind "sint32" "sint64" -}}
@@ -915,7 +932,7 @@
         if v, err := dec.DecodeSInt{{$bitSize}}(); err != nil {
             return fmt.Errorf("unable to decode sint{{$bitSize}} value for field '{{.Desc.Name}}' (tag={{.Desc.Number}}): %w", err)
         } else {
-            m.{{.GoName | getSafeFieldName}} = {{if eq $syntax "proto2"}}csproto.Int{{$bitSize}}(v){{else}}v{{end}}
+            m.{{.GoName | getSafeFieldName}} = {{if eq $isOptional true}}csproto.Int{{$bitSize}}(v){{else}}v{{end}}
         }
     {{- end -}}
 {{- else if eq $kind "float" "double" -}}
@@ -945,7 +962,7 @@
         if v, err := dec.DecodeFloat{{$bitSize}}(); err != nil {
             return fmt.Errorf("unable to decode {{$kind}} value for field '{{.Desc.Name}}' (tag={{.Desc.Number}}): %w", err)
         } else {
-            m.{{.GoName | getSafeFieldName}} = {{if eq $syntax "proto2"}}csproto.Float{{$bitSize}}(v){{else}}v{{end}}
+            m.{{.GoName | getSafeFieldName}} = {{if eq $isOptional true}}csproto.Float{{$bitSize}}(v){{else}}v{{end}}
         }
     {{- end -}}
 {{- else -}}
@@ -956,6 +973,7 @@
 {{ define "UnmarshalString" }}
 {{- $syntax := (.Desc.Syntax | string) -}}
 {{- $cardinality := (.Desc.Cardinality | string) -}}
+{{- $isOptional := or (eq $syntax "proto2") (ne .Desc.ContainingOneof nil) -}}
             if wt != csproto.WireTypeLengthDelimited {
                 return fmt.Errorf("incorrect wire type %v for field '{{.Desc.Name}}' (tag={{.Desc.Number}}), expected 2 (length-delimited)", wt)
             }
@@ -964,7 +982,7 @@
             } else {
     {{- if eq $cardinality "repeated" -}}
             m.{{.GoName | getSafeFieldName}} = append(m.{{.GoName | getSafeFieldName}}, s)
-    {{- else if eq $syntax "proto2" -}}
+    {{- else if eq $isOptional true -}}
             m.{{.GoName | getSafeFieldName}} = csproto.String(s)
     {{- else -}}
             m.{{.GoName | getSafeFieldName}} = s
@@ -986,6 +1004,7 @@
 {{ define "UnmarshalSFixed" }}
 {{- $syntax := (.Desc.Syntax | string) -}}
 {{- $cardinality := (.Desc.Cardinality | string) -}}
+{{- $isOptional := or (eq $syntax "proto2") (ne .Desc.ContainingOneof nil) -}}
 {{- $bitSize := (.Desc.Kind | string | trunc -2) -}}
             if wt != csproto.WireTypeFixed{{$bitSize}} {
                 return fmt.Errorf("incorrect wire type %v for field '{{.Desc.Name}}' (tag={{.Desc.Number}}), expected {{if eq $bitSize "32" }}5 (32-bit){{else}}1 (64-bit){{end}}", wt)
@@ -995,7 +1014,7 @@
             } else {
     {{- if eq $cardinality "repeated" -}}
                 m.{{.GoName | getSafeFieldName}}= append(m.{{.GoName | getSafeFieldName}}, int{{$bitSize}}(v))
-    {{- else if eq $syntax "proto2" -}}
+    {{- else if eq $isOptional true -}}
                 iv := int{{$bitSize}}(v)
                 m.{{.GoName | getSafeFieldName}}= &iv
     {{- else -}}
