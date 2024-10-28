@@ -8,6 +8,7 @@ import (
 	"text/template"
 
 	"google.golang.org/protobuf/compiler/protogen"
+	"google.golang.org/protobuf/types/pluginpb"
 )
 
 // options defines the supported configuration options for a generation request
@@ -119,6 +120,8 @@ func doGenerate(opts *options) func(*protogen.Plugin) error {
 		if opts.apiVersion == "" {
 			opts.apiVersion = protoAPIVersion("v1")
 		}
+
+		plugin.SupportedFeatures |= uint64(pluginpb.CodeGeneratorResponse_FEATURE_PROTO3_OPTIONAL)
 
 		for _, protoFile := range plugin.Files {
 			if !protoFile.Generate {
