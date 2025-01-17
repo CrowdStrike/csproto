@@ -2,11 +2,21 @@ package lazyproto
 
 import (
 	"fmt"
+	"slices"
+	"sync"
 
 	"github.com/CrowdStrike/csproto"
 )
 
 var (
+	// ErrNestingNotDefined is returned by [PartialDecodeResult.FieldData] when the specified tag
+	// was not supplied with a nested definitions. This will also return true for errors.Is(err, ErrTagNotFound) but is
+	// more specific because this means the tag nesting was not in the original decoder definition
+	ErrNestingNotDefined = fmt.Errorf("%w: the requested tag was not defined as a nested tag in the decoder", ErrTagNotFound)
+	// ErrTagNotDefined is returned by [PartialDecodeResult.FieldData] when the specified tag
+	// was not defined in the decoder. This will also return true for errors.Is(err, ErrTagNotFound) but is
+	// more specific because this means the tag was not in the original decoder definition
+	ErrTagNotDefined = fmt.Errorf("%w: the requested tag was not defined in the decoder", ErrTagNotFound)
 	// ErrTagNotFound is returned by [PartialDecodeResult.FieldData] when the specified tag(s) do not
 	// exist in the result.
 	ErrTagNotFound = fmt.Errorf("the requested tag does not exist in the partial decode result")
@@ -26,184 +36,195 @@ var emptyResult DecodeResult
 // of field values are needed, so [PartialDecodeResult] and [FieldData] only support extracting
 // scalar values or slices of scalar values. Consumers that need to decode entire messages will need
 // to use [Unmarshal] instead.
-func Decode(data []byte, def Def) (res DecodeResult, err error) {
+//
+// Deprecated: use NewDecoder(def) and (*Decoder).Decode(data)
+// For best performance, decoders should be initialized once per definition and reused when decoding data
+func Decode(data []byte, def Def) (DecodeResult, error) {
 	if len(data) == 0 || len(def) == 0 {
 		return emptyResult, nil
 	}
-	if err := def.Validate(); err != nil {
+	dec := &Decoder{}
+	result, err := dec.newBaseResult(def)
+	if err != nil || result == nil {
 		return emptyResult, err
 	}
-	res.m = fieldDataMapPool.Get().(map[int]*FieldData)
-	defer func() {
+	for i := range result.flatData {
+		result.flatData[i] = new(FieldData)
+	}
+	err = result.decode(slices.Clone(data))
+	if err != nil {
+		return emptyResult, err
+	}
+	return *result, nil
+}
+
+// Option is a functional option that allows configuring new Decoders
+type Option func(*Decoder) error
+
+// WithMaxBufferSize will prevent slices greater than n from being cached for future reuse
+func WithMaxBufferSize(n int) Option {
+	return func(d *Decoder) error {
+		if n < 0 {
+			return fmt.Errorf("WithMaxBuffer: negative max buffer size is not allowed")
+		}
+		d.maxBuffer = n
+		return nil
+	}
+}
+
+// WithBufferFilterFunc can prevent slices from being cached for future reuse.
+//
+// Under the hood, decoders will use sync Pools to avoid allocations for slices.
+// If messages intermitently contain very large slices it can cause all of the cached
+// decode results to eventually use the max slice value.
+// This may result in larger memory use than is necessary. To avoid such a scenario,
+// clients may set a BufferFilterFunction to cleanup slices based on their capacity.
+//
+// fn accepts the current slice capacity and should return the target capacity.
+// Negative capacities will be ignored.
+func WithBufferFilterFunc(fn func(capacity int) int) Option {
+	return func(d *Decoder) error {
+		if fn == nil {
+			return fmt.Errorf("WithMaxBufferFunc: nil function is not allowed")
+		}
+		d.filter = fn
+		return nil
+	}
+}
+
+// WithMode will set the mode of operation for the decoder
+//
+// - DecoderModeSafe will create copies of the input data slice and create new slices for any returned field data results
+//
+// - DecoderModeFast will not reallocate input data or slices. When the mode is DecoderModeFast it is not safe to modify the
+// input data slice after calling (*Decoder).Decode(data) and it is not safe to use any slices after calling (*DecodeResult).Close()
+func WithMode(mode csproto.DecoderMode) Option {
+	return func(d *Decoder) error {
+		d.mode = mode
+		return nil
+	}
+}
+
+// Decoder is a lazy decoder that will reuse DecodeResults after (DecodeResult).Close()
+// is called.
+//
+// A decoder is unique to a given Definition and can be reused for any protobuf message using
+// that definition.
+//
+// Decoder methods are thread safe and can be used by concurrent/parallel processes.
+type Decoder struct {
+	pool      *sync.Pool
+	filter    func(int) int
+	maxBuffer int
+	mode      csproto.DecoderMode
+}
+
+// NewDecoder creates a new Decoder for a given Def. See NewDef for defining a definition.
+//
+// NewDecoder will return an error if the definition or options are invalid
+func NewDecoder(def Def, opts ...Option) (*Decoder, error) {
+	err := def.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("invalid definition: %w", err)
+	}
+
+	dec := &Decoder{
+		pool:      new(sync.Pool),
+		maxBuffer: -1,
+		mode:      csproto.DecoderModeSafe,
+	}
+	for _, opt := range opts {
+		err := opt(dec)
+		if err != nil {
+			return nil, fmt.Errorf("invalid option: %w", err)
+		}
+	}
+
+	base, err := dec.newBaseResult(def)
+	if err != nil {
+		return nil, err
+	}
+	dec.pool.New = func() any {
+		return base.clone()
+	}
+	return dec, nil
+}
+
+// Decode will convert the raw []byte slice to a DecodeResult
+func (dec *Decoder) Decode(data []byte) (*DecodeResult, error) {
+	if dec.mode == csproto.DecoderModeSafe {
+		return dec.decodeWithPool(slices.Clone(data))
+	}
+	return dec.decodeWithPool(data)
+}
+
+func (dec *Decoder) decodeWithPool(data []byte) (*DecodeResult, error) {
+	if len(data) == 0 {
+		return nil, nil
+	}
+	res, ok := dec.pool.Get().(*DecodeResult)
+	if !ok {
+		// This will only happen if the decoder was initialized outside of NewDecoder
+		return nil, fmt.Errorf("invalid decoder")
+	}
+	err := res.decode(data)
+	if err != nil {
 		// call res.Close() on error to clean up field data
-		if err != nil {
-			_ = res.Close()
-		}
-	}()
-	for dec := csproto.NewDecoder(data); dec.More(); {
-		tag, wt, err := dec.DecodeTag()
-		if err != nil {
-			return emptyResult, err
-		}
-		var (
-			dv            Def
-			want, wantRaw bool
-		)
-		dv, want = def.Get(tag)
-		_, wantRaw = def.Get(-1 * tag)
-		if !want && !wantRaw {
-			if _, err := dec.Skip(tag, wt); err != nil {
-				return emptyResult, err
-			}
-			continue
-		}
-		switch wt {
-		case csproto.WireTypeVarint, csproto.WireTypeFixed32, csproto.WireTypeFixed64:
-			if wantRaw {
-				return emptyResult, fmt.Errorf("invalid definition: raw mode only supported for length-delimited fields (tag=%d, wire type=%s)", tag, wt)
-			}
-			// varint, fixed32, and fixed64 could be multiple Go types so
-			// grab the raw bytes and defer interpreting them to the consumer/caller
-			// . varint -> int32, int64, uint32, uint64, sint32, sint64, bool, enum
-			// . fixed32 -> int32, uint32, float32
-			// . fixed64 -> int32, uint64, float64
-			val, err := dec.Skip(tag, wt)
-			if err != nil {
-				return emptyResult, err
-			}
-			fd, err := res.getOrAddFieldData(tag, wt)
-			if err != nil {
-				return emptyResult, err
-			}
-			// Skip() returns the entire field contents, both the tag and the value, so we need to skip past the tag
-			val = val[csproto.SizeOfTagKey(tag):]
-			fd.data = append(fd.data, val)
-		case csproto.WireTypeLengthDelimited:
-			val, err := dec.DecodeBytes()
-			if err != nil {
-				return emptyResult, err
-			}
-			if len(dv) > 0 {
-				// recurse
-				subResult, err := Decode(val, dv)
-				if err != nil {
-					return emptyResult, err
-				}
-				fd, err := res.getOrAddFieldData(tag, wt)
-				if err != nil {
-					return emptyResult, err
-				}
-				fd.data = append(fd.data, subResult.m)
-			} else {
-				fd, err := res.getOrAddFieldData(tag, wt)
-				if err != nil {
-					return emptyResult, err
-				}
-				fd.data = append(fd.data, val)
-			}
-			if wantRaw {
-				fd, err := res.getOrAddFieldData(-1*tag, wt)
-				if err != nil {
-					return emptyResult, err
-				}
-				fd.data = append(fd.data, val)
-			}
-		default:
-			return emptyResult, fmt.Errorf("read unknown/unsupported protobuf wire type (%v)", wt)
-		}
+		_ = res.Close()
+		return nil, err
 	}
 	return res, nil
 }
 
-// DecodeResult holds a (possibly nested) mapping of integer field tags to FieldData instances
-// which can be used to retrieve typed values for specific Protobuf message fields.
-type DecodeResult struct {
-	m map[int]*FieldData
-}
-
-// Close releases all internal resources held by r.
-//
-// Consumers should always call Close() on instances returned by [Decode] to ensure that internal
-// resources are cleaned up.
-func (r *DecodeResult) Close() error {
-	for k, v := range r.m {
-		if v != nil {
-			v.close()
-		}
-		delete(r.m, k)
+// newBaseResult creates a new DecodeResult object based on the given definition
+// all other initialization of this DecodeResult is done by cloning the resulting object
+func (dec *Decoder) newBaseResult(def Def) (*DecodeResult, error) {
+	err := def.Validate()
+	if err != nil {
+		return nil, fmt.Errorf("invalid definition: %w", err)
 	}
-	if r.m != nil {
-		fieldDataMapPool.Put(r.m)
-	}
-	r.m = nil
-	return nil
-}
-
-// The FieldData method returns a FieldData instance for the specified tag "path", if it exists.
-//
-// The tags parameter is a list of one or more integer field tags that act as a "path" to a particular
-// field to support retreiving fields from nested messages.  Each value is used to retreieve the field
-// data at the corresponding level of nesting, i.e. a value of [1, 2] would return the field data for
-// tag 2 within the nested data for tag 1 at the root.
-func (r *DecodeResult) FieldData(tags ...int) (*FieldData, error) {
-	if r == nil || len(r.m) == 0 {
-		return nil, ErrTagNotFound
-	}
-	if len(tags) == 0 {
-		return nil, fmt.Errorf("at least one tag key must be specified")
-	}
-	// special case:
-	// - negative tag values are used to extract the raw bytes of a field, but it must be the only
-	//   (or last) field in the path
-	if len(tags) > 1 {
-		for i := 0; i < len(tags)-1; i++ {
-			if tags[i] < 0 {
-				return nil, fmt.Errorf("invalid tag in path at index %d, negative tags must be the last (or only) path item", i)
-			}
-		}
-	}
-	var (
-		fd *FieldData
-		ok = true
-	)
-	for dd := r.m; ok && len(tags) > 0; {
-		fd, ok = dd[tags[0]]
-		if !ok || len(fd.data) == 0 {
-			return nil, ErrTagNotFound
-		}
-		tags = tags[1:]
-		if len(tags) == 0 {
-			return fd, nil
-		}
-		dd, ok = fd.data[0].(map[int]*FieldData)
-	}
-	return nil, ErrTagNotFound
-}
-
-// getOrAddFieldData is a helper to consolidate the logic of checking if a given tag exists in the
-// field data map and adding it if not.
-func (r *DecodeResult) getOrAddFieldData(tag int, wt csproto.WireType) (*FieldData, error) {
-	// first key: add a new entry and return
-	if len(r.m) == 0 {
-		fd := &FieldData{
-			wt: wt,
-		}
-		r.m = fieldDataMapPool.Get().(map[int]*FieldData)
-		r.m[tag] = fd
-		return fd, nil
-	}
-	// if the key doesn't exist, add a new entry
-	fd, exists := r.m[tag]
-	if !exists {
-		fd = &FieldData{
-			wt: wt,
-		}
-		r.m[tag] = fd
-	}
-	// double-check wire type
-	if fd.wt != wt {
-		return nil, fmt.Errorf("invalid message data - repeated tag %d w/ different wire types (prev=%v, current=%v)", tag, fd.wt, wt)
+	result := &DecodeResult{
+		pool:      dec.pool,
+		filter:    dec.filter,
+		maxBuffer: dec.maxBuffer,
+		unsafe:    dec.mode != csproto.DecoderModeSafe,
 	}
 
-	return fd, nil
+	// iterate over all of the flat/raw tags and any nested tags in the definition
+	for k, v := range def {
+		if k < 0 {
+			k *= -1
+		}
+		result.flatTags = append(result.flatTags, k)
+		if v == nil {
+			continue
+		}
+		result.nestedTags = append(result.nestedTags, k)
+	}
+
+	// sort and deduplicate the tags
+	slices.Sort(result.flatTags)
+	result.flatTags = slices.Compact(result.flatTags)
+	slices.Sort(result.nestedTags)
+	result.nestedTags = slices.Compact(result.nestedTags)
+
+	// intitialize the slice length
+	// (we don't need to fill the slice because that will be done when it's cloned)
+	result.flatData = make([]*FieldData, len(result.flatTags))
+
+	// create decoders for any nested results
+	result.nestedDecoders = make([]*Decoder, len(result.nestedTags))
+	for i, tag := range result.nestedTags {
+		nestedDec, err := NewDecoder(def[tag], func(d *Decoder) error {
+			d.filter = dec.filter
+			d.maxBuffer = dec.maxBuffer
+			d.mode = dec.mode
+			return nil
+		})
+		if err != nil {
+			return nil, fmt.Errorf("invalid definition on tag: %d", tag)
+		}
+		result.nestedDecoders[i] = nestedDec
+	}
+	return result, nil
 }

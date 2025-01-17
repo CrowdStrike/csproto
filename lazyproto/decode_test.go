@@ -1,6 +1,7 @@
 package lazyproto
 
 import (
+	"cmp"
 	"fmt"
 	"math"
 	"testing"
@@ -36,12 +37,22 @@ func ExampleDecodeResult_FieldData() {
 	def := NewDef()
 	// extract tags 1 and 2 from the nested message at tag 2 in the outer message
 	_ = def.NestedTag(2, 1, 2)
-	res, err := Decode(data, def)
+
+	// create a new decoder for this definition
+	dec, err := NewDecoder(def, WithMode(csproto.DecoderModeFast), WithMaxBufferSize(1024))
+	if err != nil {
+		fmt.Println("unable to create new decoder:", err)
+		return
+	}
+
+	// decode arbitrary data
+	res, err := dec.Decode(data)
 	if err != nil {
 		fmt.Println("error from decode:", err)
 		return
 	}
 	defer func() {
+		// Only close the result after we are completely done using it and any values we retrieved from it
 		if err := res.Close(); err != nil {
 			fmt.Println("error from DecodeResult.Close():", err)
 		}
@@ -74,6 +85,205 @@ func ExampleDecodeResult_FieldData() {
 	// description: bar
 }
 
+func FuzzStrings(f *testing.F) {
+	for i, s := range []string{"hello", "world", "", " ", "123"} {
+		f.Add(i, s)
+	}
+	const tagID = 123
+	dec, err := NewDecoder(Def{tagID: nil})
+	require.NoError(f, err)
+	f.Fuzz(func(t *testing.T, n int, expected string) {
+		var msg []byte
+		for i := 0; i < n; i++ {
+			sz := len(fmt.Sprintf("%s%d", expected, i))
+			msg = append(msg, make([]byte, csproto.SizeOfTagKey(tagID)+csproto.SizeOfVarint(uint64(sz))+sz)...)
+		}
+		enc := csproto.NewEncoder(msg)
+		for i := 0; i < n; i++ {
+			enc.EncodeString(tagID, fmt.Sprintf("%s%d", expected, i))
+		}
+		result, err := dec.Decode(msg)
+		require.NoError(t, err)
+		v := checkErr(result.StringValue(tagID))(t, n)
+		vs := checkErr(result.StringValues(tagID))(t, n)
+		b := checkErr(result.BytesValue(tagID))(t, n)
+		bs := checkErr(result.BytesValues(tagID))(t, n)
+		if n <= 0 {
+			return
+		}
+
+		exp := fmt.Sprintf("%s%d", expected, n-1)
+		assert.EqualValues(t, exp, v)
+		assert.EqualValues(t, exp, string(b))
+		require.Len(t, vs, n)
+		require.Len(t, bs, n)
+		for i := 0; i < n; i++ {
+			exp = fmt.Sprintf("%s%d", expected, i)
+			assert.EqualValues(t, exp, vs[i])
+			assert.EqualValues(t, exp, string(bs[i]))
+		}
+	})
+}
+
+func FuzzBools(f *testing.F) {
+	f.Add(0)
+	f.Add(1)
+	f.Add(2)
+	f.Add(20)
+	const tagID = 123
+	dec, err := NewDecoder(Def{tagID: nil})
+	require.NoError(f, err)
+	f.Fuzz(func(t *testing.T, n int) {
+		msg := make([]byte, max(n*(csproto.SizeOfTagKey(tagID)+1), 0))
+		var expected []bool
+		enc := csproto.NewEncoder(msg)
+		for i := 0; i < n; i++ {
+			expected = append(expected, n%3 == 0)
+			enc.EncodeBool(tagID, n%3 == 0)
+		}
+		result, err := dec.Decode(msg)
+		require.NoError(t, err)
+		v := checkErr(result.BoolValue(tagID))(t, n)
+		vs := checkErr(result.BoolValues(tagID))(t, n)
+		if n <= 0 {
+			return
+		}
+		assert.EqualValues(t, expected[len(expected)-1], v)
+		assert.EqualValues(t, expected, vs)
+	})
+}
+
+func FuzzNumbers(f *testing.F) {
+	for i, v := range []float64{math.MinInt64, -100, -2, -1, 0, 1, 2, math.MaxUint64} {
+		f.Add(i, v)
+	}
+
+	const (
+		float32Tag = 1 + iota
+		float64Tag
+		int32Tag
+		int64Tag
+		fixed32Tag
+		fixed64Tag
+		sInt32Tag
+		sInt64Tag
+		uint32Tag
+		uint64Tag
+	)
+	def := Def{}
+	for i := float32Tag; i <= uint64Tag; i++ {
+		def[i] = nil
+	}
+	dec, err := NewDecoder(def)
+	require.NoError(f, err)
+
+	f.Fuzz(func(t *testing.T, n int, expected float64) {
+		var sz int
+		for i := 0; i < n; i++ {
+			exp := expected * float64(i)
+			sz += csproto.SizeOfTagKey(float32Tag) + 4 +
+				csproto.SizeOfTagKey(float64Tag) + 8 +
+				csproto.SizeOfTagKey(int32Tag) + csproto.SizeOfVarint(uint64(int32(exp))) +
+				csproto.SizeOfTagKey(int64Tag) + csproto.SizeOfVarint(uint64(int64(exp))) +
+				csproto.SizeOfTagKey(fixed32Tag) + 4 +
+				csproto.SizeOfTagKey(fixed64Tag) + 8 +
+				csproto.SizeOfTagKey(sInt32Tag) + csproto.SizeOfZigZag(uint64(int32(exp))) +
+				csproto.SizeOfTagKey(sInt64Tag) + csproto.SizeOfZigZag(uint64(int64(exp))) +
+				csproto.SizeOfTagKey(uint32Tag) + csproto.SizeOfVarint(uint64(uint32(exp))) +
+				csproto.SizeOfTagKey(uint64Tag) + csproto.SizeOfVarint(uint64(exp))
+		}
+		msg := make([]byte, sz)
+		enc := csproto.NewEncoder(msg)
+		for i := 0; i < n; i++ {
+			exp := expected * float64(i)
+			enc.EncodeFloat32(float32Tag, float32(exp))
+			enc.EncodeFloat64(float64Tag, exp)
+			t.Log("encoding", int32(exp))
+			t.Log(msg)
+			enc.EncodeInt32(int32Tag, int32(exp))
+			t.Log(msg)
+			enc.EncodeInt64(int64Tag, int64(exp))
+			enc.EncodeFixed32(fixed32Tag, uint32(exp))
+			enc.EncodeFixed64(fixed64Tag, uint64(exp))
+			enc.EncodeSInt32(sInt32Tag, int32(exp))
+			enc.EncodeSInt64(sInt64Tag, int64(exp))
+			enc.EncodeUInt32(uint32Tag, uint32(exp))
+			enc.EncodeUInt64(uint64Tag, uint64(exp))
+		}
+		result, err := dec.Decode(msg)
+		require.NoError(t, err)
+		exp := expected * float64(n-1)
+		checkNum(result.Float32Value(float32Tag))(t, n, exp)
+		checkNum(result.Float64Value(float64Tag))(t, n, exp)
+		checkNum(result.Int32Value(int32Tag))(t, n, exp)
+		checkNum(result.Int64Value(int64Tag))(t, n, exp)
+		checkNum(result.Fixed32Value(fixed32Tag))(t, n, exp)
+		checkNum(result.Fixed64Value(fixed64Tag))(t, n, exp)
+		checkNum(result.SInt32Value(sInt32Tag))(t, n, exp)
+		checkNum(result.SInt64Value(sInt64Tag))(t, n, exp)
+		checkNum(result.UInt32Value(uint32Tag))(t, n, exp)
+		checkNum(result.UInt64Value(uint64Tag))(t, n, exp)
+		if t.Failed() {
+			return
+		}
+
+		checkNums(result.Float32Values(float32Tag))(t, n, expected)
+		checkNums(result.Float64Values(float64Tag))(t, n, expected)
+		checkNums(result.Int32Values(int32Tag))(t, n, expected)
+		checkNums(result.Int64Values(int64Tag))(t, n, expected)
+		checkNums(result.Fixed32Values(fixed32Tag))(t, n, expected)
+		checkNums(result.Fixed64Values(fixed64Tag))(t, n, expected)
+		checkNums(result.SInt32Values(sInt32Tag))(t, n, expected)
+		checkNums(result.SInt64Values(sInt64Tag))(t, n, expected)
+		checkNums(result.UInt32Values(uint32Tag))(t, n, expected)
+		checkNums(result.UInt64Values(uint64Tag))(t, n, expected)
+
+	})
+}
+
+type number interface {
+	~int32 | ~int64 | ~uint32 | ~uint64 | ~float32 | ~float64
+}
+
+func checkNum[T number](x T, err error) func(t testing.TB, n int, expected float64) {
+	return func(t testing.TB, n int, expected float64) {
+		if n <= 0 {
+			assert.ErrorIs(t, err, ErrTagNotFound)
+			assert.EqualValues(t, 0, cmp.Compare(x, T(0)))
+			return
+		}
+		require.NoError(t, err)
+		assert.EqualValues(t, 0, cmp.Compare(x, T(expected)))
+	}
+}
+
+func checkNums[T number](x []T, err error) func(t testing.TB, n int, expected float64) {
+	return func(t testing.TB, n int, expected float64) {
+		t.Logf("N:%d, Expected:%f, ExpectedT:%+v, T:%T, actual:%+v", n, expected, T(expected), T(expected), x)
+		if n <= 0 {
+			assert.ErrorIs(t, err, ErrTagNotFound)
+			return
+		}
+		require.NoError(t, err)
+		require.Len(t, x, n)
+		for i := 0; i < n; i++ {
+			exp := expected * float64(i)
+			assert.EqualValues(t, 0, cmp.Compare(x[i], T(exp)))
+		}
+	}
+}
+
+func checkErr[T any](x T, err error) func(t testing.TB, n int) T {
+	return func(t testing.TB, n int) T {
+		if n <= 0 {
+			assert.ErrorIs(t, err, ErrTagNotFound)
+			return x
+		}
+		require.NoError(t, err)
+		return x
+	}
+}
+
 func TestDecode(t *testing.T) {
 	var sampleMessage = []byte{
 		// field 1: varint boolean true
@@ -96,7 +306,7 @@ func TestDecode(t *testing.T) {
 		defer func() { _ = res.Close() }()
 
 		assert.NoError(t, err)
-		assert.Empty(t, res.m)
+		assert.Empty(t, res.flatData)
 	})
 	t.Run("decode with nil def", func(t *testing.T) {
 		t.Parallel()
@@ -104,7 +314,7 @@ func TestDecode(t *testing.T) {
 		defer func() { _ = res.Close() }()
 
 		assert.NoError(t, err)
-		assert.Empty(t, res.m)
+		assert.Empty(t, res.flatData)
 	})
 	t.Run("decode with empty def", func(t *testing.T) {
 		t.Parallel()
@@ -112,7 +322,7 @@ func TestDecode(t *testing.T) {
 		defer func() { _ = res.Close() }()
 
 		assert.NoError(t, err)
-		assert.Empty(t, res.m)
+		assert.Empty(t, res.flatData)
 	})
 	t.Run("decode with missing def keys", func(t *testing.T) {
 		t.Parallel()
@@ -121,7 +331,7 @@ func TestDecode(t *testing.T) {
 		defer func() { _ = res.Close() }()
 
 		assert.NoError(t, err)
-		assert.Empty(t, res.m)
+		assert.Empty(t, res.flatData[0].data)
 	})
 	t.Run("decode with matching def keys", func(t *testing.T) {
 		t.Parallel()
@@ -130,7 +340,7 @@ func TestDecode(t *testing.T) {
 		defer func() { _ = res.Close() }()
 
 		assert.NoError(t, err)
-		assert.Len(t, res.m, 4, "should have 4 results")
+		assert.Len(t, res.flatData, 4, "should have 4 results")
 	})
 	t.Run("decode with nested def keys", func(t *testing.T) {
 		t.Parallel()
@@ -140,8 +350,9 @@ func TestDecode(t *testing.T) {
 		defer func() { _ = res.Close() }()
 
 		assert.NoError(t, err)
-		assert.Len(t, res.m, 4, "should have 4 results")
-		fd := res.m[3]
+		assert.Len(t, res.flatData, 4, "should have 4 results")
+		fd, err := res.FieldData(3, 2)
+		assert.NoError(t, err)
 		assert.Len(t, fd.data, 1)
 	})
 	t.Run("get field data with nested def keys", func(t *testing.T) {
@@ -162,7 +373,7 @@ func TestDecode(t *testing.T) {
 		def := NewDef(csproto.MaxTagValue + 1)
 		res, err := Decode(sampleMessage, def)
 		defer func() { _ = res.Close() }()
-		assert.Empty(t, res.m)
+		assert.Empty(t, res.flatData)
 		assert.Error(t, err)
 	})
 }
@@ -219,7 +430,9 @@ func TestDecodeResultFieldData(t *testing.T) {
 		fd, err := res.FieldData(1, -1, 1)
 		assert.Nil(t, fd)
 		assert.Error(t, err)
-		assert.Contains(t, fmt.Sprint(err), "negative tags must be the last (or only) path item")
+		assert.ErrorIs(t, err, ErrTagNotFound)
+		// negative tags no longer result in an error
+		//assert.Contains(t, fmt.Sprint(err), "negative tags must be the last (or only) path item")
 	})
 	t.Run("returns nil and not found error for unmatched path", func(t *testing.T) {
 		t.Parallel()
@@ -307,20 +520,6 @@ func TestRawFieldData(t *testing.T) {
 		defer func() { _ = res.Close() }()
 		assert.NoError(t, err)
 		defer res.Close()
-
-		// negative tags must be the last/only value
-		fd, err := res.FieldData(1, -1, 1)
-		assert.Error(t, err)
-		assert.Nil(t, fd)
-	})
-	t.Run("fails for incorrect wire type", func(t *testing.T) {
-		t.Parallel()
-		def := NewDef(-1)
-		res, err := Decode(sampleMessage, def)
-		defer func() { _ = res.Close() }()
-		assert.Error(t, err)
-		assert.Contains(t, fmt.Sprintf("%s", err), "invalid definition: raw mode only supported for length-delimited fields")
-		assert.Empty(t, res.m)
 	})
 }
 
