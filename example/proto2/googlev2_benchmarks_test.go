@@ -69,14 +69,45 @@ func BenchmarkLazyDecodeGoogleV2(b *testing.B) {
 		evt = createGoogleV2Event(b)
 		def = lazyproto.NewDef(1, 2, 3, 4)
 	)
-	_ = def.NestedTag(100, 1)
+	_ = def.NestedTag(100, 1, 2, 3, 4, 5, 6, 7, 8, 9)
 	data, _ := proto.Marshal(evt)
 	b.ResetTimer()
 	for n := 0; n < b.N; n++ {
-		r, _ := lazyproto.Decode(data, def)
+		r, _ := lazyproto.Decode(data, def) //nolint: staticcheck // benchmarking deprecated function to demonstrate the difference
 		_ = r.Close()
 	}
 }
+
+func BenchmarkLazyDecoder(b *testing.B) {
+	var (
+		evt = createGoogleV2Event(b)
+		def = lazyproto.NewDef(1, 2, 3, 4)
+	)
+	_ = def.NestedTag(100, 1, 2, 3, 4, 5, 6, 7, 8, 9)
+	data, _ := proto.Marshal(evt)
+	b.Run("safe", func(b *testing.B) {
+		dec, _ := lazyproto.NewDecoder(def, lazyproto.WithMaxBufferSize(3))
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			r, _ := dec.Decode(data)
+			nest, _ := r.NestedResult(100)
+			discardStrings, _ = nest.StringValues(4)
+			_ = r.Close()
+		}
+	})
+	b.Run("unsafe", func(b *testing.B) {
+		dec, _ := lazyproto.NewDecoder(def, lazyproto.WithMode(csproto.DecoderModeFast), lazyproto.WithMaxBufferSize(3))
+		b.ResetTimer()
+		for n := 0; n < b.N; n++ {
+			r, _ := dec.Decode(data)
+			nest, _ := r.NestedResult(100)
+			discardStrings, _ = nest.StringValues(4)
+			_ = r.Close()
+		}
+	})
+}
+
+var discardStrings []string
 
 func createGoogleV2Event(t interface{ Errorf(string, ...interface{}) }) *googlev2.BaseEvent {
 	eventType := googlev2.EventType_EVENT_TYPE_ONE
