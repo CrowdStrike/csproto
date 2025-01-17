@@ -114,7 +114,7 @@ func TestDef(t *testing.T) {
 			def := NewDef()
 			subdef := def.NestedTag(1)
 			assert.NotNil(t, subdef)
-			assert.NotSame(t, subdef, def)
+			assert.NotSame(t, &subdef, &def)
 			assert.Empty(t, subdef)
 		})
 		t.Run("single tag", func(t *testing.T) {
