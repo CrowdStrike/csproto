@@ -58,16 +58,18 @@ func (m DecoderMode) String() string {
 
 // Decoder implements a binary Protobuf Decoder by sequentially reading from a provided []byte.
 type Decoder struct {
-	p      []byte
-	offset int
-	mode   DecoderMode
+	p           []byte
+	offset      int
+	mode        DecoderMode
+	maxFieldLen uint64
 }
 
 // NewDecoder initializes a new Protobuf decoder to read the provided buffer.
 func NewDecoder(p []byte) *Decoder {
 	return &Decoder{
-		p:      p,
-		offset: 0,
+		p:           p,
+		offset:      0,
+		maxFieldLen: maxFieldLen,
 	}
 }
 
@@ -79,6 +81,17 @@ func (d *Decoder) Mode() DecoderMode {
 // SetMode configures the decoding behavior, safe vs fastest.
 func (d *Decoder) SetMode(m DecoderMode) {
 	d.mode = m
+}
+
+// SetMaxFieldLength sets the maximum size a field can have.
+// This applies to bytes/string fields and messages.
+// By default, the official protobuf limit of 2GB is used.
+//
+// You can set a different limit here, including a higher limit, but
+// by doing so you deviate from the protobuf specified limits,
+// and your interoperability with other implementations may be affected.
+func (d *Decoder) SetMaxFieldLength(length uint64) {
+	d.maxFieldLen = length
 }
 
 // Seek sets the position of the next read operation to [offset], interpreted according to [whence]:
@@ -195,7 +208,7 @@ func (d *Decoder) DecodeBytes() ([]byte, error) {
 		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 	case n == 0:
 		return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
-	case l > maxFieldLen:
+	case l > d.maxFieldLen:
 		return nil, fmt.Errorf("invalid length (%d) for length-delimited field at byte %d: %w", l, d.offset, ErrLenOverflow)
 	default:
 		// length is good
@@ -883,7 +896,7 @@ func (d *Decoder) DecodeNested(m interface{}) error {
 		return fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 	case n == 0:
 		return fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
-	case l > maxFieldLen:
+	case l > d.maxFieldLen:
 		return fmt.Errorf("invalid length (%d) for length-delimited field at byte %d: %w", l, d.offset, ErrLenOverflow)
 	default:
 		// length is good
@@ -964,7 +977,7 @@ func (d *Decoder) Skip(tag int, wt WireType) ([]byte, error) {
 			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 		case n == 0:
 			return nil, fmt.Errorf("invalid data at byte %d: %w", d.offset, ErrInvalidVarintData)
-		case l > maxFieldLen:
+		case l > d.maxFieldLen:
 			return nil, fmt.Errorf("invalid length (%d) for length-delimited field at byte %d: %w", l, d.offset, ErrLenOverflow)
 		default:
 			// length is good
