@@ -198,7 +198,6 @@ func addSprigFunctions(fm template.FuncMap) template.FuncMap {
 func addProtoFunctions(fm template.FuncMap, protoFile *protogen.File, names specialNames, goPackageForFile map[string]string) template.FuncMap {
 	fm["protoNumberEncodeMethod"] = protoNumberEncodeMethod
 	fm["getExtensions"] = getExtensions(protoFile)
-	fm["allMessages"] = allMessages(protoFile)
 	fm["getAdditionalImports"] = getAdditionalImports(protoFile, goPackageForFile)
 	fm["getImportPrefix"] = getImportPrefix(protoFile, goPackageForFile)
 	fm["mapFieldGoType"] = mapFieldGoType(protoFile, goPackageForFile)
@@ -247,28 +246,6 @@ func getExtensions(protoFile *protogen.File) func(*protogen.Message) []*protogen
 	return func(msg *protogen.Message) []*protogen.Field {
 		exts := extensionDict[msg.GoIdent]
 		return exts
-	}
-}
-
-// allMessages returns a list of all top-level and nested message definitions in protoFile
-func allMessages(protoFile *protogen.File) func() []*protogen.Message {
-	var queue, msgs []*protogen.Message
-	queue = append(queue, protoFile.Messages...)
-	for len(queue) > 0 {
-		m := queue[0]
-		queue = queue[1:]
-		msgs = append(msgs, m)
-		for _, mm := range m.Messages {
-			// skip "messgaes" that represent map fields
-			if mm.Desc.IsMapEntry() {
-				continue
-			}
-			queue = append(queue, mm)
-		}
-	}
-
-	return func() []*protogen.Message {
-		return msgs
 	}
 }
 
@@ -440,7 +417,7 @@ func msgHasRequiredField(m *protogen.Message) bool {
 func hasRequiredFields(protoFile *protogen.File) func(*protogen.Message) bool {
 	anyMessageHasRequiredFields := false
 	if protoFile.Desc.Syntax() == protoreflect.Proto2 {
-		for _, m := range allMessages(protoFile)() {
+		for _, m := range allMessages(protoFile) {
 			anyMessageHasRequiredFields = anyMessageHasRequiredFields || msgHasRequiredField(m)
 		}
 	}

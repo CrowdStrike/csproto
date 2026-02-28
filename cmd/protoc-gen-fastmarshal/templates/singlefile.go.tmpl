@@ -12,11 +12,11 @@ import (
     "strings"{{end}}
     "sync/atomic"
     "github.com/CrowdStrike/csproto"
-    {{range $path, $alias := (allMessages | getAdditionalImports)}}{{ (printf "%s %s" $alias $path) | trimspace}}
+    {{range $path, $alias := (.Messages | getAdditionalImports)}}{{ (printf "%s %s" $alias $path) | trimspace}}
     {{end}}
 )
 
-{{ range allMessages }}
+{{ range .Messages }}
 
 //------------------------------------------------------------------------------
 // Custom Protobuf size/marshal/unmarshal code for {{ .GoIdent.GoName }}
