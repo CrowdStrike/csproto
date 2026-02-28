@@ -23,6 +23,7 @@ const (
 // Protobuf code generator
 type generateRequest struct {
 	ProtoDesc          *protogen.File
+	Messages           []*protogen.Message
 	Mode               outputMode
 	NameTemplate       string
 	Funcs              template.FuncMap
