@@ -170,7 +170,7 @@ func allMessages(protoFile *protogen.File) []*protogen.Message {
 		queue = queue[1:]
 		msgs = append(msgs, m)
 		for _, mm := range m.Messages {
-			// skip "messgaes" that represent map fields
+			// skip "messages" that represent map fields
 			if mm.Desc.IsMapEntry() {
 				continue
 			}
