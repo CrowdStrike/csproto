@@ -128,6 +128,11 @@ func doGenerate(opts *options) func(*protogen.Plugin) error {
 				continue
 			}
 
+			messages := allMessages(protoFile)
+			if len(messages) == 0 {
+				continue
+			}
+
 			// account for per-message output mode
 			// - default output template is "[protofile].pb.fm.go"
 			// - file-per-message template is "[protofile]_[lower(messagename)].pb.fm.go"
@@ -139,6 +144,7 @@ func doGenerate(opts *options) func(*protogen.Plugin) error {
 			req := generateRequest{
 				Mode:               outputModeSingleFile,
 				ProtoDesc:          protoFile,
+				Messages:           messages,
 				NameTemplate:       nameTemplate,
 				APIVersion:         opts.apiVersion.String(),
 				SpecialNames:       opts.specialNames,
@@ -153,4 +159,23 @@ func doGenerate(opts *options) func(*protogen.Plugin) error {
 		}
 		return nil
 	}
+}
+
+// allMessages returns a list of all top-level and nested message definitions in protoFile
+func allMessages(protoFile *protogen.File) []*protogen.Message {
+	var queue, msgs []*protogen.Message
+	queue = append(queue, protoFile.Messages...)
+	for len(queue) > 0 {
+		m := queue[0]
+		queue = queue[1:]
+		msgs = append(msgs, m)
+		for _, mm := range m.Messages {
+			// skip "messages" that represent map fields
+			if mm.Desc.IsMapEntry() {
+				continue
+			}
+			queue = append(queue, mm)
+		}
+	}
+	return msgs
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"time"
 
@@ -21,6 +22,7 @@ func generateSingle(plugin *protogen.Plugin, req generateRequest) error {
 		Now                time.Time
 		Pwd                string
 		ProtoDesc          *protogen.File
+		Messages           []*protogen.Message
 		APIVersion         string
 		SpecialNames       specialNames
 		EnableUnsafeDecode bool
@@ -29,6 +31,7 @@ func generateSingle(plugin *protogen.Plugin, req generateRequest) error {
 		Now:                time.Now().UTC(),
 		Pwd:                func() string { p, _ := os.Getwd(); return p }(),
 		ProtoDesc:          req.ProtoDesc,
+		Messages:           req.Messages,
 		APIVersion:         req.APIVersion,
 		SpecialNames:       req.SpecialNames,
 		EnableUnsafeDecode: req.EnableUnsafeDecode,
@@ -38,26 +41,29 @@ func generateSingle(plugin *protogen.Plugin, req generateRequest) error {
 		name, content string
 		err           error
 	)
+
 	goPackageForFile := make(map[string]string, len(plugin.Files))
 	for _, f := range plugin.Files {
 		goPackageForFile[f.Desc.Path()] = string(f.GoPackageName)
 	}
 	funcs := codeGenFunctions(req.ProtoDesc, req.SpecialNames, goPackageForFile)
-	for k, v := range req.Funcs {
-		funcs[k] = v
-	}
+	maps.Copy(funcs, req.Funcs)
+
 	nt, err := loadTemplateFromString(req.NameTemplate, funcs)
 	if err != nil {
 		return fmt.Errorf("unable to parse output file name template: %w", err)
 	}
+
 	name, err = renderTemplate(nt, args)
 	if err != nil {
 		return fmt.Errorf("unable to generate output file name from name template: %w", err)
 	}
+
 	ct, err := loadTemplateFromEmbedded(funcs)
 	if err != nil {
 		return fmt.Errorf("unable to load embedded content templates: %w", err)
 	}
+
 	content, err = renderNamedTemplate(ct, "SingleFile", args)
 	if err != nil {
 		return fmt.Errorf("unable to generate output from content template: %w", err)
@@ -86,9 +92,7 @@ func generatePerMessage(plugin *protogen.Plugin, req generateRequest) error {
 		goPackageForFile[f.Desc.Path()] = string(f.GoPackageName)
 	}
 	funcs := codeGenFunctions(req.ProtoDesc, req.SpecialNames, goPackageForFile)
-	for k, v := range req.Funcs {
-		funcs[k] = v
-	}
+	maps.Copy(funcs, req.Funcs)
 
 	var (
 		now    = time.Now().UTC()
@@ -99,7 +103,7 @@ func generatePerMessage(plugin *protogen.Plugin, req generateRequest) error {
 	if err != nil {
 		return fmt.Errorf("unable to load embedded content templates: %w", err)
 	}
-	for _, msg := range allMessages(req.ProtoDesc)() {
+	for _, msg := range req.Messages {
 		args := genArgsPerFile{
 			Now:                now,
 			Pwd:                pwd,
@@ -109,6 +113,7 @@ func generatePerMessage(plugin *protogen.Plugin, req generateRequest) error {
 			SpecialNames:       req.SpecialNames,
 			EnableUnsafeDecode: req.EnableUnsafeDecode,
 		}
+
 		content, err := renderNamedTemplate(tt, "PerMessage", args)
 		if err != nil {
 			return fmt.Errorf("error executing content template for message %s: %w", msg.Desc.FullName(), err)
