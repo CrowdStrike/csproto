@@ -1348,6 +1348,41 @@ func TestDecodeTag(t *testing.T) {
 	}
 }
 
+func TestDecoder_SetMaxFieldLength(t *testing.T) {
+	payload := []byte{0x12, 0xE, 0x74, 0x68, 0x69, 0x73, 0x20, 0x69, 0x73, 0x20, 0x61, 0x20, 0x74, 0x65, 0x73, 0x74}
+	message := "this is a test"
+
+	dec := csproto.NewDecoder(payload)
+	dec.SetMaxFieldLength(5) // too small
+
+	tag, wt, err := dec.DecodeTag()
+	assert.Equal(t, 2, tag, "tag should match")
+	assert.Equal(t, csproto.WireTypeLengthDelimited, wt, "wire type should match")
+	assert.NoError(t, err, "should not fail")
+
+	// enforced for strings
+	_, err = dec.DecodeString()
+	assert.ErrorContains(t, err, "invalid length")
+
+	// enforced for bytes
+	_, err = dec.DecodeBytes()
+	assert.ErrorContains(t, err, "invalid length")
+
+	// enforced for nested messages (will never reach actual decoding into m)
+	err = dec.DecodeNested(nil)
+	assert.ErrorContains(t, err, "invalid length")
+
+	// enforced for skip
+	_, err = dec.Skip(2, csproto.WireTypeLengthDelimited)
+	assert.ErrorContains(t, err, "invalid length")
+
+	// now increase the limit to succeed
+	dec.SetMaxFieldLength(uint64(len(message))) // just large enough
+	got, err := dec.DecodeString()
+	assert.NoError(t, err)
+	assert.Equal(t, message, got)
+}
+
 func FuzzDecodeTag(f *testing.F) {
 	seedData := [][]byte{
 		{(1 << 3)},     // tag=1, wire type=0
