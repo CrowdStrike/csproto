@@ -1,6 +1,7 @@
 package csproto_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/CrowdStrike/csproto"
@@ -90,4 +91,34 @@ func BenchmarkDecodeFixed64(b *testing.B) {
 		val = v
 	}
 	_ = val
+}
+
+func BenchmarkDecodeVarint(b *testing.B) {
+	cases := []struct {
+		name  string
+		value uint64
+	}{
+		{"1byte", 127},
+		{"2byte", 300},
+		{"3byte", 100000},
+		{"4byte", 40000000},
+		{"5byte", 5000000000},
+		{"8byte", 1 << 55},
+		{"10byte", 1<<63 | 1<<62},
+	}
+
+	buf := make([]byte, 10)
+	for _, tc := range cases {
+		n := csproto.EncodeVarint(buf, tc.value)
+		encoded := make([]byte, n)
+		copy(encoded, buf[:n])
+
+		b.Run(fmt.Sprintf("%s/%d_bytes", tc.name, n), func(b *testing.B) {
+			var v uint64
+			for i := 0; i < b.N; i++ {
+				v, _, _ = csproto.DecodeVarint(encoded)
+			}
+			_ = v
+		})
+	}
 }

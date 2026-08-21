@@ -989,39 +989,234 @@ func (d *Decoder) Skip(tag int, wt WireType) ([]byte, error) {
 //
 // [varint encoded]: https://developers.google.com/protocol-buffers/docs/encoding#varints
 func DecodeVarint(p []byte) (v uint64, n int, err error) {
-	if len(p) == 0 {
+	sz := len(p)
+	if sz == 0 {
 		return 0, 0, ErrInvalidVarintData
 	}
 	// single-byte values don't need any processing
-	if p[0] < 0x80 {
-		return uint64(p[0]), 1, nil
+	b := p[0]
+	if b < 0x80 {
+		return uint64(b), 1, nil
 	}
-	// 2-9 byte values
-	if len(p) < 10 {
-		for shift := uint(0); shift < 64; shift += 7 {
-			if n >= len(p) {
-				return 0, 0, io.ErrUnexpectedEOF
-			}
-			b := uint64(p[n])
-			n++
-			v |= (b & 0x7f << shift)
-			if (b & 0x80) == 0 {
-				return v, n, nil
-			}
+
+	// For 2-N available bytes, switch on sz to unroll exactly the right number of
+	// byte reads. Each case falls through checking high bits to determine length.
+	// We already know p[0] >= 0x80 (handled above).
+
+	v = uint64(b) & 0x7f
+	switch sz {
+	case 1:
+		return 0, 0, io.ErrUnexpectedEOF
+	case 2:
+		v |= uint64(p[1]) << 7
+		if p[1] < 0x80 {
+			return v, 2, nil
 		}
-		return 0, 0, ErrValueOverflow
-	}
-	// 10-byte values
-	// . we already know the first byte has the high-bit set, so grab it's value then walk bytes 2-10
-	v = uint64(p[0] & 0x7f)
-	for i, shift := 1, 7; i < 10; i, shift = i+1, shift+7 {
-		b := uint64(p[i])
-		v |= (b & 0x7f) << shift
-		if (b & 0x80) == 0 {
-			return v, i + 1, nil
+		return 0, 0, io.ErrUnexpectedEOF
+	case 3:
+		v |= uint64(p[1]&0x7f) << 7
+		if p[1] < 0x80 {
+			return v, 2, nil
 		}
+		v |= uint64(p[2]) << 14
+		if p[2] < 0x80 {
+			return v, 3, nil
+		}
+		return 0, 0, io.ErrUnexpectedEOF
+	case 4:
+		v |= uint64(p[1]&0x7f) << 7
+		if p[1] < 0x80 {
+			return v, 2, nil
+		}
+		v |= uint64(p[2]&0x7f) << 14
+		if p[2] < 0x80 {
+			return v, 3, nil
+		}
+		v |= uint64(p[3]) << 21
+		if p[3] < 0x80 {
+			return v, 4, nil
+		}
+		return 0, 0, io.ErrUnexpectedEOF
+	case 5:
+		v |= uint64(p[1]&0x7f) << 7
+		if p[1] < 0x80 {
+			return v, 2, nil
+		}
+		v |= uint64(p[2]&0x7f) << 14
+		if p[2] < 0x80 {
+			return v, 3, nil
+		}
+		v |= uint64(p[3]&0x7f) << 21
+		if p[3] < 0x80 {
+			return v, 4, nil
+		}
+		v |= uint64(p[4]) << 28
+		if p[4] < 0x80 {
+			return v, 5, nil
+		}
+		return 0, 0, io.ErrUnexpectedEOF
+	case 6:
+		v |= uint64(p[1]&0x7f) << 7
+		if p[1] < 0x80 {
+			return v, 2, nil
+		}
+		v |= uint64(p[2]&0x7f) << 14
+		if p[2] < 0x80 {
+			return v, 3, nil
+		}
+		v |= uint64(p[3]&0x7f) << 21
+		if p[3] < 0x80 {
+			return v, 4, nil
+		}
+		v |= uint64(p[4]&0x7f) << 28
+		if p[4] < 0x80 {
+			return v, 5, nil
+		}
+		v |= uint64(p[5]) << 35
+		if p[5] < 0x80 {
+			return v, 6, nil
+		}
+		return 0, 0, io.ErrUnexpectedEOF
+	case 7:
+		v |= uint64(p[1]&0x7f) << 7
+		if p[1] < 0x80 {
+			return v, 2, nil
+		}
+		v |= uint64(p[2]&0x7f) << 14
+		if p[2] < 0x80 {
+			return v, 3, nil
+		}
+		v |= uint64(p[3]&0x7f) << 21
+		if p[3] < 0x80 {
+			return v, 4, nil
+		}
+		v |= uint64(p[4]&0x7f) << 28
+		if p[4] < 0x80 {
+			return v, 5, nil
+		}
+		v |= uint64(p[5]&0x7f) << 35
+		if p[5] < 0x80 {
+			return v, 6, nil
+		}
+		v |= uint64(p[6]) << 42
+		if p[6] < 0x80 {
+			return v, 7, nil
+		}
+		return 0, 0, io.ErrUnexpectedEOF
+	case 8:
+		v |= uint64(p[1]&0x7f) << 7
+		if p[1] < 0x80 {
+			return v, 2, nil
+		}
+		v |= uint64(p[2]&0x7f) << 14
+		if p[2] < 0x80 {
+			return v, 3, nil
+		}
+		v |= uint64(p[3]&0x7f) << 21
+		if p[3] < 0x80 {
+			return v, 4, nil
+		}
+		v |= uint64(p[4]&0x7f) << 28
+		if p[4] < 0x80 {
+			return v, 5, nil
+		}
+		v |= uint64(p[5]&0x7f) << 35
+		if p[5] < 0x80 {
+			return v, 6, nil
+		}
+		v |= uint64(p[6]&0x7f) << 42
+		if p[6] < 0x80 {
+			return v, 7, nil
+		}
+		v |= uint64(p[7]) << 49
+		if p[7] < 0x80 {
+			return v, 8, nil
+		}
+		return 0, 0, io.ErrUnexpectedEOF
+	case 9:
+		v |= uint64(p[1]&0x7f) << 7
+		if p[1] < 0x80 {
+			return v, 2, nil
+		}
+		v |= uint64(p[2]&0x7f) << 14
+		if p[2] < 0x80 {
+			return v, 3, nil
+		}
+		v |= uint64(p[3]&0x7f) << 21
+		if p[3] < 0x80 {
+			return v, 4, nil
+		}
+		v |= uint64(p[4]&0x7f) << 28
+		if p[4] < 0x80 {
+			return v, 5, nil
+		}
+		v |= uint64(p[5]&0x7f) << 35
+		if p[5] < 0x80 {
+			return v, 6, nil
+		}
+		v |= uint64(p[6]&0x7f) << 42
+		if p[6] < 0x80 {
+			return v, 7, nil
+		}
+		v |= uint64(p[7]&0x7f) << 49
+		if p[7] < 0x80 {
+			return v, 8, nil
+		}
+		v |= uint64(p[8]) << 56
+		if p[8] < 0x80 {
+			return v, 9, nil
+		}
+		return 0, 0, io.ErrUnexpectedEOF
+	default:
+		b := uint64(p[1])
+		v |= (b & 0x7f) << 7
+		if b < 0x80 {
+			return v, 2, nil
+		}
+		b = uint64(p[2])
+		v |= (b & 0x7f) << 14
+		if b < 0x80 {
+			return v, 3, nil
+		}
+		b = uint64(p[3])
+		v |= (b & 0x7f) << 21
+		if b < 0x80 {
+			return v, 4, nil
+		}
+		b = uint64(p[4])
+		v |= (b & 0x7f) << 28
+		if b < 0x80 {
+			return v, 5, nil
+		}
+		b = uint64(p[5])
+		v |= (b & 0x7f) << 35
+		if b < 0x80 {
+			return v, 6, nil
+		}
+		b = uint64(p[6])
+		v |= (b & 0x7f) << 42
+		if b < 0x80 {
+			return v, 7, nil
+		}
+		b = uint64(p[7])
+		v |= (b & 0x7f) << 49
+		if b < 0x80 {
+			return v, 8, nil
+		}
+		b = uint64(p[8])
+		v |= (b & 0x7f) << 56
+		if b < 0x80 {
+			return v, 9, nil
+		}
+		b = uint64(p[9])
+		if b > 0x01 {
+			// See reference implementation:
+			// https://github.com/protocolbuffers/protobuf-go/blob/cdd4c5f7406e82462949c7a65defa9f3029c162d/encoding/protowire/wire.go#L366
+			return 0, 0, ErrValueOverflow
+		}
+		v |= b << 63
+		return v, 10, nil
 	}
-	return 0, 0, ErrValueOverflow
 }
 
 // DecodeZigZag32 reads a base-128 [zig zag encoded] 32-bit integer from p and returns the value and the
