@@ -150,6 +150,7 @@ func (r *DecodeResult) close() {
 				r.trunc(n)
 			}
 		}
+		r.skipClose = false
 		r.pool.Put(r)
 	}
 }
@@ -272,6 +273,10 @@ func (r *DecodeResult) NestedResults(tag int) ([]*DecodeResult, error) {
 	for _, b := range fd.data {
 		res, err := dec.decodeWithPool(b)
 		if err != nil {
+			// return already-decoded results to the pool
+			for _, prev := range results {
+				prev.close()
+			}
 			return nil, err
 		}
 		res.skipClose = true
