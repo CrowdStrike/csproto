@@ -1,6 +1,7 @@
 package lazyproto
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"sync"
@@ -183,48 +184,46 @@ func (dec *Decoder) newBaseResult(def Def) (*DecodeResult, error) {
 	if err != nil {
 		return nil, fmt.Errorf("invalid definition: %w", err)
 	}
+
 	result := &DecodeResult{
+		lut:       newLutTable(def),
 		pool:      dec.pool,
 		filter:    dec.filter,
 		maxBuffer: dec.maxBuffer,
 		unsafe:    dec.mode != csproto.DecoderModeSafe,
 	}
 
-	// iterate over all of the flat/raw tags and any nested tags in the definition
-	for k, v := range def {
-		if k < 0 {
-			k *= -1
-		}
-		result.flatTags = append(result.flatTags, k)
-		if v == nil {
-			continue
-		}
-		result.nestedTags = append(result.nestedTags, k)
-	}
-
-	// sort and deduplicate the tags
-	slices.Sort(result.flatTags)
-	result.flatTags = slices.Compact(result.flatTags)
-	slices.Sort(result.nestedTags)
-	result.nestedTags = slices.Compact(result.nestedTags)
+	slotCnt := result.lut.count()
 
 	// intitialize the slice length
 	// (we don't need to fill the slice because that will be done when it's cloned)
-	result.flatData = make([]*FieldData, len(result.flatTags))
+	result.flatData = make([]*FieldData, slotCnt)
 
 	// create decoders for any nested results
-	result.nestedDecoders = make([]*Decoder, len(result.nestedTags))
-	for i, tag := range result.nestedTags {
-		nestedDec, err := NewDecoder(def[tag], func(d *Decoder) error {
+	result.nestedDecoders = make([]*Decoder, slotCnt)
+
+	for k, v := range def {
+		if v == nil {
+			continue
+		}
+
+		slot, ok := result.lut.safeLookup(k)
+		if !ok || slot < 0 || slot >= slotCnt {
+			return nil, errors.New("unexpected lut fail initializing nested decoders")
+		}
+
+		nestedDec, err := NewDecoder(v, func(d *Decoder) error {
 			d.filter = dec.filter
 			d.maxBuffer = dec.maxBuffer
 			d.mode = dec.mode
 			return nil
 		})
+
 		if err != nil {
-			return nil, fmt.Errorf("invalid definition on tag: %d", tag)
+			return nil, fmt.Errorf("invalid definition on tag: %d", k)
 		}
-		result.nestedDecoders[i] = nestedDec
+		result.nestedDecoders[slot] = nestedDec
 	}
+
 	return result, nil
 }

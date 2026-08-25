@@ -2,7 +2,6 @@ package lazyproto
 
 import (
 	"fmt"
-	"slices"
 	"sync"
 
 	"github.com/CrowdStrike/csproto"
@@ -14,14 +13,8 @@ type DecodeResult struct {
 	pool   *sync.Pool
 	filter func(int) int
 
-	// flatTags and flatData are equal length, binary searches are used as an optimization
-	// but this is essentially equal to a map[int]*FieldData but ranging over a slice is faster than a map.
-	flatTags []int
-	flatData []*FieldData
-
-	// like flatTags/flatData, nestedTags/nestedData uses binary searching to treat this as
-	// a map[int]*Decoder but ranging over a slice is faster than a map.
-	nestedTags     []int
+	lut            *lutTable
+	flatData       []*FieldData
 	nestedDecoders []*Decoder
 
 	// closers is used to return any nested DecodeResults to their respective pool
@@ -43,7 +36,8 @@ func (r *DecodeResult) decode(data []byte) error {
 			return err
 		}
 
-		flatIdx, hasFlat := slices.BinarySearch(r.flatTags, tag)
+		// non-safeLookup ok here because dec.DecodeTag validates tag range
+		flatIdx, hasFlat := r.lut.lookup(tag)
 		if !hasFlat {
 			if _, err := dec.Skip(tag, wt); err != nil {
 				return err
@@ -95,9 +89,8 @@ func (r *DecodeResult) clone() *DecodeResult {
 	res := &DecodeResult{
 		pool:           r.pool,
 		filter:         r.filter,
-		flatTags:       r.flatTags,
+		lut:            r.lut,
 		flatData:       make([]*FieldData, len(r.flatData)),
-		nestedTags:     r.nestedTags,
 		nestedDecoders: r.nestedDecoders,
 		maxBuffer:      r.maxBuffer,
 		unsafe:         r.unsafe,
@@ -188,7 +181,7 @@ func (r *DecodeResult) cap() int {
 // data at the corresponding level of nesting, i.e. a value of [1, 2] would return the field data for
 // tag 2 within the nested data for tag 1 at the root.
 func (r *DecodeResult) FieldData(tags ...int) (*FieldData, error) {
-	if r == nil || (len(r.flatTags) == 0 && len(r.nestedTags) == 0) {
+	if r == nil || r.lut == nil {
 		return nil, ErrTagNotDefined
 	}
 	switch n := len(tags); n {
@@ -213,18 +206,17 @@ func (r *DecodeResult) FieldData(tags ...int) (*FieldData, error) {
 // The tag parameter acts as a "path" to a particular field to support retrieving DecodeResult
 // from nested messages.  The value is used to retreieve the field data at the corresponding protonumber
 func (r *DecodeResult) NestedResult(tag int) (*DecodeResult, error) {
-	if r == nil || len(r.nestedTags) == 0 {
+	if r == nil || r.lut == nil {
 		return nil, ErrTagNotDefined
 	}
-	if tag < 0 {
-		tag *= -1
-	}
-	flatIdx, hasFlat := slices.BinarySearch(r.flatTags, tag)
+
+	flatIdx, hasFlat := r.lut.safeLookup(tag)
 	if !hasFlat {
 		return nil, ErrTagNotDefined
 	}
-	nestedIdx, hasNested := slices.BinarySearch(r.nestedTags, tag)
-	if !hasNested {
+
+	nestedDecoder := r.nestedDecoders[flatIdx]
+	if nestedDecoder == nil {
 		return nil, ErrNestingNotDefined
 	}
 
@@ -235,7 +227,7 @@ func (r *DecodeResult) NestedResult(tag int) (*DecodeResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	tmp, err := r.nestedDecoders[nestedIdx].decodeWithPool(b)
+	tmp, err := nestedDecoder.decodeWithPool(b)
 	if err != nil {
 		return nil, err
 	}
@@ -249,28 +241,27 @@ func (r *DecodeResult) NestedResult(tag int) (*DecodeResult, error) {
 // The tag parameter acts as a "path" to a particular field to support retrieving DecodeResult
 // from nested messages.  The value is used to retreieve the field data at the corresponding protonumber
 func (r *DecodeResult) NestedResults(tag int) ([]*DecodeResult, error) {
-	if r == nil || len(r.nestedTags) == 0 {
+	if r == nil || r.lut == nil {
 		return nil, ErrTagNotDefined
 	}
-	if tag < 0 {
-		tag *= -1
-	}
-	nestedIdx, hasNested := slices.BinarySearch(r.nestedTags, tag)
-	if !hasNested {
-		return nil, ErrTagNotDefined
-	}
-	flatIdx, hasFlat := slices.BinarySearch(r.flatTags, tag)
+
+	flatIdx, hasFlat := r.lut.safeLookup(tag)
 	if !hasFlat {
 		return nil, ErrTagNotDefined
 	}
+
+	nestedDecoder := r.nestedDecoders[flatIdx]
+	if nestedDecoder == nil {
+		return nil, ErrNestingNotDefined
+	}
+
 	fd := r.flatData[flatIdx]
 	if fd == nil || len(fd.data) == 0 {
 		return nil, ErrTagNotFound
 	}
 	results := make([]*DecodeResult, 0, len(fd.data))
-	dec := r.nestedDecoders[nestedIdx]
 	for _, b := range fd.data {
-		res, err := dec.decodeWithPool(b)
+		res, err := nestedDecoder.decodeWithPool(b)
 		if err != nil {
 			return nil, err
 		}
@@ -287,8 +278,12 @@ func (r *DecodeResult) NestedResults(tag int) ([]*DecodeResult, error) {
 //
 // Currently, Range will iterate in the order of the tags, but this is not guaranteed for future use.
 func (r *DecodeResult) Range(fn func(tag int, field *FieldData) bool) {
-	for idx, tag := range r.flatTags {
-		field := r.flatData[idx]
+	if r == nil || r.lut == nil {
+		return
+	}
+
+	for tag, slot := range r.lut.all() {
+		field := r.flatData[slot]
 		if field == nil || len(field.data) == 0 {
 			if !fn(tag, nil) {
 				return
@@ -303,14 +298,11 @@ func (r *DecodeResult) Range(fn func(tag int, field *FieldData) bool) {
 
 // GetFieldData returns the raw field data object at the given tag
 func (r *DecodeResult) GetFieldData(tag int) (*FieldData, error) {
-	if r == nil || (len(r.flatTags) == 0) {
+	if r == nil || r.lut == nil {
 		return nil, ErrTagNotDefined
 	}
-	if tag < 0 {
-		tag *= -1
-	}
 
-	flatIdx, hasFlat := slices.BinarySearch(r.flatTags, tag)
+	flatIdx, hasFlat := r.lut.safeLookup(tag)
 	if !hasFlat {
 		return nil, ErrTagNotDefined
 	}
