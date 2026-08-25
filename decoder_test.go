@@ -2,11 +2,13 @@ package csproto_test
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"math"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/CrowdStrike/csproto"
 )
@@ -1346,6 +1348,447 @@ func TestDecodeTag(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDecodeVarint(t *testing.T) {
+	t.Parallel()
+
+	// Helper: encode a uint64 to varint bytes
+	encode := func(v uint64) []byte {
+		buf := make([]byte, 10)
+		n := csproto.EncodeVarint(buf, v)
+		return buf[:n]
+	}
+
+	t.Run("valid values", func(t *testing.T) {
+		t.Parallel()
+		tests := []struct {
+			name  string
+			input []byte
+			want  uint64
+			wantN int
+		}{
+			// Single byte values (0x00–0x7F)
+			{"zero", []byte{0x00}, 0, 1},
+			{"one", []byte{0x01}, 1, 1},
+			{"max_single_byte_127", []byte{0x7f}, 127, 1},
+			{"single_byte_with_trailing", []byte{0x05, 0xFF, 0xFF}, 5, 1},
+
+			// Two byte values
+			{"min_2byte_128", encode(128), 128, 2},
+			{"val_300", encode(300), 300, 2},
+			{"max_2byte_16383", encode(16383), 16383, 2},
+
+			// Three byte values
+			{"min_3byte_16384", encode(16384), 16384, 3},
+			{"val_100000", encode(100000), 100000, 3},
+			{"max_3byte_2097151", encode(2097151), 2097151, 3},
+
+			// Four byte values
+			{"min_4byte_2097152", encode(2097152), 2097152, 4},
+			{"max_4byte_268435455", encode(268435455), 268435455, 4},
+
+			// Five byte values
+			{"min_5byte_268435456", encode(268435456), 268435456, 5},
+			{"max_uint32", encode(math.MaxUint32), math.MaxUint32, 5},
+			{"max_5byte_34359738367", encode(34359738367), 34359738367, 5},
+
+			// Six byte values
+			{"min_6byte_34359738368", encode(34359738368), 34359738368, 6},
+			{"max_6byte_4398046511103", encode(4398046511103), 4398046511103, 6},
+
+			// Seven byte values
+			{"min_7byte_4398046511104", encode(4398046511104), 4398046511104, 7},
+			{"max_7byte_562949953421311", encode(562949953421311), 562949953421311, 7},
+
+			// Eight byte values
+			{"min_8byte_562949953421312", encode(562949953421312), 562949953421312, 8},
+			{"max_8byte_72057594037927935", encode(72057594037927935), 72057594037927935, 8},
+
+			// Nine byte values
+			{"min_9byte_72057594037927936", encode(72057594037927936), 72057594037927936, 9},
+			{"max_int64", encode(math.MaxInt64), math.MaxInt64, 9},
+
+			// Ten byte values
+			{"min_10byte_2^63", encode(1 << 63), 1 << 63, 10},
+			{"max_uint64", encode(math.MaxUint64), math.MaxUint64, 10},
+			{"negative_one_as_uint64", encode(math.MaxUint64), math.MaxUint64, 10},
+
+			// Minimal payload patterns (0x80...0x80, 0x01)
+			{"min_payload_2byte", []byte{0x80, 0x01}, 128, 2},
+			{"min_payload_3byte", []byte{0x80, 0x80, 0x01}, 1 << 14, 3},
+			{"min_payload_4byte", []byte{0x80, 0x80, 0x80, 0x01}, 1 << 21, 4},
+			{"min_payload_5byte", []byte{0x80, 0x80, 0x80, 0x80, 0x01}, 1 << 28, 5},
+			{"min_payload_6byte", []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x01}, 1 << 35, 6},
+			{"min_payload_7byte", []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x01}, 1 << 42, 7},
+			{"min_payload_8byte", []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x01}, 1 << 49, 8},
+			{"min_payload_9byte", []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x01}, 1 << 56, 9},
+			{"min_payload_10byte", []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x01}, 1 << 63, 10},
+
+			// Max payload patterns (0xFF...0xFF, 0x7F)
+			{"max_payload_2byte", []byte{0xFF, 0x7F}, (1 << 14) - 1, 2},
+			{"max_payload_3byte", []byte{0xFF, 0xFF, 0x7F}, (1 << 21) - 1, 3},
+			{"max_payload_4byte", []byte{0xFF, 0xFF, 0xFF, 0x7F}, (1 << 28) - 1, 4},
+			{"max_payload_5byte", []byte{0xFF, 0xFF, 0xFF, 0xFF, 0x7F}, (1 << 35) - 1, 5},
+
+			// Protobuf field tags: (tag << 3 | wire_type)
+			{"tag_1_varint", encode(1<<3 | 0), 1<<3 | 0, 1},
+			{"tag_1_bytes", encode(1<<3 | 2), 1<<3 | 2, 1},
+			{"tag_15_varint", encode(15<<3 | 0), 15<<3 | 0, 1},
+			{"tag_16_varint", encode(16<<3 | 0), 16<<3 | 0, 2},
+			{"tag_2047_varint", encode(2047<<3 | 0), 2047<<3 | 0, 2},
+			{"tag_2048_varint", encode(2048<<3 | 0), 2048<<3 | 0, 3},
+			{"tag_19000_varint", encode(19000<<3 | 0), 19000<<3 | 0, 3},
+		}
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				v, n, err := csproto.DecodeVarint(tc.input)
+				require.NoError(t, err)
+				assert.Equal(t, tc.want, v)
+				assert.Equal(t, tc.wantN, n)
+			})
+		}
+	})
+
+	t.Run("error cases", func(t *testing.T) {
+		t.Parallel()
+		tests := []struct {
+			name    string
+			input   []byte
+			wantErr error
+		}{
+			// Empty/nil
+			{"nil_input", nil, csproto.ErrInvalidVarintData},
+			{"empty_input", []byte{}, csproto.ErrInvalidVarintData},
+
+			// Single byte with continuation bit (needs more but has none)
+			{"sz1_0x80", []byte{0x80}, io.ErrUnexpectedEOF},
+			{"sz1_0xFF", []byte{0xFF}, io.ErrUnexpectedEOF},
+			{"sz1_0xFE", []byte{0xFE}, io.ErrUnexpectedEOF},
+
+			// All continuation bytes, no terminator (sz 2-9)
+			{"all_cont_sz2", []byte{0x80, 0x80}, io.ErrUnexpectedEOF},
+			{"all_cont_sz3", []byte{0x80, 0x80, 0x80}, io.ErrUnexpectedEOF},
+			{"all_cont_sz4", []byte{0x80, 0x80, 0x80, 0x80}, io.ErrUnexpectedEOF},
+			{"all_cont_sz5", []byte{0x80, 0x80, 0x80, 0x80, 0x80}, io.ErrUnexpectedEOF},
+			{"all_cont_sz6", []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80}, io.ErrUnexpectedEOF},
+			{"all_cont_sz7", []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80}, io.ErrUnexpectedEOF},
+			{"all_cont_sz8", []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80}, io.ErrUnexpectedEOF},
+			{"all_cont_sz9", []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80}, io.ErrUnexpectedEOF},
+
+			// All continuation bytes, no terminator (sz 2-9)
+			{"all_cont_sz2", []byte{0x80, 0x80}, io.ErrUnexpectedEOF},
+			{"all_cont_sz3", []byte{0x80, 0x80, 0x80}, io.ErrUnexpectedEOF},
+			{"all_cont_sz4", []byte{0x80, 0x80, 0x80, 0x80}, io.ErrUnexpectedEOF},
+			{"all_cont_sz5", []byte{0x80, 0x80, 0x80, 0x80, 0x80}, io.ErrUnexpectedEOF},
+			{"all_cont_sz6", []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80}, io.ErrUnexpectedEOF},
+			{"all_cont_sz7", []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80}, io.ErrUnexpectedEOF},
+			{"all_cont_sz8", []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80}, io.ErrUnexpectedEOF},
+			{"all_cont_sz9", []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80}, io.ErrUnexpectedEOF},
+
+			// 10+ bytes all with continuation bit set (overflow)
+			{"overflow_10byte", []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80}, csproto.ErrValueOverflow},
+			{"overflow_11byte", []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80}, csproto.ErrValueOverflow},
+			{"overflow_ff_10byte", []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF}, csproto.ErrValueOverflow},
+
+			// 10th byte has continuation bit set (would need an 11th byte, overflows)
+			{"overflow_10th_byte_cont", []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80}, csproto.ErrValueOverflow},
+			// All payload bits set with continuation in every byte including the 10th
+			{"overflow_all_ff_cont", []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x80}, csproto.ErrValueOverflow},
+			// 10 bytes where last byte has continuation bit (payload doesn't matter)
+			{"overflow_mixed_payload", []byte{0x81, 0x82, 0x83, 0x84, 0x85, 0x86, 0x87, 0x88, 0x89, 0x8A}, csproto.ErrValueOverflow},
+			// 12 bytes all continuation — ensure we don't read past byte 10
+			{"overflow_12byte", []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80}, csproto.ErrValueOverflow},
+
+			// Bug #1: 10th byte with payload bits above bit 0 should overflow.
+			// Only values 0x00 and 0x01 are valid for the 10th byte since only
+			// bit 0 (shifted to position 63) fits in a uint64. Values 0x02-0x7F
+			// encode bits 64+ which silently overflow — these should be rejected.
+			{"10th_byte_0x02_overwide", []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x02}, csproto.ErrValueOverflow},
+			{"10th_byte_0x03_overwide", []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x03}, csproto.ErrValueOverflow},
+			{"10th_byte_0x7f_overwide", []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x7F}, csproto.ErrValueOverflow},
+			{"10th_byte_0x40_overwide", []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x40}, csproto.ErrValueOverflow},
+			// With real payload in earlier bytes — 10th byte still overwide
+			{"10th_byte_overwide_with_payload", []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0x02}, csproto.ErrValueOverflow},
+		}
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				_, _, err := csproto.DecodeVarint(tc.input)
+				assert.ErrorIs(t, err, tc.wantErr)
+			})
+		}
+	})
+
+	t.Run("truncated varints", func(t *testing.T) {
+		t.Parallel()
+
+		// For several multi-byte varints, truncate at each byte position and expect EOF
+		truncCases := []struct {
+			name string
+			full []byte
+		}{
+			{"5byte_max_uint32", encode(math.MaxUint32)},
+			{"10byte_max_uint64", encode(math.MaxUint64)},
+			{"3byte_100000", encode(100000)},
+			{"8byte_2^55", encode(1 << 55)},
+		}
+		for _, tc := range truncCases {
+			for cutAt := 1; cutAt < len(tc.full); cutAt++ {
+				name := fmt.Sprintf("%s_cut_at_%d_of_%d", tc.name, cutAt, len(tc.full))
+				input := tc.full[:cutAt]
+				t.Run(name, func(t *testing.T) {
+					t.Parallel()
+					_, _, err := csproto.DecodeVarint(input)
+					assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
+				})
+			}
+		}
+	})
+
+	t.Run("powers of two", func(t *testing.T) {
+		t.Parallel()
+		for bit := 0; bit < 64; bit++ {
+			val := uint64(1) << bit
+			t.Run(fmt.Sprintf("2^%d", bit), func(t *testing.T) {
+				t.Parallel()
+				raw := encode(val)
+				v, n, err := csproto.DecodeVarint(raw)
+				require.NoError(t, err)
+				assert.Equal(t, val, v)
+				assert.Equal(t, len(raw), n)
+			})
+		}
+	})
+
+	t.Run("powers of two minus one", func(t *testing.T) {
+		t.Parallel()
+		for bit := 1; bit <= 63; bit++ {
+			val := (uint64(1) << bit) - 1
+			t.Run(fmt.Sprintf("2^%d-1", bit), func(t *testing.T) {
+				t.Parallel()
+				raw := encode(val)
+				v, n, err := csproto.DecodeVarint(raw)
+				require.NoError(t, err)
+				assert.Equal(t, val, v)
+				assert.Equal(t, len(raw), n)
+			})
+		}
+	})
+
+	t.Run("7-bit boundaries", func(t *testing.T) {
+		t.Parallel()
+		tests := []struct {
+			name  string
+			val   uint64
+			wantN int
+		}{
+			{"max_7bits", (1 << 7) - 1, 1},
+			{"min_8bits", 1 << 7, 2},
+			{"max_14bits", (1 << 14) - 1, 2},
+			{"min_15bits", 1 << 14, 3},
+			{"max_21bits", (1 << 21) - 1, 3},
+			{"min_22bits", 1 << 21, 4},
+			{"max_28bits", (1 << 28) - 1, 4},
+			{"min_29bits", 1 << 28, 5},
+			{"max_35bits", (1 << 35) - 1, 5},
+			{"min_36bits", 1 << 35, 6},
+			{"max_42bits", (1 << 42) - 1, 6},
+			{"min_43bits", 1 << 42, 7},
+			{"max_49bits", (1 << 49) - 1, 7},
+			{"min_50bits", 1 << 49, 8},
+			{"max_56bits", (1 << 56) - 1, 8},
+			{"min_57bits", 1 << 56, 9},
+			{"max_63bits", (1 << 63) - 1, 9},
+			{"min_64bits", 1 << 63, 10},
+			{"max_64bits", math.MaxUint64, 10},
+		}
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				raw := encode(tc.val)
+				require.Equal(t, tc.wantN, len(raw), "encoded length")
+				v, n, err := csproto.DecodeVarint(raw)
+				require.NoError(t, err)
+				assert.Equal(t, tc.val, v)
+				assert.Equal(t, tc.wantN, n)
+			})
+		}
+	})
+
+	t.Run("terminator at each position in sz9 buffer", func(t *testing.T) {
+		t.Parallel()
+		// Buffer of 9 bytes; place terminator (clear high bit) at each position 0-8
+		for pos := 0; pos < 9; pos++ {
+			buf := make([]byte, 9)
+			for i := 0; i < pos; i++ {
+				buf[i] = 0x80 | byte(i+1)
+			}
+			buf[pos] = byte(pos + 1) // terminal byte
+			expectedN := pos + 1
+			t.Run(fmt.Sprintf("term_at_%d", pos), func(t *testing.T) {
+				t.Parallel()
+				_, n, err := csproto.DecodeVarint(buf)
+				require.NoError(t, err)
+				assert.Equal(t, expectedN, n)
+			})
+		}
+	})
+
+	t.Run("early exit in each switch case", func(t *testing.T) {
+		t.Parallel()
+		// For each buffer size (sz) 2-9, test a varint that terminates at
+		// every valid early byte position. This exercises all the early-return
+		// branches within each switch case.
+		for sz := 2; sz <= 9; sz++ {
+			// Varint can terminate at positions 1 through sz-1 (early) or sz-1 (full use)
+			for termAt := 1; termAt <= sz; termAt++ {
+				buf := make([]byte, sz)
+				// Bytes before terminator have continuation bit set
+				for i := 0; i < termAt-1; i++ {
+					buf[i] = 0x80 | byte(i+1)
+				}
+				// Terminator byte (high bit clear) — use position-based value
+				buf[termAt-1] = byte(termAt)
+
+				name := fmt.Sprintf("sz%d_term_at_byte%d", sz, termAt)
+				expectedN := termAt
+				t.Run(name, func(t *testing.T) {
+					t.Parallel()
+					_, n, err := csproto.DecodeVarint(buf)
+					require.NoError(t, err)
+					assert.Equal(t, expectedN, n)
+				})
+			}
+
+			// Also test the EOF case: all bytes have continuation bit, no terminator
+			allCont := make([]byte, sz)
+			for i := range allCont {
+				allCont[i] = 0x80 | byte(i+1)
+			}
+			name := fmt.Sprintf("sz%d_all_continuation_eof", sz)
+			t.Run(name, func(t *testing.T) {
+				t.Parallel()
+				_, _, err := csproto.DecodeVarint(allCont)
+				assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
+			})
+		}
+	})
+
+	t.Run("early exit with real values in padded buffers", func(t *testing.T) {
+		t.Parallel()
+		// Encode short varints and place them in larger buffers so the sz
+		// dispatches to a higher case but exits early at the real terminator.
+		type testCase struct {
+			name      string
+			val       uint64
+			varintLen int
+		}
+		vals := []testCase{
+			{"2byte_val_300", 300, 2},
+			{"3byte_val_100000", 100000, 3},
+			{"4byte_val_40000000", 40000000, 4},
+			{"5byte_val_5000000000", 5000000000, 5},
+		}
+		for _, tc := range vals {
+			raw := encode(tc.val)
+			require.Equal(t, tc.varintLen, len(raw))
+
+			// Place in buffers of size varintLen+1 through 9
+			for bufSz := tc.varintLen + 1; bufSz <= 9; bufSz++ {
+				padded := make([]byte, bufSz)
+				copy(padded, raw)
+				// Remaining bytes are zero (which has high bit clear, but the varint
+				// should terminate before reaching them)
+
+				name := fmt.Sprintf("%s_in_buf%d", tc.name, bufSz)
+				expectedVal := tc.val
+				expectedN := tc.varintLen
+				t.Run(name, func(t *testing.T) {
+					t.Parallel()
+					v, n, err := csproto.DecodeVarint(padded)
+					require.NoError(t, err)
+					assert.Equal(t, expectedVal, v)
+					assert.Equal(t, expectedN, n)
+				})
+			}
+		}
+	})
+
+	t.Run("short path vs long path consistency", func(t *testing.T) {
+		t.Parallel()
+		// Same varint decoded from a tight buffer (short path, sz < 10)
+		// and a padded buffer (long path, sz >= 10) must give identical results.
+		tests := []uint64{
+			128, 16384, 2097152, 268435456, 34359738368,
+			4398046511104, 562949953421312, 72057594037927936,
+		}
+		for _, val := range tests {
+			t.Run(fmt.Sprintf("val_%d", val), func(t *testing.T) {
+				t.Parallel()
+				raw := encode(val)
+				require.Less(t, len(raw), 10)
+
+				// Short path: exact-fit buffer
+				v1, n1, err1 := csproto.DecodeVarint(raw)
+				require.NoError(t, err1)
+
+				// Long path: 10-byte buffer
+				padded := make([]byte, 10)
+				copy(padded, raw)
+				v2, n2, err2 := csproto.DecodeVarint(padded)
+				require.NoError(t, err2)
+
+				assert.Equal(t, v1, v2, "values differ")
+				assert.Equal(t, n1, n2, "byte counts differ")
+			})
+		}
+	})
+
+	t.Run("varint with trailing garbage", func(t *testing.T) {
+		t.Parallel()
+		// Decoder should consume only the varint bytes, not the garbage after
+		tests := []struct {
+			name  string
+			val   uint64
+			trail []byte
+		}{
+			{"1byte_trailing", 42, []byte{0xDE, 0xAD}},
+			{"2byte_trailing", 300, []byte{0xBE, 0xEF, 0xCA}},
+			{"5byte_trailing", math.MaxUint32, []byte{0xFF, 0xFF, 0xFF, 0xFF, 0xFF}},
+		}
+		for _, tc := range tests {
+			t.Run(tc.name, func(t *testing.T) {
+				t.Parallel()
+				raw := encode(tc.val)
+				input := append(raw, tc.trail...)
+				v, n, err := csproto.DecodeVarint(input)
+				require.NoError(t, err)
+				assert.Equal(t, tc.val, v)
+				assert.Equal(t, len(raw), n)
+			})
+		}
+	})
+
+	t.Run("negative int64 roundtrip", func(t *testing.T) {
+		t.Parallel()
+		// Protobuf encodes negative int64 as full 10-byte uint64
+		negatives := []int64{-1, -128, -32768, math.MinInt64}
+		for _, neg := range negatives {
+			asUint := uint64(neg)
+			t.Run(fmt.Sprintf("neg_%d", neg), func(t *testing.T) {
+				t.Parallel()
+				raw := encode(asUint)
+				assert.Equal(t, 10, len(raw))
+				v, n, err := csproto.DecodeVarint(raw)
+				require.NoError(t, err)
+				assert.Equal(t, asUint, v)
+				assert.Equal(t, 10, n)
+				assert.Equal(t, neg, int64(v))
+			})
+		}
+	})
 }
 
 func FuzzDecodeTag(f *testing.F) {
