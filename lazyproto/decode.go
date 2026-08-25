@@ -170,8 +170,8 @@ func (dec *Decoder) decodeWithPool(data []byte) (*DecodeResult, error) {
 	}
 	err := res.decode(data)
 	if err != nil {
-		// call res.Close() on error to clean up field data
-		_ = res.Close()
+		// call res.close() on error to clean up field data
+		res.close()
 		return nil, err
 	}
 	return res, nil
