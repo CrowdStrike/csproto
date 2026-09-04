@@ -140,6 +140,71 @@ func TestNestedDecodeResultPoolLeak_ErrorPath(t *testing.T) {
 		newCalls.Load())
 }
 
+func TestNestedResultEmptyNestedMessage(t *testing.T) {
+	// message Outer { Inner inner = 1; }
+	// message Inner { uint32 id = 1; }
+	//
+	// Inner is present on the wire but has a zero-length payload (e.g. Inner{}
+	// with no fields set). (*Decoder).decodeWithPool short-circuits on empty
+	// data and returns (nil, nil) instead of a *DecodeResult, so NestedResult
+	// must not dereference the result before checking for nil.
+	outerMsg := []byte{
+		// field 1: nested message (0 bytes)
+		(1 << 3) | 2, 0x00,
+	}
+
+	def := NewDef()
+	_ = def.NestedTag(1, 1)
+
+	dec, err := NewDecoder(def, WithMode(csproto.DecoderModeFast))
+	require.NoError(t, err)
+
+	res, err := dec.Decode(outerMsg)
+	require.NoError(t, err)
+
+	nested, err := res.NestedResult(1)
+	require.NoError(t, err)
+	assert.Nil(t, nested)
+
+	require.NoError(t, res.Close())
+}
+
+func TestNestedResultsEmptyNestedMessage(t *testing.T) {
+	// message Outer { repeated Inner items = 1; }
+	// message Inner { uint32 id = 1; }
+	//
+	// One of the repeated entries is present but has a zero-length payload
+	// (e.g. Inner{} with no fields set). NestedResults must not dereference
+	// the corresponding nil *DecodeResult.
+	outerMsg := []byte{
+		// field 1: first nested (2 bytes): id=1
+		(1 << 3) | 2, 0x02, (1 << 3), 0x01,
+		// field 1: second nested (0 bytes)
+		(1 << 3) | 2, 0x00,
+	}
+
+	def := NewDef()
+	_ = def.NestedTag(1, 1)
+
+	dec, err := NewDecoder(def, WithMode(csproto.DecoderModeFast))
+	require.NoError(t, err)
+
+	res, err := dec.Decode(outerMsg)
+	require.NoError(t, err)
+
+	results, err := res.NestedResults(1)
+	require.NoError(t, err)
+	require.Len(t, results, 2)
+
+	v, err := results[0].UInt32Value(1)
+	require.NoError(t, err)
+	assert.Equal(t, uint32(1), v)
+
+	assert.Nil(t, results[1])
+
+	require.NoError(t, res.Close())
+}
+
 func TestNestedDecodeResultPoolReuse_MultipleNested(t *testing.T) {
 	// Verify pool reuse works correctly with repeated nested results (NestedResults plural).
 	// After Close(), all nested results should be returned with skipClose=false.
