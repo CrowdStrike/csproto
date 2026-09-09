@@ -86,20 +86,38 @@ func (r *DecodeResult) clone() *DecodeResult {
 	if r == nil {
 		return nil
 	}
+
+	// Allocate all FieldData as a contiguous slab (1 heap allocation) rather than
+	// N individual allocations. The flatData pointer slice points into the slab,
+	// giving each entry a stable address that survives pool recycling and can be
+	// safely handed to external callers via GetFieldData/Range.
+	//
+	// Tradeoff: if a caller holds a single *FieldData past Close(), the entire slab
+	// is retained by the GC rather than just one FieldData. In practice this is not
+	// a regression — a live *DecodeResult already pins all of its *FieldData anyway,
+	// and callers are expected to release references before Close().
+
+	var (
+		n    = len(r.flatData)
+		slab = make([]FieldData, n)
+		ptrs = make([]*FieldData, n)
+	)
+
+	for i := range slab {
+		slab[i].unsafe = r.unsafe
+		ptrs[i] = &slab[i]
+	}
+
 	res := &DecodeResult{
 		pool:           r.pool,
 		filter:         r.filter,
 		lut:            r.lut,
-		flatData:       make([]*FieldData, len(r.flatData)),
+		flatData:       ptrs,
 		nestedDecoders: r.nestedDecoders,
 		maxBuffer:      r.maxBuffer,
 		unsafe:         r.unsafe,
 	}
-	for i := range r.flatData {
-		res.flatData[i] = &FieldData{
-			unsafe: r.unsafe,
-		}
-	}
+
 	return res
 }
 

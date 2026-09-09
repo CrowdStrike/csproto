@@ -49,8 +49,9 @@ func Decode(data []byte, def Def) (DecodeResult, error) {
 	if err != nil || result == nil {
 		return emptyResult, err
 	}
-	for i := range result.flatData {
-		result.flatData[i] = new(FieldData)
+	slab := make([]FieldData, len(result.flatData))
+	for i := range slab {
+		result.flatData[i] = &slab[i]
 	}
 	err = result.decode(slices.Clone(data))
 	if err != nil {
