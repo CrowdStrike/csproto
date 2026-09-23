@@ -250,8 +250,11 @@ func (r *DecodeResult) NestedResult(tag int) (*DecodeResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	tmp.skipClose = true
-	r.closers = append(r.closers, tmp)
+	// If the slice is empty, tmp and err are both nil.
+	if tmp != nil {
+		tmp.skipClose = true
+		r.closers = append(r.closers, tmp)
+	}
 	return tmp, nil
 }
 
@@ -288,10 +291,13 @@ func (r *DecodeResult) NestedResults(tag int) ([]*DecodeResult, error) {
 			}
 			return nil, err
 		}
-		res.skipClose = true
+		// If the slice is empty, res and err are both nil.
+		if res != nil {
+			res.skipClose = true
+			r.closers = append(r.closers, res)
+		}
 		results = append(results, res)
 	}
-	r.closers = append(r.closers, results...)
 	return results, nil
 }
 
