@@ -36,13 +36,31 @@ import (
 //
 // To avoid panics, any method called on a nil instance returns a zero value and [ErrTagNotFound].
 type FieldData struct {
+	// --- hot fields (40 bytes): touched on every decode-loop iteration ---
+
 	// one or more []byte values containing the raw bytes from the decoded message for single or
 	//  repeated scalar values
 	data [][]byte
 
-	// these are slices that are initialized when creating a new result,
-	// they will be reused if the result is closed and put back in the sync.Pool
-	// so we can reduce the overall allocations
+	// holds the Protobuf wire type from the source data
+	wt csproto.WireType
+
+	// buffers holds the typed conversion slices used by the XxxValues() accessor
+	// methods. It is non-nil only in unsafe/fast mode (DecoderModeFast), where it
+	// enables zero-copy returns and slice reuse. In safe mode buffers is nil — the
+	// accessors allocate fresh on every call. The nil check replaces a separate
+	// "unsafe bool" flag.
+	//
+	// Separating buffers from the hot decode fields keeps the decode loop's
+	// working set small under L1 pressure — the loop only touches data and wt.
+	buffers *fieldDataBuffers
+}
+
+// fieldDataBuffers holds the typed reuse slices for FieldData.
+// These are only allocated in unsafe/fast mode and are never touched during
+// the decode loop itself — only when a caller reads typed values (BoolValues,
+// Int64Values, etc.).
+type fieldDataBuffers struct {
 	boolSlice    []bool
 	uint64Slice  []uint64
 	int64Slice   []int64
@@ -52,12 +70,8 @@ type FieldData struct {
 	float32Slice []float32
 	float64Slice []float64
 
-	// holds the Protobuf wire type from the source data
-	wt csproto.WireType
-
-	// holds the maximum capacity of the slice values
+	// holds the maximum capacity of the slice values above
 	maxCap int
-	unsafe bool
 }
 
 // BoolValue converts the lazily-decoded field data into a bool.
@@ -86,16 +100,21 @@ func (fd *FieldData) BoolValues() ([]bool, error) {
 	if fd == nil || len(fd.data) == 0 {
 		return nil, ErrTagNotFound
 	}
-	s, err := sliceValue(fd, csproto.WireTypeVarint, fd.boolSlice, func(data []byte) (bool, int, error) {
+	buf := fd.buffers
+	var reuse []bool
+	if buf != nil {
+		reuse = buf.boolSlice
+	}
+	s, err := sliceValue(fd, csproto.WireTypeVarint, reuse, func(data []byte) (bool, int, error) {
 		v, n, err := csproto.DecodeVarint(data)
 		if err != nil {
 			return false, 0, err
 		}
 		return v != 0, n, nil
 	})
-	if fd.unsafe {
-		fd.maxCap = max(fd.maxCap, cap(s))
-		fd.boolSlice = s
+	if buf != nil {
+		buf.maxCap = max(buf.maxCap, cap(s))
+		buf.boolSlice = s
 	}
 	return s, err
 }
@@ -105,7 +124,7 @@ func (fd *FieldData) BoolValues() ([]bool, error) {
 // See the [FieldData] docs for more specific details about interpreting lazily-decoded data.
 func (fd *FieldData) StringValue() (string, error) {
 	return scalarValue(fd, csproto.WireTypeLengthDelimited, func(data []byte) (string, error) {
-		if fd.unsafe {
+		if fd.buffers != nil {
 			return unsafe.String(unsafe.SliceData(data), len(data)), nil
 		}
 		return string(data), nil
@@ -119,15 +138,20 @@ func (fd *FieldData) StringValues() ([]string, error) {
 	if fd == nil || len(fd.data) == 0 {
 		return nil, ErrTagNotFound
 	}
-	s, err := sliceValue(fd, csproto.WireTypeLengthDelimited, fd.stringSlice, func(data []byte) (string, int, error) {
-		if fd.unsafe {
+	buf := fd.buffers
+	var reuse []string
+	if buf != nil {
+		reuse = buf.stringSlice
+	}
+	s, err := sliceValue(fd, csproto.WireTypeLengthDelimited, reuse, func(data []byte) (string, int, error) {
+		if buf != nil {
 			return unsafe.String(unsafe.SliceData(data), len(data)), len(data), nil
 		}
 		return string(data), len(data), nil
 	})
-	if fd.unsafe {
-		fd.maxCap = max(fd.maxCap, cap(s))
-		fd.stringSlice = s
+	if buf != nil {
+		buf.maxCap = max(buf.maxCap, cap(s))
+		buf.stringSlice = s
 	}
 	return s, err
 }
@@ -137,7 +161,7 @@ func (fd *FieldData) StringValues() ([]string, error) {
 // See the [FieldData] docs for more specific details about interpreting lazily-decoded data.
 func (fd *FieldData) BytesValue() ([]byte, error) {
 	return scalarValue(fd, csproto.WireTypeLengthDelimited, func(data []byte) ([]byte, error) {
-		if fd.unsafe {
+		if fd.buffers != nil {
 			return data, nil
 		}
 		return slices.Clone(data), nil
@@ -151,7 +175,7 @@ func (fd *FieldData) BytesValues() ([][]byte, error) {
 	if fd == nil || len(fd.data) == 0 {
 		return nil, ErrTagNotFound
 	}
-	if fd.unsafe {
+	if fd.buffers != nil {
 		return fd.data, nil
 	}
 	output := make([][]byte, len(fd.data))
@@ -184,7 +208,12 @@ func (fd *FieldData) UInt32Values() ([]uint32, error) {
 	if fd == nil || len(fd.data) == 0 {
 		return nil, ErrTagNotFound
 	}
-	s, err := sliceValue(fd, csproto.WireTypeVarint, fd.uint32Slice, func(data []byte) (uint32, int, error) {
+	buf := fd.buffers
+	var reuse []uint32
+	if buf != nil {
+		reuse = buf.uint32Slice
+	}
+	s, err := sliceValue(fd, csproto.WireTypeVarint, reuse, func(data []byte) (uint32, int, error) {
 		value, n, err := csproto.DecodeVarint(data)
 		if err != nil {
 			return 0, 0, err
@@ -194,9 +223,9 @@ func (fd *FieldData) UInt32Values() ([]uint32, error) {
 		}
 		return uint32(value), n, nil
 	})
-	if fd.unsafe {
-		fd.maxCap = max(fd.maxCap, cap(s))
-		fd.uint32Slice = s
+	if buf != nil {
+		buf.maxCap = max(buf.maxCap, cap(s))
+		buf.uint32Slice = s
 	}
 	return s, err
 }
@@ -237,7 +266,12 @@ func (fd *FieldData) Int32Values() ([]int32, error) {
 	if fd == nil || len(fd.data) == 0 {
 		return nil, ErrTagNotFound
 	}
-	s, err := sliceValue(fd, csproto.WireTypeVarint, fd.int32Slice, func(data []byte) (int32, int, error) {
+	buf := fd.buffers
+	var reuse []int32
+	if buf != nil {
+		reuse = buf.int32Slice
+	}
+	s, err := sliceValue(fd, csproto.WireTypeVarint, reuse, func(data []byte) (int32, int, error) {
 		value, n, err := csproto.DecodeVarint(data)
 		if err != nil {
 			return 0, 0, err
@@ -248,9 +282,9 @@ func (fd *FieldData) Int32Values() ([]int32, error) {
 		}
 		return int32(value), n, nil
 	})
-	if fd.unsafe {
-		fd.maxCap = max(fd.maxCap, cap(s))
-		fd.int32Slice = s
+	if buf != nil {
+		buf.maxCap = max(buf.maxCap, cap(s))
+		buf.int32Slice = s
 	}
 	return s, err
 }
@@ -287,16 +321,21 @@ func (fd *FieldData) SInt32Values() ([]int32, error) {
 	if fd == nil || len(fd.data) == 0 {
 		return nil, ErrTagNotFound
 	}
-	s, err := sliceValue(fd, csproto.WireTypeVarint, fd.int32Slice, func(data []byte) (int32, int, error) {
+	buf := fd.buffers
+	var reuse []int32
+	if buf != nil {
+		reuse = buf.int32Slice
+	}
+	s, err := sliceValue(fd, csproto.WireTypeVarint, reuse, func(data []byte) (int32, int, error) {
 		value, n, err := csproto.DecodeZigZag32(data)
 		if err != nil {
 			return 0, 0, err
 		}
 		return value, n, nil
 	})
-	if fd.unsafe {
-		fd.maxCap = max(fd.maxCap, cap(s))
-		fd.int32Slice = s
+	if buf != nil {
+		buf.maxCap = max(buf.maxCap, cap(s))
+		buf.int32Slice = s
 	}
 	return s, err
 }
@@ -321,16 +360,21 @@ func (fd *FieldData) UInt64Values() ([]uint64, error) {
 	if fd == nil || len(fd.data) == 0 {
 		return nil, ErrTagNotFound
 	}
-	s, err := sliceValue(fd, csproto.WireTypeVarint, fd.uint64Slice, func(data []byte) (uint64, int, error) {
+	buf := fd.buffers
+	var reuse []uint64
+	if buf != nil {
+		reuse = buf.uint64Slice
+	}
+	s, err := sliceValue(fd, csproto.WireTypeVarint, reuse, func(data []byte) (uint64, int, error) {
 		value, n, err := csproto.DecodeVarint(data)
 		if err != nil {
 			return 0, 0, err
 		}
 		return value, n, nil
 	})
-	if fd.unsafe {
-		fd.maxCap = max(fd.maxCap, cap(s))
-		fd.uint64Slice = s
+	if buf != nil {
+		buf.maxCap = max(buf.maxCap, cap(s))
+		buf.uint64Slice = s
 	}
 	return s, err
 }
@@ -367,16 +411,21 @@ func (fd *FieldData) Int64Values() ([]int64, error) {
 	if fd == nil || len(fd.data) == 0 {
 		return nil, ErrTagNotFound
 	}
-	s, err := sliceValue(fd, csproto.WireTypeVarint, fd.int64Slice, func(data []byte) (int64, int, error) {
+	buf := fd.buffers
+	var reuse []int64
+	if buf != nil {
+		reuse = buf.int64Slice
+	}
+	s, err := sliceValue(fd, csproto.WireTypeVarint, reuse, func(data []byte) (int64, int, error) {
 		value, n, err := csproto.DecodeVarint(data)
 		if err != nil {
 			return 0, 0, err
 		}
 		return int64(value), n, nil
 	})
-	if fd.unsafe {
-		fd.maxCap = max(fd.maxCap, cap(s))
-		fd.int64Slice = s
+	if buf != nil {
+		buf.maxCap = max(buf.maxCap, cap(s))
+		buf.int64Slice = s
 	}
 	return s, err
 }
@@ -413,16 +462,21 @@ func (fd *FieldData) SInt64Values() ([]int64, error) {
 	if fd == nil || len(fd.data) == 0 {
 		return nil, ErrTagNotFound
 	}
-	s, err := sliceValue(fd, csproto.WireTypeVarint, fd.int64Slice, func(data []byte) (int64, int, error) {
+	buf := fd.buffers
+	var reuse []int64
+	if buf != nil {
+		reuse = buf.int64Slice
+	}
+	s, err := sliceValue(fd, csproto.WireTypeVarint, reuse, func(data []byte) (int64, int, error) {
 		value, n, err := csproto.DecodeZigZag64(data)
 		if err != nil {
 			return 0, 0, err
 		}
 		return value, n, nil
 	})
-	if fd.unsafe {
-		fd.maxCap = max(fd.maxCap, cap(s))
-		fd.int64Slice = s
+	if buf != nil {
+		buf.maxCap = max(buf.maxCap, cap(s))
+		buf.int64Slice = s
 	}
 	return s, err
 }
@@ -459,16 +513,21 @@ func (fd *FieldData) Fixed32Values() ([]uint32, error) {
 	if fd == nil || len(fd.data) == 0 {
 		return nil, ErrTagNotFound
 	}
-	s, err := sliceValue(fd, csproto.WireTypeFixed32, fd.uint32Slice, func(data []byte) (uint32, int, error) {
+	buf := fd.buffers
+	var reuse []uint32
+	if buf != nil {
+		reuse = buf.uint32Slice
+	}
+	s, err := sliceValue(fd, csproto.WireTypeFixed32, reuse, func(data []byte) (uint32, int, error) {
 		value, n, err := csproto.DecodeFixed32(data)
 		if err != nil {
 			return 0, 0, err
 		}
 		return value, n, nil
 	})
-	if fd.unsafe {
-		fd.maxCap = max(fd.maxCap, cap(s))
-		fd.uint32Slice = s
+	if buf != nil {
+		buf.maxCap = max(buf.maxCap, cap(s))
+		buf.uint32Slice = s
 	}
 	return s, err
 }
@@ -505,16 +564,21 @@ func (fd *FieldData) Fixed64Values() ([]uint64, error) {
 	if fd == nil || len(fd.data) == 0 {
 		return nil, ErrTagNotFound
 	}
-	s, err := sliceValue(fd, csproto.WireTypeFixed64, fd.uint64Slice, func(data []byte) (uint64, int, error) {
+	buf := fd.buffers
+	var reuse []uint64
+	if buf != nil {
+		reuse = buf.uint64Slice
+	}
+	s, err := sliceValue(fd, csproto.WireTypeFixed64, reuse, func(data []byte) (uint64, int, error) {
 		value, n, err := csproto.DecodeFixed64(data)
 		if err != nil {
 			return 0, 0, err
 		}
 		return value, n, nil
 	})
-	if fd.unsafe {
-		fd.maxCap = max(fd.maxCap, cap(s))
-		fd.uint64Slice = s
+	if buf != nil {
+		buf.maxCap = max(buf.maxCap, cap(s))
+		buf.uint64Slice = s
 	}
 	return s, err
 }
@@ -538,15 +602,20 @@ func (fd *FieldData) Float32Values() ([]float32, error) {
 	if fd == nil || len(fd.data) == 0 {
 		return nil, ErrTagNotFound
 	}
-	s, err := sliceValue(fd, csproto.WireTypeFixed32, fd.float32Slice, func(data []byte) (float32, int, error) {
+	buf := fd.buffers
+	var reuse []float32
+	if buf != nil {
+		reuse = buf.float32Slice
+	}
+	s, err := sliceValue(fd, csproto.WireTypeFixed32, reuse, func(data []byte) (float32, int, error) {
 		if len(data) < 4 {
 			return 0, 0, io.ErrUnexpectedEOF
 		}
 		return math.Float32frombits(binary.LittleEndian.Uint32(data)), 4, nil
 	})
-	if fd.unsafe {
-		fd.maxCap = max(fd.maxCap, cap(s))
-		fd.float32Slice = s
+	if buf != nil {
+		buf.maxCap = max(buf.maxCap, cap(s))
+		buf.float32Slice = s
 	}
 	return s, err
 }
@@ -570,15 +639,20 @@ func (fd *FieldData) Float64Values() ([]float64, error) {
 	if fd == nil || len(fd.data) == 0 {
 		return nil, ErrTagNotFound
 	}
-	s, err := sliceValue(fd, csproto.WireTypeFixed64, fd.float64Slice, func(data []byte) (float64, int, error) {
+	buf := fd.buffers
+	var reuse []float64
+	if buf != nil {
+		reuse = buf.float64Slice
+	}
+	s, err := sliceValue(fd, csproto.WireTypeFixed64, reuse, func(data []byte) (float64, int, error) {
 		if len(data) < 8 {
 			return 0, 0, io.ErrUnexpectedEOF
 		}
 		return math.Float64frombits(binary.LittleEndian.Uint64(data)), 8, nil
 	})
-	if fd.unsafe {
-		fd.maxCap = max(fd.maxCap, cap(s))
-		fd.float64Slice = s
+	if buf != nil {
+		buf.maxCap = max(buf.maxCap, cap(s))
+		buf.float64Slice = s
 	}
 	return s, err
 }
@@ -703,36 +777,41 @@ func (fd *FieldData) trunc(n int) {
 		fd.data = make([][]byte, 0, n)
 	}
 
-	// if the slices aren't large enough we don't need to reallocate
-	if n > fd.maxCap {
+	buf := fd.buffers
+	if buf == nil {
 		return
 	}
 
-	if cap(fd.boolSlice) > n {
-		fd.boolSlice = make([]bool, 0, n)
+	// if the slices aren't large enough we don't need to reallocate
+	if n > buf.maxCap {
+		return
 	}
-	if cap(fd.uint64Slice) > n {
-		fd.uint64Slice = make([]uint64, 0, n)
+
+	if cap(buf.boolSlice) > n {
+		buf.boolSlice = make([]bool, 0, n)
 	}
-	if cap(fd.int64Slice) > n {
-		fd.int64Slice = make([]int64, 0, n)
+	if cap(buf.uint64Slice) > n {
+		buf.uint64Slice = make([]uint64, 0, n)
 	}
-	if cap(fd.uint32Slice) > n {
-		fd.uint32Slice = make([]uint32, 0, n)
+	if cap(buf.int64Slice) > n {
+		buf.int64Slice = make([]int64, 0, n)
 	}
-	if cap(fd.int32Slice) > n {
-		fd.int32Slice = make([]int32, 0, n)
+	if cap(buf.uint32Slice) > n {
+		buf.uint32Slice = make([]uint32, 0, n)
 	}
-	if cap(fd.stringSlice) > n {
-		fd.stringSlice = make([]string, 0, n)
+	if cap(buf.int32Slice) > n {
+		buf.int32Slice = make([]int32, 0, n)
 	}
-	if cap(fd.float32Slice) > n {
-		fd.float32Slice = make([]float32, 0, n)
+	if cap(buf.stringSlice) > n {
+		buf.stringSlice = make([]string, 0, n)
 	}
-	if cap(fd.float64Slice) > n {
-		fd.float64Slice = make([]float64, 0, n)
+	if cap(buf.float32Slice) > n {
+		buf.float32Slice = make([]float32, 0, n)
 	}
-	fd.maxCap = n
+	if cap(buf.float64Slice) > n {
+		buf.float64Slice = make([]float64, 0, n)
+	}
+	buf.maxCap = n
 }
 
 // cap returns the capacity of the largest slice within fd
@@ -740,5 +819,9 @@ func (fd *FieldData) cap() int {
 	if fd == nil {
 		return 0
 	}
-	return max(cap(fd.data), fd.maxCap)
+	mc := 0
+	if fd.buffers != nil {
+		mc = fd.buffers.maxCap
+	}
+	return max(cap(fd.data), mc)
 }

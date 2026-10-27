@@ -87,15 +87,27 @@ func (r *DecodeResult) clone() *DecodeResult {
 		return nil
 	}
 
-	// Allocate all FieldData as a contiguous slab (1 heap allocation) rather than
-	// N individual allocations. The flatData pointer slice points into the slab,
-	// giving each entry a stable address that survives pool recycling and can be
-	// safely handed to external callers via GetFieldData/Range.
+	// Allocate FieldData as a contiguous slab (1 heap allocation + 1 pointer
+	// slice) rather than N individual allocations. The FieldData slab contains
+	// only the hot decode fields (data, wt) at 40 bytes per entry, keeping the
+	// decode loop's cache footprint ~6× smaller than the original 240-byte
+	// struct.
 	//
-	// Tradeoff: if a caller holds a single *FieldData past Close(), the entire slab
-	// is retained by the GC rather than just one FieldData. In practice this is not
-	// a regression — a live *DecodeResult already pins all of its *FieldData anyway,
-	// and callers are expected to release references before Close().
+	// In unsafe/fast mode, a separate fieldDataBuffers slab is allocated for
+	// the cold conversion slices (slice reuse, zero-copy returns). In safe
+	// mode no bufSlab is allocated — fd.buffers stays nil and accessors
+	// allocate fresh on every call. The nil-vs-non-nil buffers pointer
+	// replaces a separate "unsafe" flag.
+	//
+	// The flatData pointer slice points into the slab, giving each entry a
+	// stable address that survives pool recycling and can be safely handed
+	// to external callers via GetFieldData/Range.
+	//
+	// Tradeoff: if a caller holds a single *FieldData past Close(), the
+	// entire slab is retained by the GC rather than just one FieldData. In
+	// practice this is not a regression — a live *DecodeResult already pins
+	// all of its *FieldData anyway, and callers are expected to release
+	// references before Close().
 
 	var (
 		n    = len(r.flatData)
@@ -103,9 +115,16 @@ func (r *DecodeResult) clone() *DecodeResult {
 		ptrs = make([]*FieldData, n)
 	)
 
-	for i := range slab {
-		slab[i].unsafe = r.unsafe
-		ptrs[i] = &slab[i]
+	if r.unsafe {
+		bufSlab := make([]fieldDataBuffers, n)
+		for i := range slab {
+			slab[i].buffers = &bufSlab[i]
+			ptrs[i] = &slab[i]
+		}
+	} else {
+		for i := range slab {
+			ptrs[i] = &slab[i]
+		}
 	}
 
 	res := &DecodeResult{

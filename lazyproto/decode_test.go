@@ -2287,6 +2287,86 @@ A2 06 ; tag=100 (WrappedMessagePayload extension), length-delimited
 	assert.Error(t, err, "expected error from Decode() when data is corrupted")
 }
 
+// encodeVarintField appends a varint-encoded protobuf field (tag + value) to buf.
+func encodeVarintField(buf []byte, tag int, val uint64) []byte {
+	var tmp [20]byte // enough for tag + varint
+	n := csproto.EncodeTag(tmp[:], tag, csproto.WireTypeVarint)
+	n += csproto.EncodeVarint(tmp[n:], val)
+	return append(buf, tmp[:n]...)
+}
+
+// buildMessage builds a protobuf-encoded message with nFields varint fields
+// using consecutive tags starting at 1.
+func buildMessage(nFields int) (data []byte, tags []int) {
+	tags = make([]int, nFields)
+	for i := range tags {
+		tags[i] = i + 1
+	}
+	for _, tag := range tags {
+		data = encodeVarintField(data, tag, uint64(tag*7))
+	}
+	return data, tags
+}
+
+func BenchmarkDecode(b *testing.B) {
+	// Batch-decode to create realistic L1 cache pressure.
+	//
+	// With a single decode+close cycle the pool returns the same DecodeResult
+	// every time, so FieldData stays warm in L1 and struct layout has no
+	// measurable impact. In production, many concurrent DecodeResults compete
+	// for L1 space, making each FieldData access a potential cache miss.
+	//
+	// This benchmark decodes a batch of messages before closing any of them.
+	// With batchSize=256 and 64 fields, the live FieldData slabs total ~3.8 MB
+	// — well over L1 (128 KB on Apple M-series cores). Each decode therefore
+	// fetches its FieldData from L2+, where the number of cache lines touched
+	// per field (1 vs 2) is directly visible in wall time.
+	const batchSize = 256
+
+	for _, nFields := range []int{8, 18, 32, 64} {
+		data, tags := buildMessage(nFields)
+
+		b.Run(fmt.Sprintf("fields=%d", nFields), func(b *testing.B) {
+			dec, err := NewDecoder(NewDef(tags...), WithMode(csproto.DecoderModeFast))
+			if err != nil {
+				b.Fatal(err)
+			}
+
+			results := make([]*DecodeResult, batchSize)
+
+			// warm the pool so clone cost is not measured
+			for i := range results {
+				r, err := dec.Decode(data)
+				if err != nil {
+					b.Fatal(err)
+				}
+				results[i] = r
+			}
+			for i := range results {
+				results[i].Close()
+			}
+
+			b.SetBytes(int64(len(data)) * batchSize)
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				for j := 0; j < batchSize; j++ {
+					res, err := dec.Decode(data)
+					if err != nil {
+						b.Fatal(err)
+					}
+					results[j] = res
+				}
+				for j := 0; j < batchSize; j++ {
+					results[j].Close()
+				}
+			}
+		})
+	}
+}
+
+var cloneSink *DecodeResult
+
 func BenchmarkCloneAllocs(b *testing.B) {
 	def := NewDef(sampleTags[:]...)
 	dec, err := NewDecoder(def)
@@ -2300,7 +2380,6 @@ func BenchmarkCloneAllocs(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		r := base.clone()
-		_ = r
+		cloneSink = base.clone()
 	}
 }
