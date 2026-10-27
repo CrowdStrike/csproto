@@ -49,10 +49,19 @@ func Decode(data []byte, def Def) (DecodeResult, error) {
 	if err != nil || result == nil {
 		return emptyResult, err
 	}
-	slab := make([]FieldData, len(result.flatData))
+	var (
+		n         = len(result.flatData)
+		slab      = make([]FieldData, n)
+		coldSlab  = make([]coldData, n)
+		sharedBuf = new([]byte)
+	)
+
 	for i := range slab {
+		coldSlab[i].bufPtr = sharedBuf
+		slab[i].cold = &coldSlab[i]
 		result.flatData[i] = &slab[i]
 	}
+	result.sharedBuf = sharedBuf
 	err = result.decode(slices.Clone(data))
 	if err != nil {
 		return emptyResult, err
@@ -146,8 +155,9 @@ func NewDecoder(def Def, opts ...Option) (*Decoder, error) {
 	if err != nil {
 		return nil, err
 	}
+	alloc := dec.mode != csproto.DecoderModeSafe
 	dec.pool.New = func() any {
-		return base.clone()
+		return base.clone(alloc)
 	}
 	return dec, nil
 }
@@ -191,7 +201,6 @@ func (dec *Decoder) newBaseResult(def Def) (*DecodeResult, error) {
 		pool:      dec.pool,
 		filter:    dec.filter,
 		maxBuffer: dec.maxBuffer,
-		unsafe:    dec.mode != csproto.DecoderModeSafe,
 	}
 
 	slotCnt := result.lut.count()

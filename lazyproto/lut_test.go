@@ -662,18 +662,27 @@ func TestAbsSaturating(t *testing.T) {
 // Set of tags derived from platformevents.PlatformBaseEvent
 var sampleTags = [...]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 100, 124, 362, 407}
 
+// lutBenchSink prevents the compiler from eliminating lookup calls.
+var lutBenchSink int
+
 func BenchmarkLutTableLookup(b *testing.B) {
 	tags := sampleTags
 	def := NewDef(tags[:]...)
 	lut := newLutTable(def)
 
+	// Power-of-two length lets us use a bitmask instead of modulo to cycle tags.
+	const n = 16 // must be power of two and <= len(sampleTags)
+	var hitTags [n]int
+	copy(hitTags[:], tags[:n])
+
+	var sink int
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		for _, tag := range tags {
-			lut.lookup(tag)
-		}
+		slot, _ := lut.lookup(hitTags[i&(n-1)])
+		sink += slot
 	}
+	lutBenchSink = sink
 }
 
 func BenchmarkLutTableLookupMiss(b *testing.B) {
@@ -681,45 +690,15 @@ func BenchmarkLutTableLookupMiss(b *testing.B) {
 	def := NewDef(tags...)
 	lut := newLutTable(def)
 
-	misses := []int{6, 7, 8, 99, 500, 1000}
+	// Power-of-two set of tags that are all misses.
+	missTags := [16]int{6, 7, 8, 15, 16, 17, 18, 19, 20, 50, 99, 101, 200, 300, 400, 500}
 
+	var sink int
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		for _, tag := range misses {
-			lut.lookup(tag)
-		}
+		slot, _ := lut.lookup(missTags[i&(len(missTags)-1)])
+		sink += slot
 	}
-}
-
-func BenchmarkBinarySearchLookup(b *testing.B) {
-	tags := sampleTags
-	sorted := make([]int, len(tags))
-	copy(sorted, tags[:])
-	slices.Sort(sorted)
-
-	b.ResetTimer()
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		for _, tag := range tags {
-			slices.BinarySearch(sorted, tag)
-		}
-	}
-}
-
-func BenchmarkBinarySearchLookupMiss(b *testing.B) {
-	tags := []int{1, 2, 3, 4, 5}
-	sorted := make([]int, len(tags))
-	copy(sorted, tags)
-	slices.Sort(sorted)
-
-	misses := []int{6, 7, 8, 99, 500, 1000}
-
-	b.ResetTimer()
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		for _, tag := range misses {
-			slices.BinarySearch(sorted, tag)
-		}
-	}
+	lutBenchSink = sink
 }

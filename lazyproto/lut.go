@@ -114,32 +114,34 @@ func (t *lutTable) all() iter.Seq2[int, int] {
 	}
 }
 
-// Safely lookup tag in lut handing negative tags.
+// Safelookup safely converts negative tags to positive equivalent.
 func (t *lutTable) safeLookup(tag int) (int, bool) {
 	return t.lookup(absSaturating(tag))
 }
 
-// Lookup tag in lut, returns false if not found.
-// WARNING: tag must be >= 0 lookup will panic; if unsure use safeLookup.
-func (t *lutTable) lookup(tag int) (int, bool) {
-	if tag > maxTag {
-		slot, ok := t.overflow[tag]
-		return slot, ok
+// Lookup tag in lut, returns false if not found; can inline.
+// tag is always >= 1 when called from the decode loop (validated before call).
+func (t *lutTable) lookup(tag int) (slot int, ok bool) {
+	// Unsigned comparison collapses tag < 0 (wraps to huge uint) and
+	// tag > maxTag into a single branch. Negative tags hit the overflow
+	// map which returns the zero value (false) — safe because the decode
+	// loop rejects tag < 1 before calling lookup.
+	if uint(tag) > uint(maxTag) {
+		slot, ok = t.overflow[tag]
+		return
 	}
 
 	var (
 		wordIndex = tag >> 6
-		bit       = tag & 63
-		mask      = uint64(1) << bit
+		mask      = uint64(1) << (tag & 63)
 		word      = t.bitmap[wordIndex]
 	)
 
-	if word&mask == 0 {
-		return 0, false
+	if word&mask != 0 {
+		ok = true
+		slot = int(t.rank[wordIndex]) + bits.OnesCount64(word&(mask-1))
 	}
-
-	slot := int(t.rank[wordIndex]) + bits.OnesCount64(word&(mask-1))
-	return slot, true
+	return
 }
 
 func absSaturating(x int) int {

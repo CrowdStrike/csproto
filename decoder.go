@@ -26,13 +26,20 @@ var (
 	ErrInvalidFixed64Data = errors.New("unable to read protobuf fixed 64-bit value")
 	// ErrInvalidPackedData is returned by the decoder when it fails to read a packed repeated value.
 	ErrInvalidPackedData = errors.New("unable to read protobuf packed value")
+	// ErrUnexpectedWireType is returned by the decoder what it detects an unexpected wire type.
+	ErrUnexpectedWireType = errors.New("unexpected wire type")
 )
 
-// MaxTagValue is the largest supported protobuf field tag, which is 2^29 - 1 (or 536,870,911)
-const MaxTagValue = 536870911
+const (
+	// MaxTagValue is the largest supported protobuf field tag, which is 2^29 - 1 (or 536,870,911)
+	MaxTagValue = 536870911
 
-// length-delimited fields cannot contain more than 2GB
-const maxFieldLen = math.MaxInt32
+	// length-delimited fields cannot contain more than 2GB
+	maxFieldLen = math.MaxInt32
+
+	// maximum number of bytes in a varint
+	maxVarint = 10
+)
 
 // DecoderMode defines the behavior of the decoder (safe vs fastest).
 type DecoderMode int
@@ -55,6 +62,11 @@ func (m DecoderMode) String() string {
 	}
 	return "fast"
 }
+
+// varintShifts is a lookup table for varint bit-shift amounts.
+// Using a table index instead of a multiply (uint(n) * 7) saves 1 inlining
+// cost unit in the hot-path functions that decode varints.
+var varintShifts = [10]uint{0, 7, 14, 21, 28, 35, 42, 49, 56, 63}
 
 // Decoder implements a binary Protobuf Decoder by sequentially reading from a provided []byte.
 type Decoder struct {
@@ -1285,6 +1297,228 @@ func DecodeFixed64(p []byte) (v uint64, n int, err error) {
 	v |= uint64(p[6]) << 48
 	v |= uint64(p[7]) << 56
 	return v, 8, nil
+}
+
+// DecodeTagInline decodes a field tag and wire type from the current position.
+//
+// Unlike [Decoder.DecodeTag], this variant is inlineable (cost ≤ 80) and omits
+// tag-range validation — the caller is expected to reject unknown tags via its
+// own lookup. Similarly, wire type is not validated.  The offset is advanced
+// only on success; on error it is unchanged and the invariant
+// d.offset <= len(d.p) is preserved.
+//
+// Error types:
+//   - [io.ErrUnexpectedEOF]: the buffer is too short to contain a complete
+//     varint (no terminator byte found within the available bytes).
+//   - [ErrInvalidVarintData]: the varint exceeds the allowed byte window
+//     (all continuation bits set) — the tag key is too large.
+//
+// Requires 0 <= d.offset <= len(d.p) on entry.
+func (d *Decoder) DecodeTagInline() (tag int, wireType WireType, err error) {
+
+	const (
+		// safeTagVarint is the maximum number of varint bytes we scan
+		// before the decoded field number (v >> 3) can no longer fit
+		// in a platform int.
+		//
+		// On 64-bit (int = 64 bits): v >> 3 needs at most 61 bits,
+		// which fits in 9 varint bytes (63 bits), so maxTagVarint = 9
+		// = allowedVarint.
+		//
+		// On 32-bit (int = 32 bits): v >> 3 needs at most 31 bits =
+		// 34 bits of v, which fits in 5 varint bytes (35 bits). A
+		// 6th byte would push v above 35 bits, potentially
+		// overflowing int(v>>3). Capping at 5 limits the damage:
+		// the only remaining overflow is the 35th bit, which always
+		// manifests as tag < 0 (sign bit set). Callers that reject
+		// negative or unknown tags handle this naturally.
+		// Non-canonical encodings of valid field numbers (< 2²⁹)
+		// always fit in 5 bytes.
+		//
+		intBits       = 32 << (^uint(0) >> 63) // 32 or 64 (standard library pattern).
+		safeTagVarint = (intBits + 5) / 7      // 5 on 32-bit, 9 on 64-bit
+	)
+
+	var v uint64
+
+	// Compute count first to avoid d.offset+safeTagVarint overflow on 32-bit.
+	for n, b := range d.p[d.offset : d.offset+min(safeTagVarint, len(d.p)-d.offset)] {
+		v |= (uint64(b) & 0x7f) << varintShifts[n]
+		if b < 0x80 {
+			tag = int(v >> 3)
+			wireType = WireType(v & 0x7)
+			d.offset += n + 1
+			return
+		}
+	}
+
+	if len(d.p)-d.offset < safeTagVarint {
+		err = io.ErrUnexpectedEOF
+	} else {
+		err = ErrInvalidVarintData
+	}
+
+	return
+}
+
+// SkipBytesInline skips a length-delimited field (varint length prefix + payload) and
+// returns the offset and length of the payload within the input buffer. No slice
+// is allocated — callers index the original buffer with data[offset:offset+length].
+//
+// Inlineable (cost ≤ 80). The offset is advanced only on success; on error it is
+// unchanged and the invariant d.offset <= len(d.p) is preserved.
+//
+// Note: unlike [Decoder.DecodeBytes] and [Decoder.Skip], this function does NOT
+// enforce the 2 GiB protobuf message-size limit (ErrLenOverflow). Adding the
+// check would exceed the inlining budget. Lengths that fit in the remaining
+// buffer are accepted regardless of size. Callers that need the limit must
+// check it themselves.
+//
+// Error types:
+//   - [io.ErrUnexpectedEOF]: the length varint decoded successfully but the
+//     remaining buffer is shorter than the declared payload length.
+//   - [ErrInvalidVarintData]: the length varint is malformed. This covers both
+//     overflow (all continuation bits set within the allowed window) AND
+//     truncated buffers where no terminator byte was found. Distinguishing
+//     the two cases would exceed the inlining budget.
+//
+// Requires 0 <= d.offset <= len(d.p) on entry.
+func (d *Decoder) SkipBytesInline() (offset int, length int, err error) {
+
+	const (
+		// According to the protobuf spec, a message must be
+		// a total size < 2GiB.  That implies that 31 bits is sufficient
+		// to express the largest possible size to be skipped, which
+		// in varint encoding implies at most 5 bytes (35 bits).
+		// It is possible to have a non-canonical encoding of a tag
+		// prepended with zeros, so we allow more than 5 bytes.
+		// However, we disallow the 10th byte (64th bit) to avoid
+		// dealing with the required overflow error logic.  The
+		// overflow logic would break the inline budget and is not
+		// strictly necessary in this case.
+		safeVarint = maxVarint - 1
+	)
+
+	var v uint64
+
+	// Compute count first to avoid d.offset+safeVarint overflow on 32-bit.
+	for n, b := range d.p[d.offset : d.offset+min(safeVarint, len(d.p)-d.offset)] {
+		v |= (uint64(b) & 0x7f) << varintShifts[n]
+		if b < 0x80 {
+			// Calculate offset of the buffer; this cannot overflow due to loop guard.
+			offset = d.offset + n + 1
+
+			// Compare in int64 space before narrowing to int.
+			// v uses at most 63 bits (10th byte disallowed), so int64(v) >= 0.
+			// offset <= len(d.p) (loop range), so len(d.p)-offset >= 0.
+			// If v fits in the remaining buffer it also fits in int,
+			// making the subsequent int(v) safe on both 32- and 64-bit.
+			if int64(v) > int64(len(d.p)-offset) {
+				// Varint decoded OK but payload exceeds remaining buffer.
+				offset = 0
+				err = io.ErrUnexpectedEOF
+			} else {
+				// Varint in range; return the length and adjust d.offset.
+				length = int(v)
+				d.offset = offset + length
+			}
+			return
+		}
+	}
+	// Covers both short buffer (no terminator found) and varint overflow
+	// (all safeVarint continuation bits set). Distinguishing the two
+	// requires an if/else branch (~8 cost units) that exceeds the inline budget.
+	err = ErrInvalidVarintData
+	return
+}
+
+// SkipFixedInline skips a fixed-width field (fixed32 or fixed64) and returns the
+// offset and size of the value within the input buffer. No slice is allocated —
+// callers index the original buffer with data[off:off+sz].
+//
+// Inlineable (cost ≤ 80). The offset is advanced only on success; on error it is
+// unchanged and the invariant d.offset <= len(d.p) is preserved.
+//
+// Error types:
+//   - [io.ErrUnexpectedEOF]: the remaining buffer is shorter than the fixed
+//     width (4 or 8 bytes).
+//   - [ErrUnexpectedWireType]: wt is not [WireTypeFixed32] or [WireTypeFixed64].
+//
+// Requires 0 <= d.offset <= len(d.p) on entry.
+func (d *Decoder) SkipFixedInline(wt WireType) (off, sz int, err error) {
+
+	switch wt {
+	case WireTypeFixed32:
+		sz = 4
+	case WireTypeFixed64:
+		sz = 8
+	default:
+		err = ErrUnexpectedWireType
+		return
+	}
+
+	// Use subtraction form to avoid integer overflow when d.offset is
+	// near MaxInt (same rationale as SkipBytes). When len(d.p) < sz the
+	// subtraction is negative, making the comparison true for any
+	// non-negative d.offset — correctly returning ErrUnexpectedEOF.
+	if d.offset > len(d.p)-sz {
+		err = io.ErrUnexpectedEOF
+		return
+	}
+
+	off = d.offset
+	d.offset += sz
+	return
+}
+
+// SkipVarintInline skips a varint-encoded field value and returns the offset and size
+// of the value within the input buffer. No slice is allocated — callers index
+// the original buffer with data[off:off+sz].
+//
+// The scan window is capped at [maxVarint] (10) bytes to bound work on
+// malformed input. Unlike [Decoder.SkipBytesInline] and [Decoder.DecodeTagInline],
+// this function allows the full 10 bytes because a varint field value can
+// legitimately use all 64 bits.
+//
+// Inlineable (cost ≤ 80). The offset is advanced only on success; on error it is
+// unchanged and the invariant d.offset <= len(d.p) is preserved.
+//
+// Error types:
+//   - [io.ErrUnexpectedEOF]: fewer than [maxVarint] bytes remain and no
+//     terminator byte (< 0x80) was found within them.
+//   - [ErrInvalidVarintData]: the full [maxVarint]-byte window was present
+//     but all bytes had continuation bits set — the varint is too large.
+//   - [ErrValueOverflow]: the 10th byte has excess bits (bits 1-6 set at
+//     shift 63 would overflow uint64).
+//
+// Requires 0 <= d.offset <= len(d.p) on entry.
+func (d *Decoder) SkipVarintInline() (off, sz int, err error) {
+	// Cache number of bytes left in the buffer
+	bytesLeft := len(d.p) - d.offset
+
+	// Compute count first to avoid d.offset+maxVarint overflow on 32-bit.
+	for i, b := range d.p[d.offset : d.offset+min(maxVarint, bytesLeft)] {
+		if b < 0x80 {
+			// The 10th byte (i==9) is at shift 63 — only bit 0 is valid.
+			// Bits 1-6 would overflow uint64; reject them.
+			if i == 9 && b > 1 {
+				err = ErrValueOverflow
+				return
+			}
+			sz = i + 1
+			off = d.offset
+			d.offset += sz
+			return
+		}
+	}
+
+	if bytesLeft < maxVarint {
+		err = io.ErrUnexpectedEOF
+	} else {
+		err = ErrInvalidVarintData
+	}
+
+	return
 }
 
 // DecoderSkipError defines an error returned by the decoder's Skip() method when the specified tag and

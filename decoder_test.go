@@ -6,6 +6,7 @@ import (
 	"io"
 	"math"
 	"testing"
+	"unsafe"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1432,13 +1433,13 @@ func TestDecodeVarint(t *testing.T) {
 			{"max_payload_5byte", []byte{0xFF, 0xFF, 0xFF, 0xFF, 0x7F}, (1 << 35) - 1, 5},
 
 			// Protobuf field tags: (tag << 3 | wire_type)
-			{"tag_1_varint", encode(1<<3 | 0), 1<<3 | 0, 1},
+			{"tag_1_varint", encode(1 << 3), 1 << 3, 1},
 			{"tag_1_bytes", encode(1<<3 | 2), 1<<3 | 2, 1},
-			{"tag_15_varint", encode(15<<3 | 0), 15<<3 | 0, 1},
-			{"tag_16_varint", encode(16<<3 | 0), 16<<3 | 0, 2},
-			{"tag_2047_varint", encode(2047<<3 | 0), 2047<<3 | 0, 2},
-			{"tag_2048_varint", encode(2048<<3 | 0), 2048<<3 | 0, 3},
-			{"tag_19000_varint", encode(19000<<3 | 0), 19000<<3 | 0, 3},
+			{"tag_15_varint", encode(15 << 3), 15 << 3, 1},
+			{"tag_16_varint", encode(16 << 3), 16 << 3, 2},
+			{"tag_2047_varint", encode(2047 << 3), 2047 << 3, 2},
+			{"tag_2048_varint", encode(2048 << 3), 2048 << 3, 3},
+			{"tag_19000_varint", encode(19000 << 3), 19000 << 3, 3},
 		}
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {
@@ -1829,4 +1830,764 @@ func FuzzDecodeTag(f *testing.F) {
 			}
 		}
 	})
+}
+
+// ---------- helpers for fast decoder tests ----------
+
+// encTag encodes a protobuf tag key (field_number << 3 | wire_type) as a varint.
+func encTag(tag int, wt csproto.WireType) []byte {
+	var buf [10]byte
+	n := csproto.EncodeTag(buf[:], tag, wt)
+	return buf[:n]
+}
+
+// encVarint encodes v as a base-128 varint.
+func encVarint(v uint64) []byte {
+	var buf [10]byte
+	n := csproto.EncodeVarint(buf[:], v)
+	return buf[:n]
+}
+
+// concat concatenates byte slices.
+func concat(parts ...[]byte) []byte {
+	var out []byte
+	for _, p := range parts {
+		out = append(out, p...)
+	}
+	return out
+}
+
+// ---------- DecodeTagInline ----------
+
+func TestDecodeTagInline(t *testing.T) {
+	t.Parallel()
+
+	t.Run("single-byte tag", func(t *testing.T) {
+		data := encTag(1, csproto.WireTypeVarint)
+		dec := csproto.NewDecoder(data)
+		tag, wt, err := dec.DecodeTagInline()
+		require.NoError(t, err)
+		assert.Equal(t, 1, tag)
+		assert.Equal(t, csproto.WireTypeVarint, wt)
+		assert.Equal(t, len(data), dec.Offset())
+	})
+
+	t.Run("all wire types", func(t *testing.T) {
+		for _, wt := range []csproto.WireType{
+			csproto.WireTypeVarint,
+			csproto.WireTypeFixed64,
+			csproto.WireTypeLengthDelimited,
+			csproto.WireTypeFixed32,
+		} {
+			data := encTag(5, wt)
+			dec := csproto.NewDecoder(data)
+			tag, gotWT, err := dec.DecodeTagInline()
+			require.NoError(t, err, "wire type %v", wt)
+			assert.Equal(t, 5, tag)
+			assert.Equal(t, wt, gotWT)
+			assert.False(t, dec.More())
+		}
+	})
+
+	t.Run("multi-byte tag", func(t *testing.T) {
+		data := encTag(16, csproto.WireTypeVarint)
+		dec := csproto.NewDecoder(data)
+		tag, wt, err := dec.DecodeTagInline()
+		require.NoError(t, err)
+		assert.Equal(t, 16, tag)
+		assert.Equal(t, csproto.WireTypeVarint, wt)
+		assert.False(t, dec.More())
+	})
+
+	t.Run("large tag", func(t *testing.T) {
+		data := encTag(100000, csproto.WireTypeFixed64)
+		dec := csproto.NewDecoder(data)
+		tag, wt, err := dec.DecodeTagInline()
+		require.NoError(t, err)
+		assert.Equal(t, 100000, tag)
+		assert.Equal(t, csproto.WireTypeFixed64, wt)
+		assert.False(t, dec.More())
+	})
+
+	t.Run("max tag value", func(t *testing.T) {
+		data := encTag(csproto.MaxTagValue, csproto.WireTypeLengthDelimited)
+		dec := csproto.NewDecoder(data)
+		tag, wt, err := dec.DecodeTagInline()
+		require.NoError(t, err)
+		assert.Equal(t, csproto.MaxTagValue, tag)
+		assert.Equal(t, csproto.WireTypeLengthDelimited, wt)
+	})
+
+	t.Run("sequential tags in one buffer", func(t *testing.T) {
+		data := concat(
+			encTag(1, csproto.WireTypeVarint), []byte{0x00},
+			encTag(2, csproto.WireTypeVarint), []byte{0x01},
+		)
+		dec := csproto.NewDecoder(data)
+
+		tag1, wt1, err := dec.DecodeTagInline()
+		require.NoError(t, err)
+		assert.Equal(t, 1, tag1)
+		assert.Equal(t, csproto.WireTypeVarint, wt1)
+
+		dec.Skip(1, csproto.WireTypeVarint)
+
+		tag2, wt2, err := dec.DecodeTagInline()
+		require.NoError(t, err)
+		assert.Equal(t, 2, tag2)
+		assert.Equal(t, csproto.WireTypeVarint, wt2)
+	})
+
+	t.Run("empty buffer", func(t *testing.T) {
+		dec := csproto.NewDecoder(nil)
+		_, _, err := dec.DecodeTagInline()
+		assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	})
+
+	t.Run("zero-length buffer", func(t *testing.T) {
+		dec := csproto.NewDecoder([]byte{})
+		_, _, err := dec.DecodeTagInline()
+		assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	})
+
+	t.Run("truncated multi-byte varint", func(t *testing.T) {
+		dec := csproto.NewDecoder([]byte{0x80})
+		_, _, err := dec.DecodeTagInline()
+		assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	})
+
+	t.Run("all continuation bytes — no terminator", func(t *testing.T) {
+		// 10 bytes all with high bit set — exceeds maxVarint, never terminates.
+		// DecodeTagInline returns ErrInvalidVarintData (overflow, not EOF).
+		data := make([]byte, 10)
+		for i := range data {
+			data[i] = 0x80
+		}
+		dec := csproto.NewDecoder(data)
+		_, _, err := dec.DecodeTagInline()
+		assert.ErrorIs(t, err, csproto.ErrInvalidVarintData)
+	})
+
+	t.Run("agrees with DecodeTag for valid tags", func(t *testing.T) {
+		for _, tag := range []int{1, 15, 16, 127, 128, 2047, 2048, 100000} {
+			for _, wt := range []csproto.WireType{
+				csproto.WireTypeVarint,
+				csproto.WireTypeFixed64,
+				csproto.WireTypeLengthDelimited,
+				csproto.WireTypeFixed32,
+			} {
+				data := encTag(tag, wt)
+
+				dec1 := csproto.NewDecoder(data)
+				tag1, wt1, err1 := dec1.DecodeTag()
+
+				dec2 := csproto.NewDecoder(data)
+				tag2, wt2, err2 := dec2.DecodeTagInline()
+
+				assert.Equal(t, err1, err2, "tag=%d wt=%v", tag, wt)
+				assert.Equal(t, tag1, tag2, "tag=%d wt=%v", tag, wt)
+				assert.Equal(t, wt1, wt2, "tag=%d wt=%v", tag, wt)
+				assert.Equal(t, dec1.Offset(), dec2.Offset(), "tag=%d wt=%v offset", tag, wt)
+			}
+		}
+	})
+
+	t.Run("MaxTagValue — DecodeTagInline skips validation", func(t *testing.T) {
+		for _, wt := range []csproto.WireType{
+			csproto.WireTypeVarint,
+			csproto.WireTypeFixed64,
+			csproto.WireTypeLengthDelimited,
+			csproto.WireTypeFixed32,
+		} {
+			data := encTag(csproto.MaxTagValue, wt)
+
+			dec1 := csproto.NewDecoder(data)
+			_, _, err1 := dec1.DecodeTag()
+			assert.Error(t, err1, "DecodeTag should reject MaxTagValue with wt=%v", wt)
+
+			dec2 := csproto.NewDecoder(data)
+			tag2, wt2, err2 := dec2.DecodeTagInline()
+			assert.NoError(t, err2, "DecodeTagInline should accept MaxTagValue with wt=%v", wt)
+			assert.Equal(t, csproto.MaxTagValue, tag2)
+			assert.Equal(t, wt, wt2)
+		}
+	})
+
+	t.Run("tag zero", func(t *testing.T) {
+		data := []byte{0x00}
+		dec := csproto.NewDecoder(data)
+		tag, wt, err := dec.DecodeTagInline()
+		require.NoError(t, err)
+		assert.Equal(t, 0, tag)
+		assert.Equal(t, csproto.WireTypeVarint, wt)
+	})
+
+	t.Run("varint overflow — 10 continuation bytes", func(t *testing.T) {
+		// 10 bytes all with continuation bit set, followed by a terminator.
+		// The varint is valid base-128 but exceeds the maxVarint limit.
+		data := []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x00}
+		dec := csproto.NewDecoder(data)
+		_, _, err := dec.DecodeTagInline()
+		assert.ErrorIs(t, err, csproto.ErrInvalidVarintData)
+	})
+
+	t.Run("non-canonical — tag 1 varint with leading zeros (2 bytes)", func(t *testing.T) {
+		// Canonical encoding of tag=1, varint: 0x08 (1 byte)
+		// Non-canonical: 0x88 0x00 — same value, padded with a continuation byte
+		// (1<<3)|0 = 8; encoded as 0x88 (8 | 0x80), 0x00 (terminator, value 0)
+		data := []byte{0x88, 0x00}
+		dec := csproto.NewDecoder(data)
+		tag, wt, err := dec.DecodeTagInline()
+		require.NoError(t, err)
+		assert.Equal(t, 1, tag)
+		assert.Equal(t, csproto.WireTypeVarint, wt)
+		assert.Equal(t, 2, dec.Offset())
+	})
+
+	t.Run("non-canonical — tag 1 varint with 3 bytes of leading zeros", func(t *testing.T) {
+		// tag=1, varint wire type: canonical is 0x08
+		// Non-canonical 3-byte: 0x88, 0x80, 0x00
+		data := []byte{0x88, 0x80, 0x00}
+		dec := csproto.NewDecoder(data)
+		tag, wt, err := dec.DecodeTagInline()
+		require.NoError(t, err)
+		assert.Equal(t, 1, tag)
+		assert.Equal(t, csproto.WireTypeVarint, wt)
+		assert.Equal(t, 3, dec.Offset())
+	})
+
+	t.Run("non-canonical — tag 2 fixed32 with max padding (5 bytes)", func(t *testing.T) {
+		// tag=2, fixed32: canonical key = (2<<3)|5 = 21 = 0x15 (1 byte)
+		// Non-canonical 5-byte: 0x95, 0x80, 0x80, 0x80, 0x00
+		data := []byte{0x95, 0x80, 0x80, 0x80, 0x00}
+		dec := csproto.NewDecoder(data)
+		tag, wt, err := dec.DecodeTagInline()
+		require.NoError(t, err)
+		assert.Equal(t, 2, tag)
+		assert.Equal(t, csproto.WireTypeFixed32, wt)
+		assert.Equal(t, 5, dec.Offset())
+	})
+
+	t.Run("non-canonical — agrees with DecodeTag", func(t *testing.T) {
+		// Verify non-canonical encodings produce the same result from both decoders
+		nonCanonical := [][]byte{
+			{0x88, 0x00},             // tag=1, varint, 2 bytes
+			{0x88, 0x80, 0x00},       // tag=1, varint, 3 bytes
+			{0x95, 0x80, 0x80, 0x00}, // tag=2, fixed32, 4 bytes
+		}
+		for _, data := range nonCanonical {
+			dec1 := csproto.NewDecoder(data)
+			tag1, wt1, err1 := dec1.DecodeTag()
+
+			dec2 := csproto.NewDecoder(data)
+			tag2, wt2, err2 := dec2.DecodeTagInline()
+
+			assert.Equal(t, err1, err2, "data=%x", data)
+			assert.Equal(t, tag1, tag2, "data=%x", data)
+			assert.Equal(t, wt1, wt2, "data=%x", data)
+			assert.Equal(t, dec1.Offset(), dec2.Offset(), "data=%x offset", data)
+		}
+	})
+}
+
+// ---------- SkipVarint ----------
+
+func TestSkipVarint(t *testing.T) {
+	t.Parallel()
+
+	t.Run("single byte", func(t *testing.T) {
+		data := []byte{0x05}
+		dec := csproto.NewDecoder(data)
+		off, sz, err := dec.SkipVarintInline()
+		require.NoError(t, err)
+		assert.Equal(t, 0, off)
+		assert.Equal(t, 1, sz)
+		assert.False(t, dec.More())
+	})
+
+	t.Run("multi byte", func(t *testing.T) {
+		data := encVarint(300)
+		dec := csproto.NewDecoder(data)
+		off, sz, err := dec.SkipVarintInline()
+		require.NoError(t, err)
+		assert.Equal(t, 0, off)
+		assert.Equal(t, len(data), sz)
+		assert.False(t, dec.More())
+	})
+
+	t.Run("max 10-byte varint", func(t *testing.T) {
+		data := encVarint(^uint64(0))
+		require.Len(t, data, 10)
+		dec := csproto.NewDecoder(data)
+		off, sz, err := dec.SkipVarintInline()
+		require.NoError(t, err)
+		assert.Equal(t, 0, off)
+		assert.Equal(t, 10, sz)
+	})
+
+	t.Run("at offset", func(t *testing.T) {
+		tag := encTag(1, csproto.WireTypeVarint)
+		val := encVarint(42)
+		data := concat(tag, val)
+		dec := csproto.NewDecoder(data)
+		dec.DecodeTagInline()
+
+		off, sz, err := dec.SkipVarintInline()
+		require.NoError(t, err)
+		assert.Equal(t, len(tag), off)
+		assert.Equal(t, len(val), sz)
+		assert.False(t, dec.More())
+	})
+
+	t.Run("sequential skips advance offset", func(t *testing.T) {
+		data := concat([]byte{0x05}, encVarint(300))
+		dec := csproto.NewDecoder(data)
+
+		off1, sz1, err := dec.SkipVarintInline()
+		require.NoError(t, err)
+		assert.Equal(t, 0, off1)
+		assert.Equal(t, 1, sz1)
+
+		off2, sz2, err := dec.SkipVarintInline()
+		require.NoError(t, err)
+		assert.Equal(t, 1, off2)
+		assert.Equal(t, 2, sz2)
+		assert.False(t, dec.More())
+	})
+
+	t.Run("empty buffer", func(t *testing.T) {
+		dec := csproto.NewDecoder([]byte{})
+		_, _, err := dec.SkipVarintInline()
+		assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	})
+
+	t.Run("no terminator/short buffer", func(t *testing.T) {
+		data := []byte{0x80, 0x80, 0x80, 0x80, 0x80}
+		dec := csproto.NewDecoder(data)
+		_, _, err := dec.SkipVarintInline()
+		assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	})
+
+	t.Run("overflow beyond 10 bytes", func(t *testing.T) {
+		// 11 continuation bytes followed by a terminator — valid per base-128
+		// encoding but exceeds the 10-byte varint limit.
+		data := make([]byte, 12)
+		for i := 0; i < 11; i++ {
+			data[i] = 0x80
+		}
+		data[11] = 0x00
+		dec := csproto.NewDecoder(data)
+		_, _, err := dec.SkipVarintInline()
+		assert.ErrorIs(t, err, csproto.ErrInvalidVarintData)
+	})
+
+	t.Run("10th byte excess bits overflow", func(t *testing.T) {
+		// A valid 10-byte varint where the 10th byte has excess bits.
+		// Byte 10 is at shift 63 — only bit 0 is valid (sets bit 63 of uint64).
+		// Value 0x02 sets bit 1 which at shift 63 would be bit 64 — overflow.
+		data := make([]byte, 10)
+		for i := 0; i < 9; i++ {
+			data[i] = 0x80 // 9 continuation bytes
+		}
+		data[9] = 0x02 // terminator with excess bit 1 set
+		dec := csproto.NewDecoder(data)
+		_, _, err := dec.SkipVarintInline()
+		assert.ErrorIs(t, err, csproto.ErrValueOverflow)
+	})
+
+	t.Run("10th byte value 0x01 is valid (sets bit 63)", func(t *testing.T) {
+		// Byte 10 = 0x01 sets exactly bit 63 of the uint64, which is valid.
+		data := make([]byte, 10)
+		for i := 0; i < 9; i++ {
+			data[i] = 0x80
+		}
+		data[9] = 0x01 // only bit 0 — valid
+		dec := csproto.NewDecoder(data)
+		off, sz, err := dec.SkipVarintInline()
+		require.NoError(t, err)
+		assert.Equal(t, 0, off)
+		assert.Equal(t, 10, sz)
+	})
+
+	t.Run("10th byte value 0x7F overflows", func(t *testing.T) {
+		// All 7 data bits set on the 10th byte — only bit 0 is valid, rest overflow.
+		data := make([]byte, 10)
+		for i := 0; i < 9; i++ {
+			data[i] = 0x80
+		}
+		data[9] = 0x7F
+		dec := csproto.NewDecoder(data)
+		_, _, err := dec.SkipVarintInline()
+		assert.ErrorIs(t, err, csproto.ErrValueOverflow)
+	})
+}
+
+// ---------- SkipFixed ----------
+
+func TestSkipFixed(t *testing.T) {
+	t.Parallel()
+
+	t.Run("fixed32", func(t *testing.T) {
+		data := []byte{0x01, 0x02, 0x03, 0x04}
+		dec := csproto.NewDecoder(data)
+		off, sz, err := dec.SkipFixedInline(csproto.WireTypeFixed32)
+		require.NoError(t, err)
+		assert.Equal(t, 0, off)
+		assert.Equal(t, 4, sz)
+		assert.False(t, dec.More())
+	})
+
+	t.Run("fixed64", func(t *testing.T) {
+		data := []byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08}
+		dec := csproto.NewDecoder(data)
+		off, sz, err := dec.SkipFixedInline(csproto.WireTypeFixed64)
+		require.NoError(t, err)
+		assert.Equal(t, 0, off)
+		assert.Equal(t, 8, sz)
+		assert.False(t, dec.More())
+	})
+
+	t.Run("fixed32/extra data after", func(t *testing.T) {
+		data := []byte{0x01, 0x02, 0x03, 0x04, 0xFF, 0xFF}
+		dec := csproto.NewDecoder(data)
+		off, sz, err := dec.SkipFixedInline(csproto.WireTypeFixed32)
+		require.NoError(t, err)
+		assert.Equal(t, 0, off)
+		assert.Equal(t, 4, sz)
+		assert.True(t, dec.More())
+		assert.Equal(t, 4, dec.Offset())
+	})
+
+	t.Run("fixed32/truncated", func(t *testing.T) {
+		dec := csproto.NewDecoder([]byte{0x01, 0x02, 0x03})
+		_, _, err := dec.SkipFixedInline(csproto.WireTypeFixed32)
+		assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	})
+
+	t.Run("fixed32/empty", func(t *testing.T) {
+		dec := csproto.NewDecoder([]byte{})
+		_, _, err := dec.SkipFixedInline(csproto.WireTypeFixed32)
+		assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	})
+
+	t.Run("fixed64/truncated", func(t *testing.T) {
+		dec := csproto.NewDecoder([]byte{0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07})
+		_, _, err := dec.SkipFixedInline(csproto.WireTypeFixed64)
+		assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	})
+
+	t.Run("fixed64/empty", func(t *testing.T) {
+		dec := csproto.NewDecoder([]byte{})
+		_, _, err := dec.SkipFixedInline(csproto.WireTypeFixed64)
+		assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	})
+
+	t.Run("length-delimited wire type rejected", func(t *testing.T) {
+		data := []byte{0x03, 0x01, 0x02, 0x03}
+		dec := csproto.NewDecoder(data)
+		_, _, err := dec.SkipFixedInline(csproto.WireTypeLengthDelimited)
+		assert.ErrorIs(t, err, csproto.ErrUnexpectedWireType)
+	})
+
+	t.Run("varint wire type rejected", func(t *testing.T) {
+		dec := csproto.NewDecoder([]byte{0x01})
+		_, _, err := dec.SkipFixedInline(csproto.WireTypeVarint)
+		assert.ErrorIs(t, err, csproto.ErrUnexpectedWireType)
+	})
+
+	t.Run("bogus wire type rejected", func(t *testing.T) {
+		dec := csproto.NewDecoder([]byte{0x01})
+		_, _, err := dec.SkipFixedInline(csproto.WireType(7))
+		assert.ErrorIs(t, err, csproto.ErrUnexpectedWireType)
+	})
+}
+
+// ---------- SkipBytes ----------
+
+func TestSkipBytes(t *testing.T) {
+	t.Parallel()
+
+	t.Run("requires 64-bit platform", func(t *testing.T) {
+		if unsafe.Sizeof(uintptr(0)) < 8 {
+			t.Fatal("SkipBytes uses int for length, which must be 64-bit to hold varint-decoded sizes")
+		}
+	})
+
+	t.Run("empty payload", func(t *testing.T) {
+		data := encVarint(0)
+		dec := csproto.NewDecoder(data)
+		off, sz, err := dec.SkipBytesInline()
+		require.NoError(t, err)
+		assert.Equal(t, len(data), off)
+		assert.Equal(t, 0, sz)
+		assert.False(t, dec.More())
+	})
+
+	t.Run("small payload", func(t *testing.T) {
+		payload := []byte{0xDE, 0xAD, 0xBE, 0xEF}
+		data := concat(encVarint(uint64(len(payload))), payload)
+		dec := csproto.NewDecoder(data)
+		off, sz, err := dec.SkipBytesInline()
+		require.NoError(t, err)
+		assert.Equal(t, len(encVarint(4)), off)
+		assert.Equal(t, 4, sz)
+		assert.False(t, dec.More())
+	})
+
+	t.Run("payload content accessible via offset+length", func(t *testing.T) {
+		payload := []byte("hello")
+		data := concat(encVarint(uint64(len(payload))), payload)
+		dec := csproto.NewDecoder(data)
+		off, sz, err := dec.SkipBytesInline()
+		require.NoError(t, err)
+		assert.Equal(t, payload, data[off:off+sz])
+	})
+
+	t.Run("large length varint", func(t *testing.T) {
+		payload := make([]byte, 200)
+		for i := range payload {
+			payload[i] = byte(i)
+		}
+		data := concat(encVarint(200), payload)
+		dec := csproto.NewDecoder(data)
+		off, sz, err := dec.SkipBytesInline()
+		require.NoError(t, err)
+		assert.Equal(t, 200, sz)
+		assert.Equal(t, payload, data[off:off+sz])
+		assert.False(t, dec.More())
+	})
+
+	t.Run("at offset after tag", func(t *testing.T) {
+		tag := encTag(3, csproto.WireTypeLengthDelimited)
+		payload := []byte{0x01, 0x02, 0x03}
+		data := concat(tag, encVarint(3), payload)
+		dec := csproto.NewDecoder(data)
+		dec.DecodeTagInline()
+
+		off, sz, err := dec.SkipBytesInline()
+		require.NoError(t, err)
+		assert.Equal(t, 3, sz)
+		assert.Equal(t, payload, data[off:off+sz])
+		assert.False(t, dec.More())
+	})
+
+	t.Run("sequential skips", func(t *testing.T) {
+		p1 := []byte{0xAA, 0xBB}
+		p2 := []byte{0xCC, 0xDD, 0xEE}
+		data := concat(encVarint(2), p1, encVarint(3), p2)
+		dec := csproto.NewDecoder(data)
+
+		off1, sz1, err := dec.SkipBytesInline()
+		require.NoError(t, err)
+		assert.Equal(t, 2, sz1)
+		assert.Equal(t, p1, data[off1:off1+sz1])
+
+		off2, sz2, err := dec.SkipBytesInline()
+		require.NoError(t, err)
+		assert.Equal(t, 3, sz2)
+		assert.Equal(t, p2, data[off2:off2+sz2])
+		assert.False(t, dec.More())
+	})
+
+	t.Run("extra data after payload", func(t *testing.T) {
+		payload := []byte{0x01, 0x02}
+		trailer := []byte{0xFF, 0xFF, 0xFF}
+		data := concat(encVarint(2), payload, trailer)
+		dec := csproto.NewDecoder(data)
+		off, sz, err := dec.SkipBytesInline()
+		require.NoError(t, err)
+		assert.Equal(t, 2, sz)
+		assert.Equal(t, payload, data[off:off+sz])
+		assert.True(t, dec.More())
+	})
+
+	t.Run("empty buffer", func(t *testing.T) {
+		dec := csproto.NewDecoder([]byte{})
+		_, _, err := dec.SkipBytesInline()
+		assert.ErrorIs(t, err, csproto.ErrInvalidVarintData)
+	})
+
+	t.Run("length varint truncated", func(t *testing.T) {
+		dec := csproto.NewDecoder([]byte{0x80})
+		_, _, err := dec.SkipBytesInline()
+		assert.ErrorIs(t, err, csproto.ErrInvalidVarintData)
+	})
+
+	t.Run("payload shorter than declared length", func(t *testing.T) {
+		data := concat(encVarint(10), []byte{0x01, 0x02, 0x03})
+		dec := csproto.NewDecoder(data)
+		_, _, err := dec.SkipBytesInline()
+		assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	})
+
+	t.Run("payload exactly one byte short", func(t *testing.T) {
+		data := concat(encVarint(5), []byte{0x01, 0x02, 0x03, 0x04})
+		dec := csproto.NewDecoder(data)
+		_, _, err := dec.SkipBytesInline()
+		assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	})
+
+	t.Run("huge declared length", func(t *testing.T) {
+		data := concat(encVarint(1<<32), []byte{0x01})
+		dec := csproto.NewDecoder(data)
+		_, _, err := dec.SkipBytesInline()
+		assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
+	})
+
+	t.Run("length varint all continuation bytes", func(t *testing.T) {
+		data := make([]byte, 10)
+		for i := range data {
+			data[i] = 0x80
+		}
+		dec := csproto.NewDecoder(data)
+		_, _, err := dec.SkipBytesInline()
+		assert.ErrorIs(t, err, csproto.ErrInvalidVarintData)
+	})
+
+	t.Run("length varint overflow — enough bytes but varint too large", func(t *testing.T) {
+		// 9 continuation bytes followed by a terminator and payload.
+		// The buffer has plenty of data — the varint just exceeds the
+		// 5-byte (35-bit) limit that SkipBytes enforces.
+		data := []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x00, 0x01, 0x02}
+		dec := csproto.NewDecoder(data)
+		_, _, err := dec.SkipBytesInline()
+		assert.ErrorIs(t, err, csproto.ErrInvalidVarintData)
+	})
+
+	t.Run("length varint large value does not overflow bounds check", func(t *testing.T) {
+		// Craft a 5-byte varint that decodes to a large value (all 35 data bits set = 34,359,738,367).
+		// With the subtraction-form bounds check, this correctly returns ErrUnexpectedEOF
+		// instead of allowing offset+length to overflow on architectures where int is small.
+		data := make([]byte, 20) // buffer smaller than declared length
+		for i := 0; i < 4; i++ {
+			data[i] = 0xFF // continuation + 7 data bits set
+		}
+		data[4] = 0x7F // terminator + 7 data bits set → 35 bits total ≈ 34 GiB
+		dec := csproto.NewDecoder(data)
+		_, _, err := dec.SkipBytesInline()
+		assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "should reject oversized length, not panic")
+	})
+
+	t.Run("length varint MaxInt64 does not overflow bounds check", func(t *testing.T) {
+		// Craft a 9-byte varint that decodes to MaxInt64 (all 63 data bits set).
+		// Without the subtraction-form bounds check (length <= len(d.p)-offset),
+		// the old form (offset+length <= len(d.p)) wraps negative on signed int64
+		// overflow, passes the check, and sets d.offset negative → panic.
+		data := make([]byte, 20)
+		for i := 0; i < 8; i++ {
+			data[i] = 0xFF // continuation + 7 data bits set
+		}
+		data[8] = 0x7F // terminator + 7 data bits set → 63 bits = MaxInt64
+		dec := csproto.NewDecoder(data)
+		_, _, err := dec.SkipBytesInline()
+		assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "should reject, not panic from integer overflow")
+	})
+
+	t.Run("regression: offset+length signed overflow", func(t *testing.T) {
+		// This test reproduces the exact exploit that crashed the old code.
+		//
+		// The old bounds check was:
+		//   if offset+length <= len(d.p) { ... }
+		//
+		// With a 9-byte varint encoding MaxInt64 as the length prefix:
+		//   length = math.MaxInt64  (9223372036854775807)
+		//   offset = 10             (9 varint bytes + 1 for d.offset=0 start)
+		//   offset + length = 10 + 9223372036854775807 = -9223372036854775799  (signed overflow!)
+		//   -9223372036854775799 <= 1024  → TRUE  → entered success path
+		//   d.offset = -9223372036854775799  → next d.p[d.offset:] → PANIC
+		//
+		// The fix uses subtraction (length <= len(d.p)-offset) which never overflows.
+		//
+		// Verify: no panic, returns an error, and decoder offset is unchanged.
+
+		buf := make([]byte, 1024)
+		// Encode MaxInt64 as a 9-byte varint length prefix at the start of buf.
+		for i := 0; i < 8; i++ {
+			buf[i] = 0xFF // continuation byte: 7 data bits all set
+		}
+		buf[8] = 0x7F // terminator: 7 data bits all set → 9×7 = 63 bits → MaxInt64
+
+		dec := csproto.NewDecoder(buf)
+		startOffset := dec.Offset()
+
+		off, sz, err := dec.SkipBytesInline()
+
+		// Must not panic (the old code panicked here).
+		// Must return an error.
+		require.Error(t, err, "MaxInt64 length must be rejected")
+		assert.ErrorIs(t, err, io.ErrUnexpectedEOF)
+
+		// Return values must be zero on error.
+		assert.Equal(t, 0, off, "offset must be zero on error")
+		assert.Equal(t, 0, sz, "length must be zero on error")
+
+		// Decoder offset must not have moved.
+		assert.Equal(t, startOffset, dec.Offset(), "decoder offset must be unchanged on error")
+	})
+}
+
+// ---------- Integration: full field round-trip ----------
+
+func TestFastDecoderFieldRoundTrip(t *testing.T) {
+	t.Parallel()
+
+	var buf [64]byte
+	n := 0
+	n += csproto.EncodeTag(buf[n:], 1, csproto.WireTypeVarint)
+	n += csproto.EncodeVarint(buf[n:], 150)
+	varintEnd := n
+	n += csproto.EncodeTag(buf[n:], 2, csproto.WireTypeFixed32)
+	buf[n], buf[n+1], buf[n+2], buf[n+3] = 0x04, 0x03, 0x02, 0x01
+	n += 4
+	n += csproto.EncodeTag(buf[n:], 3, csproto.WireTypeFixed64)
+	for i := 0; i < 8; i++ {
+		buf[n+i] = byte(i + 1)
+	}
+	n += 8
+	n += csproto.EncodeTag(buf[n:], 4, csproto.WireTypeLengthDelimited)
+	n += csproto.EncodeVarint(buf[n:], 2)
+	buf[n], buf[n+1] = 'h', 'i'
+	n += 2
+
+	data := buf[:n]
+	dec := csproto.NewDecoder(data)
+
+	tag, wt, err := dec.DecodeTagInline()
+	require.NoError(t, err)
+	assert.Equal(t, 1, tag)
+	assert.Equal(t, csproto.WireTypeVarint, wt)
+	off, sz, err := dec.SkipVarintInline()
+	require.NoError(t, err)
+	v, _, err := csproto.DecodeVarint(data[off : off+sz])
+	require.NoError(t, err)
+	assert.Equal(t, uint64(150), v)
+	assert.Equal(t, varintEnd, dec.Offset())
+
+	tag, wt, err = dec.DecodeTagInline()
+	require.NoError(t, err)
+	assert.Equal(t, 2, tag)
+	assert.Equal(t, csproto.WireTypeFixed32, wt)
+	off, sz, err = dec.SkipFixedInline(wt)
+	require.NoError(t, err)
+	assert.Equal(t, 4, sz)
+	assert.Equal(t, []byte{0x04, 0x03, 0x02, 0x01}, data[off:off+sz])
+
+	tag, wt, err = dec.DecodeTagInline()
+	require.NoError(t, err)
+	assert.Equal(t, 3, tag)
+	assert.Equal(t, csproto.WireTypeFixed64, wt)
+	off, sz, err = dec.SkipFixedInline(wt)
+	require.NoError(t, err)
+	assert.Equal(t, 8, sz)
+
+	tag, wt, err = dec.DecodeTagInline()
+	require.NoError(t, err)
+	assert.Equal(t, 4, tag)
+	assert.Equal(t, csproto.WireTypeLengthDelimited, wt)
+	off, sz, err = dec.SkipBytesInline()
+	require.NoError(t, err)
+	assert.Equal(t, 2, sz)
+	assert.Equal(t, []byte("hi"), data[off:off+sz])
+
+	assert.False(t, dec.More(), "should have consumed the entire buffer")
 }
