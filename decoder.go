@@ -39,6 +39,9 @@ type DecoderMode int
 
 const (
 	// DecoderModeSafe instructs the decoder to only use safe operations when decoding values.
+	//
+	// "Safe" refers to memory safety (no unsafe aliasing of the input), not concurrency safety: it does
+	// not make a Decoder, or a lazyproto.DecodeResult and its FieldData values, safe for concurrent use.
 	DecoderModeSafe DecoderMode = iota
 	// DecoderModeFast instructs the decoder to use unsafe operations to avoid allocations and copying data
 	// for the fastest throughput.

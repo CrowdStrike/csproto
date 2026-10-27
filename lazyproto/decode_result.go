@@ -2,120 +2,263 @@ package lazyproto
 
 import (
 	"fmt"
+	"io"
 	"sync"
 
 	"github.com/CrowdStrike/csproto"
+	"github.com/CrowdStrike/csproto/internal/wire"
 )
 
 // DecodeResult holds a (possibly nested) mapping of integer field tags to FieldData instances
 // which can be used to retrieve typed values for specific Protobuf message fields.
+//
+// A DecodeResult, and the FieldData values obtained from it, are not safe for concurrent use:
+// accessors such as the XxxValues methods update per-field state. Use a separate DecodeResult
+// per goroutine, or synchronize access. (The Decoder that produces results is safe for
+// concurrent use.)
 type DecodeResult struct {
 	pool   *sync.Pool
 	filter func(int) int
 
-	lut            *lutTable
-	flatData       []*FieldData
+	lut *lutTable
+	// slab holds one FieldData per slot, in lut slot order. It is allocated
+	// once in clone() and never reallocated, so &slab[i] is a stable address
+	// that survives pool recycling and is what GetFieldData and Range hand to
+	// callers. nil on the newBaseResult template, which never decodes.
+	slab           []FieldData
 	nestedDecoders []*Decoder
+
+	// shared points to the sharedState (input buffer and WithMaxBufferSize
+	// limit) that every coldData in this result also points to. clone()
+	// allocates a fresh one per result; newBaseResult() gives the template
+	// one that carries only the limit and never holds a buffer. decode() sets
+	// shared.buf = data once; close() nils it once. No per-field loop needed.
+	// The pointer is stable across pool recycling and safe under by-value
+	// copies (deprecated Decode() path) because both copies share the same
+	// heap location. shared.buf is the GC root that keeps the input buffer
+	// alive while any dataPtr is in use. In DecoderModeFast the cached
+	// string/[]byte reuse slices in fieldDataBuffers can also alias the
+	// input; close() clears them for fields with flagAliased set. nil only on
+	// a zero DecodeResult.
+	shared *sharedState
 
 	// closers is used to return any nested DecodeResults to their respective pool
 	// calling (DecodeResult).Close on a nested DecodeResult has no effect
 	closers []*DecodeResult
 
-	maxBuffer int
 	skipClose bool
-	unsafe    bool
 }
 
 // decode parses the data and adds it to the DecodeResult
 func (r *DecodeResult) decode(data []byte) error {
-	dec := csproto.NewDecoder(data)
-	dec.SetMode(csproto.DecoderModeFast)
+	// wire.NewCursor enforces the protobuf 2 GiB message-size limit
+	// (ErrBufferTooLarge, which wraps csproto.ErrLenOverflow). This also
+	// satisfies the dataPtr addressing invariant: offset and length are
+	// uint32, so any (offset, length) pair within a ≤MaxInt32 buffer fits in
+	// uint32 without wraparound. Stack-allocated; all methods inline.
+	dec, err := wire.NewCursor(data)
+	if err != nil {
+		return bufferTooLargeErr(len(data), err)
+	}
+
+	// Propagate the source data to all coldData entries via the shared
+	// state — one write, no loop. This is also the GC root.
+	shared := r.shared
+	shared.buf = data
+
+	// Loop-invariant fields in locals: the stores through fd below could
+	// alias *r as far as the compiler knows, which would otherwise force a
+	// reload of r.lut and r.slab on every iteration.
+	var (
+		lut       = r.lut
+		slab      = r.slab
+		maxBuffer = shared.maxBuffer
+	)
+
+	// This is the hot loop; all the functions called in this loop
+	// are intentionally inlined to optimize for speed. dec is only ever
+	// passed and reassigned by value (never &dec), so the compiler keeps it
+	// in registers instead of reloading it from the stack every iteration.
+	var (
+		sz  int
+		off int
+		tag int
+		wt  csproto.WireType
+	)
+
 	for dec.More() {
-		tag, wt, err := dec.DecodeTag()
-		if err != nil {
-			return err
+		// Fast path for 1- and 2-byte keys (field numbers 1-2047); tag == 0
+		// means fall back to the general decoder, which also reports errors.
+		// Both calls are inlined. On error dec is unchanged.
+		if dec, tag, wt = dec.NextShortTag(); tag == 0 {
+			dec, tag, wt, err = dec.NextTag()
+			if err != nil {
+				return decodeErr(dec, err, "fail tag decode at byte %d", dec.Offset())
+			}
 		}
 
-		// non-safeLookup ok here because dec.DecodeTag validates tag range
-		flatIdx, hasFlat := r.lut.lookup(tag)
-		if !hasFlat {
-			if _, err := dec.Skip(tag, wt); err != nil {
-				return err
-			}
-			continue
-		}
-		fd := r.flatData[flatIdx]
-		if len(fd.data) > 0 && fd.wt != wt {
-			return fmt.Errorf("invalid message data - repeated tag %d w/ different wire types (prev=%v, current=%v)", tag, fd.wt, wt)
-		}
+		// NextShortTag/NextTag guarantee 1 <= tag <= MaxTagValue (out-of-range
+		// tags are reported above as ErrInvalidFieldTag), as required by
+		// lut.lookup. This includes keys 0x01-0x07 (field number 0 with a
+		// non-zero wire type), which the earlier csproto.Decoder-based loop
+		// accepted as tag 0 and skipped; that compatibility change is
+		// documented on Decoder.Decode.
+
+		// Locate the field value regardless of whether we track the tag;
+		// acceptance decision made via lut lookup.  All calls are inlined for
+		// speed. Peek* does not advance dec; dec.Seek below does, once the
+		// value is known to be well-formed.
 		switch wt {
-		case csproto.WireTypeVarint, csproto.WireTypeFixed32, csproto.WireTypeFixed64:
-			// varint, fixed32, and fixed64 could be multiple Go types so
-			// grab the raw bytes and defer interpreting them to the consumer/caller
-			// . varint -> int32, int64, uint32, uint64, sint32, sint64, bool, enum
-			// . fixed32 -> int32, uint32, float32
-			// . fixed64 -> int32, uint64, float64
-			val, err := dec.Skip(tag, wt)
-			if err != nil {
-				return err
-			}
-
-			// Skip() returns the entire field contents, both the tag and the value, so we need to skip past the tag
-			val = val[csproto.SizeOfTagKey(tag):]
-			fd.wt = wt
-			fd.data = append(fd.data, val)
 		case csproto.WireTypeLengthDelimited:
-			val, err := dec.DecodeBytes()
-			if err != nil {
-				return err
-			}
-
-			fd.wt = wt
-			fd.data = append(fd.data, val)
+			off, sz, err = dec.PeekBytes()
+		case csproto.WireTypeVarint:
+			off, sz, err = dec.PeekVarint()
+		case csproto.WireTypeFixed32:
+			off, sz, err = dec.PeekFixed32()
+		case csproto.WireTypeFixed64:
+			off, sz, err = dec.PeekFixed64()
 		default:
-			return fmt.Errorf("read unknown/unsupported protobuf wire type (%v)", wt)
+			return fmt.Errorf("%w %d for tag %d at byte %d", ErrUnsupportedWireType, wt, tag, dec.Offset())
+		}
+
+		if err != nil {
+			return decodeErr(dec, err, "fail skip (%d, %s) at byte %d", tag, wt, dec.Offset())
+		}
+		dec = dec.Seek(off + sz)
+
+		// Look up the tag; skip it if our table doesn't track it. Tags below
+		// smallTags (nearly all real fields) take one load from the direct
+		// table; larger tags use the bitmap lookup. Both calls are inlined,
+		// and each arm branches straight to continue on a miss.
+		var flatIdx int
+		if uint(tag) < smallTags {
+			var ok bool
+			if flatIdx, ok = lut.lookupSmall(tag); !ok {
+				continue
+			}
+		} else {
+			var ok bool
+			if flatIdx, ok = lut.lookup(tag); !ok {
+				continue
+			}
+		}
+
+		// Retrieve the corresponding FieldData from the slab.
+		fd := &slab[flatIdx]
+
+		switch {
+		case !fd.root.hasData():
+			// First occurrence — inline into root. Both fields are plain
+			// integers so this write triggers zero GC write barriers.
+			fd.wt = int8(wt)
+			fd.root.length = uint32(sz)
+			fd.root.offset = uint32(off)
+		case fd.wireType() == wt:
+			// Repeated field — spill to cold repeated (rare path).
+			fd.cold.repeated = append(fd.cold.repeated, dataPtr{
+				length: uint32(sz),
+				offset: uint32(off),
+			})
+			fd.flags |= flagRepeated
+			if cap(fd.cold.repeated) > maxBuffer {
+				fd.flags |= flagTrunc
+			}
+		default:
+			// NOTE: the protobuf spec allows a repeated numeric field to appear
+			// as a mix of packed (WireTypeLengthDelimited) and unpacked (e.g.
+			// WireTypeVarint) entries in the same message. This decoder rejects
+			// that case. In practice no conformant encoder produces mixed
+			// encodings, and supporting it here would complicate the hot loop
+			// for a scenario that does not occur in real-world traffic.
+			return fmt.Errorf("invalid message data - %w: tag %d (prev=%v, current=%v)", ErrMixedWireTypes, tag, fd.wireType(), wt)
 		}
 	}
 
 	return nil
 }
 
-// clone will create a copy of the DecodeResult with the same tag and decoder information
-// but a new fieldData slice
-func (r *DecodeResult) clone() *DecodeResult {
+// decodeErr converts an error from the wire.Cursor hot-path methods into the
+// error decode returns, applying lazyproto's error policy in one place:
+//
+//   - RefineErr (cold path) maps the cursor's internal sentinel to the public
+//     error csproto.Decoder would return for the same input.
+//   - Truncated input is returned as a bare io.ErrUnexpectedEOF, not wrapped,
+//     so streaming callers that test err == io.ErrUnexpectedEOF detect it
+//     reliably. The previous csproto.Decoder-based implementation was
+//     inconsistent here: it returned io.ErrUnexpectedEOF unwrapped when the
+//     buffer ended at a field value or a payload was short, but wrapped it as
+//     "invalid data at byte N: ..." when the buffer ended inside a varint
+//     (tag key, varint value, or length prefix). Returning it unwrapped in
+//     every case is a superset of the old == matches. The trade-off is that
+//     truncation errors carry no tag or byte-offset context; errors.Is
+//     behaves the same either way.
+//   - Every other error is wrapped with the given context (format + args).
+//
+// Only called on the error path, so it is fine that it does not inline and
+// that the variadic args allocate. dec is taken by value so that decode()
+// never takes the address of its cursor; RefineErr runs on this copy.
+func decodeErr(dec wire.Cursor, err error, format string, args ...any) error {
+	if err = dec.RefineErr(err); err == io.ErrUnexpectedEOF {
+		return err
+	}
+	return fmt.Errorf(format+": %w", append(args, err)...)
+}
+
+// clone creates a copy of the DecodeResult with the same tag and decoder
+// information but a new FieldData slab. When allocBuffers is true, typed
+// conversion buffers are allocated for each field (used in DecoderModeFast).
+func (r *DecodeResult) clone(allocBuffers bool) *DecodeResult {
 	if r == nil {
 		return nil
 	}
 
-	// Allocate all FieldData as a contiguous slab (1 heap allocation) rather than
-	// N individual allocations. The flatData pointer slice points into the slab,
-	// giving each entry a stable address that survives pool recycling and can be
-	// safely handed to external callers via GetFieldData/Range.
+	// Allocate FieldData as a contiguous slab (1 heap allocation).
+	// Each FieldData is 24 bytes on 64-bit: wt int8 (offset 0) and
+	// flags (offset 1) packed together, root dataPtr (offset 4, 8 bytes), and
+	// the cold pointer (offset 16); see TestFieldDataLayout. The decode loop
+	// only writes wt, flags and root — all plain integers, triggering zero GC
+	// write barriers.
 	//
-	// Tradeoff: if a caller holds a single *FieldData past Close(), the entire slab
-	// is retained by the GC rather than just one FieldData. In practice this is not
-	// a regression — a live *DecodeResult already pins all of its *FieldData anyway,
-	// and callers are expected to release references before Close().
+	// A separate coldData slab holds the shared-state pointer (input buffer
+	// and buffer limit), repeated entries for repeated fields, and (in
+	// unsafe/fast mode) typed conversion buffers.
+	// The cold pointer is set once here and never changes.
+	//
+	// &slab[i] is each field's stable address: the slab is never
+	// reallocated, so it survives pool recycling and can be safely handed to
+	// external callers via GetFieldData/Range.
 
 	var (
-		n    = len(r.flatData)
-		slab = make([]FieldData, n)
-		ptrs = make([]*FieldData, n)
+		n        = r.lut.count()
+		slab     = make([]FieldData, n)
+		coldSlab = make([]coldData, n)
+		// single heap location shared by all coldData; the limit is
+		// inherited from the template and stored nowhere else
+		shared = &sharedState{maxBuffer: r.shared.maxBuffer}
 	)
 
 	for i := range slab {
-		slab[i].unsafe = r.unsafe
-		ptrs[i] = &slab[i]
+		coldSlab[i].shared = shared
+		// wt starts at the same -1 sentinel close() restores, so an absent
+		// field has wt == -1 whether or not it has ever been present.
+		slab[i].wt = -1
+		slab[i].cold = &coldSlab[i]
+	}
+
+	if allocBuffers {
+		bufSlab := make([]fieldDataBuffers, n)
+		for i := range coldSlab {
+			coldSlab[i].buffers = &bufSlab[i]
+		}
 	}
 
 	res := &DecodeResult{
 		pool:           r.pool,
 		filter:         r.filter,
 		lut:            r.lut,
-		flatData:       ptrs,
+		slab:           slab,
 		nestedDecoders: r.nestedDecoders,
-		maxBuffer:      r.maxBuffer,
-		unsafe:         r.unsafe,
+		shared:         shared,
 	}
 
 	return res
@@ -129,6 +272,12 @@ func (r *DecodeResult) clone() *DecodeResult {
 // When using with csproto.DecoderModeFast it is important that any strings, bytes, etc that were generated
 // using any of the DecodeResult/FieldData methods have moved out of scope before closing the DecodeResult.
 func (r *DecodeResult) Close() error {
+	// skipClose is set on nested DecodeResults that are owned by a parent. When a
+	// parent decodes nested messages (via NestedResult / NestedResults), the child
+	// results have skipClose=true so that a caller's Close on the child is a no-op;
+	// the parent's close() recursively closes all children and returns them to the
+	// pool. skipClose is cleared just before a result is returned to the pool so it
+	// is ready for reuse.
 	if r == nil || r.skipClose {
 		return nil
 	}
@@ -138,24 +287,82 @@ func (r *DecodeResult) Close() error {
 
 // close will recursively close the nested DecodeResults and return them to their respective pools
 func (r *DecodeResult) close() {
-	for i := range r.flatData {
-		if r.flatData[i] == nil {
+	shared := r.shared
+	if shared == nil {
+		// Zero DecodeResult (e.g. the deprecated Decode on empty input): no
+		// slab, closers or pool, so there is nothing to release.
+		return
+	}
+	// Release the input buffer: the one reference every coldData shares.
+	shared.buf = nil
+
+	slab, maxBuffer := r.slab, shared.maxBuffer // locals: see decode()
+	for i := range slab {
+		fd := &slab[i]
+		// A field with no data has nothing to reset. clone() initializes wt
+		// to -1, and decode writes wt and root together on a field's first
+		// occurrence, so an absent field already has wt == -1 and a zero
+		// root. Every flag is set only after hasData() is true, so
+		// flags != 0 implies root.hasData(). Skipping absent fields
+		// means close() no longer writes to the cache line of every unused
+		// field on sparse messages.
+		if !fd.root.hasData() {
 			continue
 		}
-		r.flatData[i].data = r.flatData[i].data[:0]
+
+		fd.wt = -1          // sentinel: no active wire type — not a valid WireType value
+		fd.root = dataPtr{} // zero value: offset=0 means absent — no barrier
+
+		// fd.flags sits on the FieldData line written just above, so this
+		// check is free. Only flagged fields pay the pointer chase into
+		// coldData (and buffers): fields that repeated (flagRepeated), whose
+		// fast-mode StringValues/BytesValues cached slices aliasing the input
+		// (flagAliased), or with a slice past the WithMaxBufferSize limit
+		// (flagTrunc).
+		if f := fd.flags; f != 0 {
+			c := fd.cold
+			if f&flagRepeated != 0 {
+				c.repeated = c.repeated[:0]
+			}
+			if f&flagAliased != 0 {
+				c.buffers.releaseAliases()
+			}
+			// Only fields with a slice past the WithMaxBufferSize limit are
+			// truncated; the others are never touched.
+			if f&flagTrunc != 0 {
+				fd.trunc(maxBuffer)
+			}
+			fd.flags = 0
+		}
 	}
 
 	if r.closers != nil {
-		for i := range r.closers {
-			r.closers[i].close()
+		for _, c := range r.closers {
+			// A by-value copy of this result (the deprecated Decode returns
+			// one) shares this backing array; if another copy already closed,
+			// the entries were cleared below. Skipping them avoids a nil deref
+			// and a second pool.Put of the same child.
+			if c != nil {
+				c.close()
+			}
 		}
+		// The children are back in their pools; drop the stale pointers so
+		// this pooled array neither aliases results now owned by other callers
+		// nor keeps their slabs reachable.
+		clear(r.closers)
 		r.closers = r.closers[:0]
 	}
 
 	if r.pool != nil {
-		if r.maxBuffer >= 0 {
-			r.trunc(r.maxBuffer)
-		}
+		// Per-field truncation for WithMaxBufferSize happened above via
+		// flagTrunc; closers belong to the result, so check them directly.
+		r.truncClosers(maxBuffer)
+		// WithBufferFilterFunc: as on main, the filter is called on every pooled
+		// Close with the result-wide max capacity. That max must include fields
+		// absent from this message, whose buffers persist from earlier cycles,
+		// so cap() and trunc() walk the whole slab. This is the one part of close()
+		// that costs O(len(Def)) rather than O(fields present); see
+		// TestCloseBufferFilterFunc.
 		if r.filter != nil {
 			if n := r.filter(r.cap()); n >= 0 {
 				r.trunc(n)
@@ -171,11 +378,18 @@ func (r *DecodeResult) trunc(n int) {
 	if r == nil || n < 0 {
 		return
 	}
-	if cap(r.closers) > n {
-		r.closers = make([]*DecodeResult, n)
+	r.truncClosers(n)
+	for i := range r.slab {
+		r.slab[i].trunc(n)
 	}
-	for i := range r.flatData {
-		r.flatData[i].trunc(n)
+}
+
+// truncClosers reallocates r.closers if its capacity is greater than n. The
+// replacement must have length 0: a length-n slice would hold nil closers
+// that panic on the next close.
+func (r *DecodeResult) truncClosers(n int) {
+	if cap(r.closers) > n {
+		r.closers = make([]*DecodeResult, 0, n)
 	}
 }
 
@@ -185,8 +399,8 @@ func (r *DecodeResult) cap() int {
 		return 0
 	}
 	c := cap(r.closers)
-	for i := range r.flatData {
-		if cc := r.flatData[i].cap(); cc > c {
+	for i := range r.slab {
+		if cc := r.slab[i].cap(); cc > c {
 			c = cc
 		}
 	}
@@ -240,7 +454,7 @@ func (r *DecodeResult) NestedResult(tag int) (*DecodeResult, error) {
 	}
 
 	// get the raw []byte slice for this tag
-	b, err := scalarValue(r.flatData[flatIdx], csproto.WireTypeLengthDelimited, func(b []byte) ([]byte, error) {
+	b, err := scalarValue(&r.slab[flatIdx], csproto.WireTypeLengthDelimited, func(b []byte) ([]byte, error) {
 		return b, nil
 	})
 	if err != nil {
@@ -277,27 +491,68 @@ func (r *DecodeResult) NestedResults(tag int) ([]*DecodeResult, error) {
 		return nil, ErrNestingNotDefined
 	}
 
-	fd := r.flatData[flatIdx]
-	if fd == nil || len(fd.data) == 0 {
+	fd := &r.slab[flatIdx]
+	if !fd.hasData() {
 		return nil, ErrTagNotFound
 	}
-	results := make([]*DecodeResult, 0, len(fd.data))
-	for _, b := range fd.data {
+	// Nested messages are always length-delimited; match NestedResult's behavior
+	// instead of handing non-message bytes to the nested decoder.
+	if fd.wireType() != csproto.WireTypeLengthDelimited {
+		return nil, wireTypeMismatchError(fd.wireType(), csproto.WireTypeLengthDelimited)
+	}
+
+	n := fd.entryCount()
+
+	// results is returned to the caller and may contain nil entries
+	// for zero-length nested messages (decodeWithPool returns nil, nil).
+	results := make([]*DecodeResult, 0, n)
+
+	// Track where r.closers starts so we can roll back on error
+	// instead of allocating a temporary closers slice.
+	closerStart := len(r.closers)
+
+	// Cache the buffer base once — avoids repeated calls to
+	// fd.cold.baseBuf() per repeated entry below.
+	base := fd.cold.baseBuf()
+
+	appendEntry := func(ref dataPtr) error {
+		b := ref.bytes(base)
 		res, err := nestedDecoder.decodeWithPool(b)
 		if err != nil {
-			// return already-decoded results to the pool
-			for _, prev := range results {
-				prev.close()
-			}
-			return nil, err
+			return err
 		}
-		// If the slice is empty, res and err are both nil.
+
+		// (nil,nil) is a valid return for zero-length nested messages.
+		// If not nil, mark skipClose and append directly to r.closers.
 		if res != nil {
 			res.skipClose = true
 			r.closers = append(r.closers, res)
 		}
+
+		// Append 'res' to results whether or not is nil.
 		results = append(results, res)
+		return nil
 	}
+
+	// Process root
+	if err := appendEntry(fd.root); err != nil {
+		return nil, err
+	}
+
+	// Process repeated entries (repeated nested messages)
+	for _, ref := range fd.cold.repeated {
+		if err := appendEntry(ref); err != nil {
+			// Close already-decoded results and return them to the pool,
+			// then roll back r.closers to where we started.
+			for _, c := range r.closers[closerStart:] {
+				c.close()
+			}
+			clear(r.closers[closerStart:]) // drop pointers to pooled results
+			r.closers = r.closers[:closerStart]
+			return nil, err
+		}
+	}
+
 	return results, nil
 }
 
@@ -312,8 +567,8 @@ func (r *DecodeResult) Range(fn func(tag int, field *FieldData) bool) {
 	}
 
 	for tag, slot := range r.lut.all() {
-		field := r.flatData[slot]
-		if field == nil || len(field.data) == 0 {
+		field := &r.slab[slot]
+		if !field.hasData() {
 			if !fn(tag, nil) {
 				return
 			}
@@ -336,8 +591,8 @@ func (r *DecodeResult) GetFieldData(tag int) (*FieldData, error) {
 		return nil, ErrTagNotDefined
 	}
 
-	fd := r.flatData[flatIdx]
-	if fd == nil || len(fd.data) == 0 {
+	fd := &r.slab[flatIdx]
+	if !fd.hasData() {
 		return nil, ErrTagNotFound
 	}
 	return fd, nil
