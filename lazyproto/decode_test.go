@@ -2286,3 +2286,21 @@ A2 06 ; tag=100 (WrappedMessagePayload extension), length-delimited
 	_, err = Decode(evt, NewDef(744))
 	assert.Error(t, err, "expected error from Decode() when data is corrupted")
 }
+
+func BenchmarkCloneAllocs(b *testing.B) {
+	def := NewDef(sampleTags[:]...)
+	dec, err := NewDecoder(def)
+	if err != nil {
+		b.Fatal(err)
+	}
+
+	// Drain the pool so every Get triggers clone
+	base, _ := dec.pool.Get().(*DecodeResult)
+
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		r := base.clone()
+		_ = r
+	}
+}
