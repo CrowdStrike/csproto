@@ -15,6 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/CrowdStrike/csproto"
+	"github.com/CrowdStrike/csproto/internal/wire"
 	"github.com/CrowdStrike/csproto/prototest"
 )
 
@@ -3141,6 +3142,55 @@ func BenchmarkCloneAllocs(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		cloneSink = base.clone(false)
+	}
+}
+
+// TestDecodeOneByteValueFastPath checks the decode loop's inline handling of
+// 1-byte varint values and 1-byte length prefixes against the cursor's
+// PeekVarint/PeekBytes, which the loop falls back to otherwise. For every
+// first value byte, and every payload length from 0 up past the declared
+// length, Decode must succeed exactly when Peek* does and return the same
+// value bytes; on failure it must return what Peek* would (bare EOF here).
+// The boundary payload length == declared length is the off-by-one case.
+func TestDecodeOneByteValueFastPath(t *testing.T) {
+	t.Parallel()
+
+	dec, err := NewDecoder(NewDef(1), WithMode(csproto.DecoderModeFast))
+	require.NoError(t, err)
+
+	for _, wt := range []csproto.WireType{csproto.WireTypeVarint, csproto.WireTypeLengthDelimited} {
+		for b := range 256 {
+			for tail := 0; tail <= 0x81; tail++ {
+				data := append([]byte{byte(1<<3) | byte(wt), byte(b)}, make([]byte, tail)...)
+
+				c, err := wire.NewCursor(data)
+				require.NoError(t, err)
+				c, _, _ = c.NextShortTag()
+				var off, sz int
+				if wt == csproto.WireTypeVarint {
+					off, sz, err = c.PeekVarint()
+				} else {
+					off, sz, err = c.PeekBytes()
+				}
+				// Decode only succeeds if the rest of the buffer after this
+				// field also parses; restrict to inputs where it ends exactly.
+				if err == nil && off+sz != len(data) {
+					continue
+				}
+
+				res, derr := dec.Decode(data)
+				if err != nil {
+					assert.Equal(t, c.RefineErr(err), derr, "wt=%v b=%#x tail=%d", wt, b, tail)
+					continue
+				}
+				require.NoError(t, derr, "wt=%v b=%#x tail=%d", wt, b, tail)
+				// Compare the raw entry; BytesValue would reject the varint wire type.
+				fd, err := res.GetFieldData(1)
+				require.NoError(t, err)
+				assert.Equal(t, data[off:off+sz], fd.root.bytes(fd.cold.baseBuf()), "wt=%v b=%#x tail=%d", wt, b, tail)
+				require.NoError(t, res.Close())
+			}
+		}
 	}
 }
 

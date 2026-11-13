@@ -108,11 +108,29 @@ func (r *DecodeResult) decode(data []byte) error {
 		// acceptance decision made via lut lookup.  All calls are inlined for
 		// speed. Peek* does not advance dec; dec.Seek below does, once the
 		// value is known to be well-formed.
+		//
+		// Most varint values and length prefixes are a single byte (< 0x80).
+		// Those are handled here with one load and compare, skipping the
+		// Peek* loop setup (window clamp and slice bounds checks); anything
+		// else, including every error case, falls through to Peek*.
+		// o < len(data) is always true after a tag (a value byte or EOF
+		// follows), but the check is cheap and keeps the index provably safe.
+		o := dec.Offset()
 		switch wt {
 		case csproto.WireTypeLengthDelimited:
-			off, sz, err = dec.PeekBytes()
+			// int(data[o]) <= len(data)-o-1: the payload fits in the buffer,
+			// the same bound PeekBytes enforces.
+			if o < len(data) && data[o] < 0x80 && int(data[o]) <= len(data)-o-1 {
+				off, sz = o+1, int(data[o])
+			} else {
+				off, sz, err = dec.PeekBytes()
+			}
 		case csproto.WireTypeVarint:
-			off, sz, err = dec.PeekVarint()
+			if o < len(data) && data[o] < 0x80 {
+				off, sz = o, 1
+			} else {
+				off, sz, err = dec.PeekVarint()
+			}
 		case csproto.WireTypeFixed32:
 			off, sz, err = dec.PeekFixed32()
 		case csproto.WireTypeFixed64:
