@@ -127,6 +127,18 @@ func (d *Decoder) Offset() int {
 // DecodeTag decodes a field tag and Protobuf wire type from the stream and returns the values.
 //
 // io.ErrUnexpectedEOF is returned if the operation would read past the end of the data.
+// ErrInvalidFieldTag is returned if the field number (the key shifted right by 3) is 0 or
+// greater than MaxTagValue.
+//
+// Compatibility note: earlier versions applied these bounds to the raw key (field<<3 | wire type)
+// rather than to the field number, which differed from the Protobuf spec in two ways:
+//   - keys 0x01-0x07 (field number 0 with a non-zero wire type) were accepted and returned tag 0;
+//     they now return ErrInvalidFieldTag, since 0 is never a valid field number.
+//   - field numbers greater than MaxTagValue>>3 (up to MaxTagValue) were rejected with
+//     ErrInvalidFieldTag; they now decode successfully.
+//
+// The value reported in the ErrInvalidFieldTag error message is now the field number rather than
+// the raw key.
 func (d *Decoder) DecodeTag() (tag int, wireType WireType, err error) {
 	if d.offset >= len(d.p) {
 		return 0, WireTypeVarint, io.ErrUnexpectedEOF
@@ -135,8 +147,9 @@ func (d *Decoder) DecodeTag() (tag int, wireType WireType, err error) {
 	if err != nil {
 		return 0, -1, fmt.Errorf("invalid data at byte %d: %w", d.offset, err)
 	}
-	if n < 1 || v < 1 || v > MaxTagValue {
-		return 0, -1, fmt.Errorf("invalid tag value (%d) at byte %d: %w", v, d.offset, ErrInvalidFieldTag)
+	// MaxTagValue bounds the field number, not the whole key (field<<3 | wire type).
+	if fieldNum := v >> 3; n < 1 || fieldNum < 1 || fieldNum > MaxTagValue {
+		return 0, -1, fmt.Errorf("invalid tag value (%d) at byte %d: %w", fieldNum, d.offset, ErrInvalidFieldTag)
 	}
 	d.offset += n
 	return int(v >> 3), WireType(v & 0x7), nil
