@@ -1312,6 +1312,11 @@ func TestDecodePastEndOfBuffer(t *testing.T) {
 
 func TestDecodeTag(t *testing.T) {
 	t.Parallel()
+	// key encodes a raw tag key (field<<3 | wire type) as a varint.
+	key := func(field uint64, wt csproto.WireType) []byte {
+		buf := make([]byte, 10)
+		return buf[:csproto.EncodeVarint(buf, field<<3|uint64(wt))]
+	}
 	cases := []struct {
 		name string
 		data []byte
@@ -1329,6 +1334,40 @@ func TestDecodeTag(t *testing.T) {
 			// 11 bytes == overflow
 			data: []byte{0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80},
 			err:  csproto.ErrValueOverflow,
+		},
+		{
+			name: "field number 1",
+			data: key(1, csproto.WireTypeVarint),
+			tag:  1,
+			wt:   csproto.WireTypeVarint,
+		},
+		{
+			// key (~8e8) exceeds MaxTagValue, but the field number does not
+			name: "large field number whose key exceeds MaxTagValue",
+			data: key(100_000_000, csproto.WireTypeLengthDelimited),
+			tag:  100_000_000,
+			wt:   csproto.WireTypeLengthDelimited,
+		},
+		{
+			name: "max field number",
+			data: key(csproto.MaxTagValue, csproto.WireTypeFixed32),
+			tag:  csproto.MaxTagValue,
+			wt:   csproto.WireTypeFixed32,
+		},
+		{
+			name: "field number 0 with zero wire type",
+			data: key(0, csproto.WireTypeVarint),
+			err:  csproto.ErrInvalidFieldTag,
+		},
+		{
+			name: "field number 0 with non-zero wire type",
+			data: key(0, csproto.WireTypeLengthDelimited),
+			err:  csproto.ErrInvalidFieldTag,
+		},
+		{
+			name: "field number above MaxTagValue",
+			data: key(csproto.MaxTagValue+1, csproto.WireTypeVarint),
+			err:  csproto.ErrInvalidFieldTag,
 		},
 	}
 	for _, tc := range cases {
@@ -1432,13 +1471,13 @@ func TestDecodeVarint(t *testing.T) {
 			{"max_payload_5byte", []byte{0xFF, 0xFF, 0xFF, 0xFF, 0x7F}, (1 << 35) - 1, 5},
 
 			// Protobuf field tags: (tag << 3 | wire_type)
-			{"tag_1_varint", encode(1<<3 | 0), 1<<3 | 0, 1},
+			{"tag_1_varint", encode(1 << 3), 1 << 3, 1},
 			{"tag_1_bytes", encode(1<<3 | 2), 1<<3 | 2, 1},
-			{"tag_15_varint", encode(15<<3 | 0), 15<<3 | 0, 1},
-			{"tag_16_varint", encode(16<<3 | 0), 16<<3 | 0, 2},
-			{"tag_2047_varint", encode(2047<<3 | 0), 2047<<3 | 0, 2},
-			{"tag_2048_varint", encode(2048<<3 | 0), 2048<<3 | 0, 3},
-			{"tag_19000_varint", encode(19000<<3 | 0), 19000<<3 | 0, 3},
+			{"tag_15_varint", encode(15 << 3), 15 << 3, 1},
+			{"tag_16_varint", encode(16 << 3), 16 << 3, 2},
+			{"tag_2047_varint", encode(2047 << 3), 2047 << 3, 2},
+			{"tag_2048_varint", encode(2048 << 3), 2048 << 3, 3},
+			{"tag_19000_varint", encode(19000 << 3), 19000 << 3, 3},
 		}
 		for _, tc := range tests {
 			t.Run(tc.name, func(t *testing.T) {

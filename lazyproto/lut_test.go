@@ -662,18 +662,27 @@ func TestAbsSaturating(t *testing.T) {
 // Set of tags derived from platformevents.PlatformBaseEvent
 var sampleTags = [...]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 100, 124, 362, 407}
 
+// lutBenchSink prevents the compiler from eliminating lookup calls.
+var lutBenchSink int
+
 func BenchmarkLutTableLookup(b *testing.B) {
 	tags := sampleTags
 	def := NewDef(tags[:]...)
 	lut := newLutTable(def)
 
+	// Power-of-two length lets us use a bitmask instead of modulo to cycle tags.
+	const n = 16 // must be power of two and <= len(sampleTags)
+	var hitTags [n]int
+	copy(hitTags[:], tags[:n])
+
+	var sink int
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		for _, tag := range tags {
-			lut.lookup(tag)
-		}
+		slot, _ := lut.lookup(hitTags[i&(n-1)])
+		sink += slot
 	}
+	lutBenchSink = sink
 }
 
 func BenchmarkLutTableLookupMiss(b *testing.B) {
@@ -681,45 +690,124 @@ func BenchmarkLutTableLookupMiss(b *testing.B) {
 	def := NewDef(tags...)
 	lut := newLutTable(def)
 
-	misses := []int{6, 7, 8, 99, 500, 1000}
+	// Power-of-two set of tags that are all misses.
+	missTags := [16]int{6, 7, 8, 15, 16, 17, 18, 19, 20, 50, 99, 101, 200, 300, 400, 500}
 
+	var sink int
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		for _, tag := range misses {
-			lut.lookup(tag)
+		slot, _ := lut.lookup(missTags[i&(len(missTags)-1)])
+		sink += slot
+	}
+	lutBenchSink = sink
+}
+
+// BenchmarkLutTableLookupSmall measures lookups of tags below smallTags,
+// comparing the direct table (lookupSmall) against the bitmap + rank path
+// (lookup) on identical inputs, for both hits and misses.
+func BenchmarkLutTableLookupSmall(b *testing.B) {
+	lut := newLutTable(NewDef(sampleTags[:]...))
+
+	// Power-of-two lengths let us use a bitmask instead of modulo to cycle tags.
+	// All values are below smallTags so lookupSmall is valid for every one.
+	hitTags := [16]int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 100, 124}
+	missTags := [16]int{15, 16, 17, 20, 31, 32, 50, 63, 64, 65, 99, 101, 127, 128, 200, 255}
+
+	cases := []struct {
+		name string
+		tags *[16]int
+	}{
+		{"hit", &hitTags},
+		{"miss", &missTags},
+	}
+	for _, c := range cases {
+		for _, tag := range c.tags {
+			if tag >= smallTags {
+				b.Fatalf("tag %d is not below smallTags (%d)", tag, smallTags)
+			}
 		}
+		tags := c.tags
+
+		b.Run(c.name+"/lookupSmall", func(b *testing.B) {
+			var sink int
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				slot, _ := lut.lookupSmall(tags[i&(len(tags)-1)])
+				sink += slot
+			}
+			lutBenchSink = sink
+		})
+		b.Run(c.name+"/lookup", func(b *testing.B) {
+			var sink int
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				slot, _ := lut.lookup(tags[i&(len(tags)-1)])
+				sink += slot
+			}
+			lutBenchSink = sink
+		})
 	}
 }
 
-func BenchmarkBinarySearchLookup(b *testing.B) {
-	tags := sampleTags
-	sorted := make([]int, len(tags))
-	copy(sorted, tags[:])
-	slices.Sort(sorted)
+// TestLutTableSmallTableMatchesReference checks lookup and lookupSmall (which
+// the decode loop uses for tags below smallTags) for every tag
+// from 0 to 300 against an independent reference: a tag's slot is its index among the
+// Def's sorted in-range tags. Includes a Def with more than smallTags fields
+// and one with tags straddling the smallTags boundary.
+func TestLutTableSmallTableMatchesReference(t *testing.T) {
+	t.Parallel()
 
-	b.ResetTimer()
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		for _, tag := range tags {
-			slices.BinarySearch(sorted, tag)
+	everyThird := func() []int {
+		var tags []int
+		for tag := 0; tag < 1000; tag += 3 {
+			tags = append(tags, tag)
 		}
+		return tags
 	}
-}
 
-func BenchmarkBinarySearchLookupMiss(b *testing.B) {
-	tags := []int{1, 2, 3, 4, 5}
-	sorted := make([]int, len(tags))
-	copy(sorted, tags)
-	slices.Sort(sorted)
+	defs := map[string][]int{
+		"single low tag":        {1},
+		"tag 0":                 {0, 2},
+		"boundary":              {smallTags - 2, smallTags - 1, smallTags, smallTags + 1},
+		"sparse":                {1, 7, 15, 16, 63, 64, 65, 127, 128, 200, 255, 256, 300},
+		"more than 255 fields":  everyThird(), // 334 tags, slots past 255 below and above the boundary
+		"with overflow tags":    {3, 4, 250, maxTag + 1, maxTag + 50},
+		"only tags above table": {smallTags, 1000, maxTag},
+	}
+	for name, tags := range defs {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			lut := newLutTable(NewDef(tags...))
 
-	misses := []int{6, 7, 8, 99, 500, 1000}
+			sorted := slices.Clone(tags)
+			slices.Sort(sorted)
+			want := map[int]int{}
+			for _, tag := range sorted {
+				if tag <= maxTag {
+					want[tag] = len(want)
+				}
+			}
 
-	b.ResetTimer()
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		for _, tag := range misses {
-			slices.BinarySearch(sorted, tag)
-		}
+			for tag := 0; tag <= 300; tag++ {
+				slot, ok := lut.lookup(tag)
+				wantSlot, wantOK := want[tag]
+				require.Equal(t, wantOK, ok, "tag %d presence", tag)
+				if ok {
+					require.Equal(t, wantSlot, slot, "tag %d slot", tag)
+				}
+				// The decode loop calls lookupSmall for tags below
+				// smallTags; it must agree with lookup there.
+				if tag < smallTags {
+					sSlot, sOK := lut.lookupSmall(tag)
+					require.Equal(t, wantOK, sOK, "tag %d: lookupSmall presence", tag)
+					if sOK {
+						require.Equal(t, wantSlot, sSlot, "tag %d: lookupSmall slot", tag)
+					}
+				}
+			}
+		})
 	}
 }

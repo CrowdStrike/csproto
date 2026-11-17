@@ -3,10 +3,12 @@ package lazyproto
 import (
 	"errors"
 	"fmt"
+	"math"
 	"slices"
 	"sync"
 
 	"github.com/CrowdStrike/csproto"
+	"github.com/CrowdStrike/csproto/internal/wire"
 )
 
 var (
@@ -21,9 +23,21 @@ var (
 	// ErrTagNotFound is returned by [PartialDecodeResult.FieldData] when the specified tag(s) do not
 	// exist in the result.
 	ErrTagNotFound = fmt.Errorf("the requested tag does not exist in the partial decode result")
+	// ErrUnsupportedWireType is returned (wrapped) by Decode when the message contains a field
+	// encoded with a wire type lazyproto does not support: the deprecated group wire types
+	// (start group = 3, end group = 4) or the undefined values 6 and 7.
+	ErrUnsupportedWireType = errors.New("unsupported protobuf wire type")
+	// ErrMixedWireTypes is returned (wrapped) by Decode when a field defined in the decoder appears
+	// more than once with different wire types, e.g. a repeated numeric field encoded both packed
+	// (length-delimited) and unpacked in the same message. The protobuf spec allows mixing packed
+	// and unpacked entries, but lazyproto does not support it.
+	ErrMixedWireTypes = errors.New("repeated tag with different wire types")
 )
 
 var emptyResult DecodeResult
+
+// errInvalidDecoder is returned by [Decoder.Decode] when the Decoder was not built by [NewDecoder].
+var errInvalidDecoder = errors.New("invalid decoder")
 
 // Decode extracts the specified field tags from data without unmarshaling the entire message.
 // The methods on the returned PartialDecodeResult can be used to retrieve the decoded values.
@@ -38,26 +52,51 @@ var emptyResult DecodeResult
 // scalar values or slices of scalar values. Consumers that need to decode entire messages will need
 // to use [Unmarshal] instead.
 //
+// data must not exceed math.MaxInt32 bytes (the 2 GiB protobuf message-size limit), and field
+// keys with field number 0 are rejected with [csproto.ErrInvalidFieldTag]; see [Decoder.Decode]
+// for details and the compatibility notes.
+//
 // Deprecated: use NewDecoder(def) and (*Decoder).Decode(data)
 // For best performance, decoders should be initialized once per definition and reused when decoding data
 func Decode(data []byte, def Def) (DecodeResult, error) {
 	if len(data) == 0 || len(def) == 0 {
 		return emptyResult, nil
 	}
-	dec := &Decoder{}
-	result, err := dec.newBaseResult(def)
-	if err != nil || result == nil {
-		return emptyResult, err
-	}
-	slab := make([]FieldData, len(result.flatData))
-	for i := range slab {
-		result.flatData[i] = &slab[i]
-	}
-	err = result.decode(slices.Clone(data))
+	// Check the size (and copy) before building the decoder tree and slabs,
+	// so oversized input fails fast with nothing allocated beyond the check.
+	data, err := cloneInput(data)
 	if err != nil {
 		return emptyResult, err
 	}
+	// Not pooled, so slices are never truncated: no WithMaxBufferSize limit.
+	// maxBuffer must be -1 (not 0) so nested decoders inherit "unlimited" too.
+	dec := &Decoder{maxBuffer: -1}
+	base, err := dec.newBaseResult(def)
+	if err != nil || base == nil {
+		return emptyResult, err
+	}
+	// Same slab setup as pooled results; dec has no pool, so the result is
+	// never returned to one.
+	result := base.clone(false)
+	if err = result.decode(data); err != nil {
+		return emptyResult, err
+	}
 	return *result, nil
+}
+
+// cloneInput copies data for safe-mode decoding. It rejects buffers over the
+// 2 GiB protobuf limit before copying, so an oversized input fails fast
+// instead of being copied in full only to be rejected by wire.NewCursor.
+func cloneInput(data []byte) ([]byte, error) {
+	if err := wire.CheckLen(len(data)); err != nil {
+		return nil, bufferTooLargeErr(len(data), err)
+	}
+	return slices.Clone(data), nil
+}
+
+// bufferTooLargeErr wraps wire.ErrBufferTooLarge with the input size.
+func bufferTooLargeErr(n int, err error) error {
+	return fmt.Errorf("input buffer too large (%d bytes): %w", n, err)
 }
 
 // Option is a functional option that allows configuring new Decoders
@@ -96,10 +135,14 @@ func WithBufferFilterFunc(fn func(capacity int) int) Option {
 
 // WithMode will set the mode of operation for the decoder
 //
-// - DecoderModeSafe will create copies of the input data slice and create new slices for any returned field data results
+// - DecoderModeSafe will create copies of the input data slice and create new slices for any returned field data results.
+// This does not make a [DecodeResult] safe for concurrent use: in every mode, use a separate DecodeResult per goroutine
+// or synchronize access.
 //
 // - DecoderModeFast will not reallocate input data or slices. When the mode is DecoderModeFast it is not safe to modify the
-// input data slice after calling (*Decoder).Decode(data) and it is not safe to use any slices after calling (*DecodeResult).Close()
+// input data slice after calling (*Decoder).Decode(data) and it is not safe to use any slices after calling (*DecodeResult).Close().
+// In addition, the slice returned by a FieldData XxxValues method (for example StringValues or BytesValues) is a per-field
+// buffer that is reused by later XxxValues calls on the same field; copy it if it must outlive the next call.
 func WithMode(mode csproto.DecoderMode) Option {
 	return func(d *Decoder) error {
 		d.mode = mode
@@ -146,16 +189,42 @@ func NewDecoder(def Def, opts ...Option) (*Decoder, error) {
 	if err != nil {
 		return nil, err
 	}
+	alloc := dec.mode != csproto.DecoderModeSafe
 	dec.pool.New = func() any {
-		return base.clone()
+		return base.clone(alloc)
 	}
 	return dec, nil
 }
 
 // Decode will convert the raw []byte slice to a DecodeResult
+//
+// data must not exceed math.MaxInt32 bytes (the 2 GiB protobuf message-size limit) in any
+// [csproto.DecoderMode]; larger inputs are rejected up front with an error that wraps
+// [csproto.ErrLenOverflow]. In [csproto.DecoderModeSafe] the check runs before data is copied.
+//
+// A field key whose field number is 0 is rejected with an error that wraps
+// [csproto.ErrInvalidFieldTag], whatever its wire type; 0 is never a valid Protobuf field number.
+//
+// Compatibility notes:
+//   - Earlier versions only rejected individual length-delimited fields larger than 2 GiB, so an
+//     oversized buffer whose fields were each under the limit (e.g. several concatenated
+//     messages) used to decode. Such inputs now fail; split them before decoding.
+//   - Earlier versions accepted keys 0x01-0x07 (field number 0 with a non-zero wire type) as tag
+//     0 and silently skipped them, so e.g. {0x02, 0x00, 0x08, 0x01} (an empty length-delimited
+//     field 0 followed by field 1 = 1) decoded with field 1 readable. Such inputs now fail with
+//     [csproto.ErrInvalidFieldTag], matching [csproto.Decoder.DecodeTag]. Key 0x00 was already
+//     rejected.
 func (dec *Decoder) Decode(data []byte) (*DecodeResult, error) {
+	if dec.pool == nil {
+		// Only a Decoder not built by NewDecoder (e.g. a zero value) has no pool.
+		// Checked before cloneInput so an invalid decoder never copies data.
+		return nil, errInvalidDecoder
+	}
 	if dec.mode == csproto.DecoderModeSafe {
-		return dec.decodeWithPool(slices.Clone(data))
+		var err error
+		if data, err = cloneInput(data); err != nil {
+			return nil, err
+		}
 	}
 	return dec.decodeWithPool(data)
 }
@@ -167,7 +236,7 @@ func (dec *Decoder) decodeWithPool(data []byte) (*DecodeResult, error) {
 	res, ok := dec.pool.Get().(*DecodeResult)
 	if !ok {
 		// This will only happen if the decoder was initialized outside of NewDecoder
-		return nil, fmt.Errorf("invalid decoder")
+		return nil, errInvalidDecoder
 	}
 	err := res.decode(data)
 	if err != nil {
@@ -186,19 +255,22 @@ func (dec *Decoder) newBaseResult(def Def) (*DecodeResult, error) {
 		return nil, fmt.Errorf("invalid definition: %w", err)
 	}
 
+	maxBuffer := dec.maxBuffer
+	if maxBuffer < 0 {
+		maxBuffer = math.MaxInt // no WithMaxBufferSize limit
+	}
 	result := &DecodeResult{
-		lut:       newLutTable(def),
-		pool:      dec.pool,
-		filter:    dec.filter,
-		maxBuffer: dec.maxBuffer,
-		unsafe:    dec.mode != csproto.DecoderModeSafe,
+		lut:    newLutTable(def),
+		pool:   dec.pool,
+		filter: dec.filter,
+		// The template never decodes, so its sharedState carries only the
+		// limit; clone() copies it into each result's own sharedState.
+		shared: &sharedState{maxBuffer: maxBuffer},
 	}
 
+	// The template has no FieldData slab; clone() allocates one per result,
+	// sized from lut.count().
 	slotCnt := result.lut.count()
-
-	// intitialize the slice length
-	// (we don't need to fill the slice because that will be done when it's cloned)
-	result.flatData = make([]*FieldData, slotCnt)
 
 	// create decoders for any nested results
 	result.nestedDecoders = make([]*Decoder, slotCnt)

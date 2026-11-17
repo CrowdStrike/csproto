@@ -3,13 +3,19 @@ package lazyproto
 import (
 	"cmp"
 	"fmt"
+	"io"
 	"math"
+	"math/rand/v2"
+	"runtime"
+	"runtime/debug"
+	"strconv"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/CrowdStrike/csproto"
+	"github.com/CrowdStrike/csproto/internal/wire"
 	"github.com/CrowdStrike/csproto/prototest"
 )
 
@@ -306,7 +312,7 @@ func TestDecode(t *testing.T) {
 		defer func() { _ = res.Close() }()
 
 		assert.NoError(t, err)
-		assert.Empty(t, res.flatData)
+		assert.Empty(t, res.slab)
 	})
 	t.Run("decode with nil def", func(t *testing.T) {
 		t.Parallel()
@@ -314,7 +320,7 @@ func TestDecode(t *testing.T) {
 		defer func() { _ = res.Close() }()
 
 		assert.NoError(t, err)
-		assert.Empty(t, res.flatData)
+		assert.Empty(t, res.slab)
 	})
 	t.Run("decode with empty def", func(t *testing.T) {
 		t.Parallel()
@@ -322,7 +328,7 @@ func TestDecode(t *testing.T) {
 		defer func() { _ = res.Close() }()
 
 		assert.NoError(t, err)
-		assert.Empty(t, res.flatData)
+		assert.Empty(t, res.slab)
 	})
 	t.Run("decode with missing def keys", func(t *testing.T) {
 		t.Parallel()
@@ -331,7 +337,7 @@ func TestDecode(t *testing.T) {
 		defer func() { _ = res.Close() }()
 
 		assert.NoError(t, err)
-		assert.Empty(t, res.flatData[0].data)
+		assert.False(t, res.slab[0].hasData())
 	})
 	t.Run("decode with matching def keys", func(t *testing.T) {
 		t.Parallel()
@@ -340,7 +346,7 @@ func TestDecode(t *testing.T) {
 		defer func() { _ = res.Close() }()
 
 		assert.NoError(t, err)
-		assert.Len(t, res.flatData, 4, "should have 4 results")
+		assert.Len(t, res.slab, 4, "should have 4 results")
 	})
 	t.Run("decode with nested def keys", func(t *testing.T) {
 		t.Parallel()
@@ -350,10 +356,11 @@ func TestDecode(t *testing.T) {
 		defer func() { _ = res.Close() }()
 
 		assert.NoError(t, err)
-		assert.Len(t, res.flatData, 4, "should have 4 results")
+		assert.Len(t, res.slab, 4, "should have 4 results")
 		fd, err := res.FieldData(3, 2)
 		assert.NoError(t, err)
-		assert.Len(t, fd.data, 1)
+		assert.True(t, fd.hasData())
+		assert.Equal(t, fd.entryCount(), 1)
 	})
 	t.Run("get field data with nested def keys", func(t *testing.T) {
 		t.Parallel()
@@ -366,15 +373,427 @@ func TestDecode(t *testing.T) {
 		fd, err := res.FieldData(3, 2)
 		assert.NoError(t, err)
 		assert.NotNil(t, fd)
-		assert.Len(t, fd.data, 1)
+		assert.True(t, fd.hasData())
+		assert.Equal(t, fd.entryCount(), 1)
+		v, err := fd.StringValue()
+		assert.NoError(t, err)
+		assert.Equal(t, v, "nested")
 	})
 	t.Run("fails with invalid def", func(t *testing.T) {
 		t.Parallel()
 		def := NewDef(csproto.MaxTagValue + 1)
 		res, err := Decode(sampleMessage, def)
 		defer func() { _ = res.Close() }()
-		assert.Empty(t, res.flatData)
+		assert.Empty(t, res.slab)
 		assert.Error(t, err)
+	})
+}
+
+// TestDecodeMalformedInput exercises error paths in the decode loop that are
+// only reachable with corrupt or adversarial protobuf data.
+func TestDecodeMalformedInput(t *testing.T) {
+	t.Parallel()
+
+	t.Run("tag zero byte is rejected", func(t *testing.T) {
+		// A 0x00 byte decodes as tag=0, wt=varint. Tag 0 is invalid per the
+		// protobuf spec. wire.Cursor.NextTag validates the field number and the
+		// decode loop reports it as ErrInvalidFieldTag.
+		data := []byte{
+			0x00, // tag=0, wt=varint (invalid)
+			0x00, // varint value 0 for tag 0
+		}
+		def := NewDef(1)
+		dec, err := NewDecoder(def, WithMode(csproto.DecoderModeFast))
+		require.NoError(t, err)
+		_, err = dec.Decode(data)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, csproto.ErrInvalidFieldTag)
+	})
+
+	t.Run("unsupported wire type 3 (start group)", func(t *testing.T) {
+		// Wire type 3 (start group) is deprecated but could appear in old data.
+		// The decode loop should return a descriptive error.
+		data := []byte{
+			(1 << 3) | 3, // tag=1, wt=3 (start group)
+		}
+		def := NewDef(1)
+		dec, err := NewDecoder(def, WithMode(csproto.DecoderModeFast))
+		require.NoError(t, err)
+		_, err = dec.Decode(data)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrUnsupportedWireType)
+		assert.Contains(t, err.Error(), "unsupported protobuf wire type 3")
+	})
+
+	t.Run("unsupported wire type 7 (bogus)", func(t *testing.T) {
+		data := []byte{
+			(1 << 3) | 7, // tag=1, wt=7 (undefined)
+		}
+		def := NewDef(1)
+		dec, err := NewDecoder(def, WithMode(csproto.DecoderModeFast))
+		require.NoError(t, err)
+		_, err = dec.Decode(data)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrUnsupportedWireType)
+		assert.Contains(t, err.Error(), "unsupported protobuf wire type 7")
+	})
+
+	t.Run("truncated varint in field value", func(t *testing.T) {
+		// Tag is valid but the varint value has no terminator byte.
+		data := []byte{
+			(1 << 3),         // tag=1, wt=varint
+			0x80, 0x80, 0x80, // continuation bytes, no terminator
+		}
+		def := NewDef(1)
+		dec, err := NewDecoder(def, WithMode(csproto.DecoderModeFast))
+		require.NoError(t, err)
+		_, err = dec.Decode(data)
+		require.Error(t, err)
+		assert.Equal(t, io.ErrUnexpectedEOF, err, "truncation must be returned bare (err == io.ErrUnexpectedEOF)")
+	})
+
+	t.Run("truncated length-delimited payload", func(t *testing.T) {
+		// Varint says 100 bytes but only 3 follow.
+		data := []byte{
+			(2 << 3) | 2,     // tag=2, wt=length-delimited
+			0x64,             // varint length = 100
+			0x01, 0x02, 0x03, // only 3 bytes
+		}
+		def := NewDef(2)
+		dec, err := NewDecoder(def, WithMode(csproto.DecoderModeFast))
+		require.NoError(t, err)
+		_, err = dec.Decode(data)
+		require.Error(t, err)
+		assert.Equal(t, io.ErrUnexpectedEOF, err, "truncation must be returned bare (err == io.ErrUnexpectedEOF)")
+	})
+
+	t.Run("repeated tag with mismatched wire types", func(t *testing.T) {
+		// Same tag appears first as varint, then as length-delimited.
+		data := []byte{
+			(1 << 3), 0x01, // tag=1, wt=varint, value=1
+			(1 << 3) | 2, 0x02, 0x01, 0x02, // tag=1, wt=length-delimited, 2 bytes
+		}
+		def := NewDef(1)
+		dec, err := NewDecoder(def, WithMode(csproto.DecoderModeFast))
+		require.NoError(t, err)
+		_, err = dec.Decode(data)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, ErrMixedWireTypes)
+		assert.Contains(t, err.Error(), "different wire types")
+	})
+
+	t.Run("varint overflow in tag (10+ continuation bytes)", func(t *testing.T) {
+		// 10 continuation bytes — no terminator within the 10-byte window
+		// in wire.Cursor.NextTag; RefineErr reports it as ErrValueOverflow,
+		// matching csproto.Decoder.DecodeTag.
+		data := make([]byte, 12)
+		for i := 0; i < 10; i++ {
+			data[i] = 0x80
+		}
+		data[10] = 0x00 // terminator (but outside the window)
+		def := NewDef(1)
+		dec, err := NewDecoder(def, WithMode(csproto.DecoderModeFast))
+		require.NoError(t, err)
+		_, err = dec.Decode(data)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "fail tag decode")
+		assert.ErrorIs(t, err, csproto.ErrValueOverflow)
+	})
+
+	t.Run("empty varint tag (EOF at tag position)", func(t *testing.T) {
+		// wire.Cursor.NextTag on an empty remaining buffer. More() returns false
+		// so the loop doesn't enter — this is actually not an error.
+		// But a single continuation byte with no terminator IS an error.
+		data := []byte{0x80} // one continuation byte, no terminator
+		def := NewDef(1)
+		dec, err := NewDecoder(def, WithMode(csproto.DecoderModeFast))
+		require.NoError(t, err)
+		_, err = dec.Decode(data)
+		require.Error(t, err)
+		assert.Equal(t, io.ErrUnexpectedEOF, err, "truncation must be returned bare (err == io.ErrUnexpectedEOF)")
+	})
+
+	t.Run("truncated length prefix is io.ErrUnexpectedEOF", func(t *testing.T) {
+		// Regression: the cursor's internal window sentinel must be refined to
+		// the same error csproto.Decoder.DecodeBytes returns, so callers can
+		// detect partial/streamed input with errors.Is(err, io.ErrUnexpectedEOF).
+		data := []byte{
+			(2 << 3) | 2, // tag=2, wt=length-delimited
+			0x80,         // length varint with continuation bit, no terminator
+		}
+		for _, mode := range []csproto.DecoderMode{csproto.DecoderModeSafe, csproto.DecoderModeFast} {
+			dec, err := NewDecoder(NewDef(2), WithMode(mode))
+			require.NoError(t, err)
+			_, err = dec.Decode(data)
+			require.Error(t, err, "mode=%v", mode)
+			assert.ErrorIs(t, err, io.ErrUnexpectedEOF, "mode=%v", mode)
+			assert.NotErrorIs(t, err, csproto.ErrInvalidVarintData, "mode=%v", mode)
+		}
+	})
+
+	t.Run("declared length over 2 GiB is ErrLenOverflow", func(t *testing.T) {
+		// Matches csproto.Decoder.DecodeBytes/Skip, which check the 2 GiB
+		// limit before the remaining-buffer check.
+		var lenBuf [10]byte
+		n := csproto.EncodeVarint(lenBuf[:], 3<<30) // 5-byte length = 3 GiB
+		data := []byte{(2 << 3) | 2}                // tag=2, length-delimited
+		data = append(data, lenBuf[:n]...)
+		data = append(data, 0x01) // 1 byte of payload
+		for _, tracked := range []bool{true, false} {
+			def := NewDef(1)
+			if tracked {
+				def = NewDef(2)
+			}
+			dec, err := NewDecoder(def, WithMode(csproto.DecoderModeFast))
+			require.NoError(t, err)
+			_, err = dec.Decode(data)
+			require.Error(t, err, "tracked=%v", tracked)
+			assert.ErrorIs(t, err, csproto.ErrLenOverflow, "tracked=%v", tracked)
+			assert.Contains(t, err.Error(),
+				"fail skip (2, length-delimited) at byte 1: invalid length (3221225472) for length-delimited field",
+				"tracked=%v", tracked)
+		}
+	})
+
+	t.Run("varint field value with 10 continuation bytes is ErrValueOverflow", func(t *testing.T) {
+		// Matches csproto.Decoder.Skip -> DecodeVarint.
+		data := []byte{(1 << 3) | 0} // tag=1, varint
+		for i := 0; i < 10; i++ {
+			data = append(data, 0x80)
+		}
+		dec, err := NewDecoder(NewDef(1), WithMode(csproto.DecoderModeFast))
+		require.NoError(t, err)
+		_, err = dec.Decode(data)
+		require.Error(t, err)
+		assert.ErrorIs(t, err, csproto.ErrValueOverflow)
+	})
+
+	t.Run("varint field value with overflowing 10th byte is ErrValueOverflow", func(t *testing.T) {
+		// 9 continuation bytes + terminator 0x02: bit 1 at shift 63 overflows uint64.
+		// PeekVarint returns ErrValueOverflow directly (not a sentinel); RefineErr passes it through.
+		data := []byte{(1 << 3) | 0} // tag=1, varint
+		for i := 0; i < 9; i++ {
+			data = append(data, 0x80)
+		}
+		data = append(data, 0x02)
+		for _, def := range []Def{NewDef(1), NewDef(9)} { // tracked, untracked
+			dec, err := NewDecoder(def, WithMode(csproto.DecoderModeFast))
+			require.NoError(t, err)
+			_, err = dec.Decode(data)
+			require.Error(t, err)
+			assert.ErrorIs(t, err, csproto.ErrValueOverflow)
+			assert.Contains(t, err.Error(), "fail skip") // wrapped with tag/offset context, not bare
+		}
+	})
+}
+
+// TestRepeatedFieldColdData verifies that the root/cold repeated-field split
+// in FieldData works correctly: the first occurrence is inlined in root,
+// subsequent occurrences spill to cold.repeated, and all accessor methods
+// (scalar "last wins", slice "all entries") return the right values.
+func TestRepeatedFieldColdData(t *testing.T) {
+	t.Parallel()
+
+	// Build a message with tag=1 (varint) appearing 3 times: 10, 20, 30
+	// and tag=2 (string) appearing 2 times: "alpha", "beta"
+	data := []byte{
+		// tag=1, wt=varint, value=10
+		(1 << 3), 0x0A,
+		// tag=2, wt=length-delimited, value="alpha"
+		(2 << 3) | 2, 0x05, 'a', 'l', 'p', 'h', 'a',
+		// tag=1, wt=varint, value=20
+		(1 << 3), 0x14,
+		// tag=2, wt=length-delimited, value="beta"
+		(2 << 3) | 2, 0x04, 'b', 'e', 't', 'a',
+		// tag=1, wt=varint, value=30
+		(1 << 3), 0x1E,
+	}
+
+	def := NewDef(1, 2)
+	dec, err := NewDecoder(def, WithMode(csproto.DecoderModeFast))
+	require.NoError(t, err)
+
+	res, err := dec.Decode(data)
+	require.NoError(t, err)
+	defer res.Close()
+
+	t.Run("scalar varint returns last value (last-write-wins)", func(t *testing.T) {
+		v, err := res.UInt64Value(1)
+		require.NoError(t, err)
+		assert.Equal(t, uint64(30), v, "scalar should return last occurrence")
+	})
+
+	t.Run("repeated varint returns all values in order", func(t *testing.T) {
+		vals, err := res.UInt64Values(1)
+		require.NoError(t, err)
+		assert.Equal(t, []uint64{10, 20, 30}, vals)
+	})
+
+	t.Run("scalar string returns last value", func(t *testing.T) {
+		v, err := res.StringValue(2)
+		require.NoError(t, err)
+		assert.Equal(t, "beta", v, "scalar should return last occurrence")
+	})
+
+	t.Run("repeated string returns all values in order", func(t *testing.T) {
+		vals, err := res.StringValues(2)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"alpha", "beta"}, vals)
+	})
+
+	t.Run("repeated string keeps empty entries", func(t *testing.T) {
+		// tag=1 = ["", "a", "", "b", ""]: empty strings at the start, middle
+		// and end must not be dropped, and StringValues must stay aligned
+		// with BytesValues.
+		msg := []byte{
+			(1 << 3) | 2, 0x00,
+			(1 << 3) | 2, 0x01, 'a',
+			(1 << 3) | 2, 0x00,
+			(1 << 3) | 2, 0x01, 'b',
+			(1 << 3) | 2, 0x00,
+		}
+		want := []string{"", "a", "", "b", ""}
+		for _, mode := range []csproto.DecoderMode{csproto.DecoderModeSafe, csproto.DecoderModeFast} {
+			t.Run(mode.String(), func(t *testing.T) {
+				d, err := NewDecoder(NewDef(1), WithMode(mode))
+				require.NoError(t, err)
+				// two cycles so fast mode also covers the pooled-buffer reuse path
+				for range 2 {
+					r, err := d.Decode(msg)
+					require.NoError(t, err)
+					ss, err := r.StringValues(1)
+					require.NoError(t, err)
+					assert.Equal(t, want, ss)
+					bs, err := r.BytesValues(1)
+					require.NoError(t, err)
+					assert.Len(t, bs, len(ss), "StringValues and BytesValues must return the same number of entries")
+					require.NoError(t, r.Close())
+				}
+			})
+		}
+	})
+
+	t.Run("empty packed entries yield no numeric values", func(t *testing.T) {
+		// tag=1 packed: [] then [1, 2] then []. An empty packed entry holds
+		// zero values, so it must not produce a zero element.
+		msg := []byte{
+			(1 << 3) | 2, 0x00,
+			(1 << 3) | 2, 0x02, 0x01, 0x02,
+			(1 << 3) | 2, 0x00,
+		}
+		for _, mode := range []csproto.DecoderMode{csproto.DecoderModeSafe, csproto.DecoderModeFast} {
+			t.Run(mode.String(), func(t *testing.T) {
+				d, err := NewDecoder(NewDef(1), WithMode(mode))
+				require.NoError(t, err)
+				r, err := d.Decode(msg)
+				require.NoError(t, err)
+				defer r.Close()
+				vs, err := r.Int32Values(1)
+				require.NoError(t, err)
+				assert.Equal(t, []int32{1, 2}, vs)
+			})
+		}
+	})
+
+	t.Run("entryCount reflects root + repeated", func(t *testing.T) {
+		fd, err := res.GetFieldData(1)
+		require.NoError(t, err)
+		assert.Equal(t, 3, fd.entryCount(), "tag=1 has 3 occurrences")
+
+		fd2, err := res.GetFieldData(2)
+		require.NoError(t, err)
+		assert.Equal(t, 2, fd2.entryCount(), "tag=2 has 2 occurrences")
+	})
+
+	t.Run("single occurrence stays in root only", func(t *testing.T) {
+		// Decode a message where tag=1 appears only once
+		single := []byte{(1 << 3), 0x07} // tag=1, value=7
+		res2, err := dec.Decode(single)
+		require.NoError(t, err)
+		defer res2.Close()
+
+		fd, err := res2.GetFieldData(1)
+		require.NoError(t, err)
+		assert.Equal(t, 1, fd.entryCount())
+
+		v, err := res2.UInt64Value(1)
+		require.NoError(t, err)
+		assert.Equal(t, uint64(7), v)
+	})
+
+	t.Run("pool reuse clears repeated entries", func(t *testing.T) {
+		// First decode: 3 entries for tag=1
+		res1, err := dec.Decode(data)
+		require.NoError(t, err)
+		fd1, _ := res1.GetFieldData(1)
+		assert.Equal(t, 3, fd1.entryCount())
+		res1.Close()
+
+		// Second decode with only 1 entry for tag=1 — repeated must be cleared
+		single := []byte{(1 << 3), 0x07}
+		res2, err := dec.Decode(single)
+		require.NoError(t, err)
+		defer res2.Close()
+
+		fd2, err := res2.GetFieldData(1)
+		require.NoError(t, err)
+		assert.Equal(t, 1, fd2.entryCount(), "repeated entries from previous decode must be cleared")
+
+		v, err := res2.UInt64Value(1)
+		require.NoError(t, err)
+		assert.Equal(t, uint64(7), v, "should not contain stale data from previous decode")
+	})
+
+	t.Run("bytes repeated values via cold path", func(t *testing.T) {
+		// tag=1 as bytes, appearing 3 times
+		bytesData := []byte{
+			(1 << 3) | 2, 0x02, 0xAA, 0xBB,
+			(1 << 3) | 2, 0x03, 0xCC, 0xDD, 0xEE,
+			(1 << 3) | 2, 0x01, 0xFF,
+		}
+		bdef := NewDef(1)
+		bdec, err := NewDecoder(bdef, WithMode(csproto.DecoderModeFast))
+		require.NoError(t, err)
+
+		bres, err := bdec.Decode(bytesData)
+		require.NoError(t, err)
+		defer bres.Close()
+
+		vals, err := bres.BytesValues(1)
+		require.NoError(t, err)
+		require.Len(t, vals, 3)
+		assert.Equal(t, []byte{0xAA, 0xBB}, vals[0])
+		assert.Equal(t, []byte{0xCC, 0xDD, 0xEE}, vals[1])
+		assert.Equal(t, []byte{0xFF}, vals[2])
+
+		// Scalar should return last
+		v, err := bres.BytesValue(1)
+		require.NoError(t, err)
+		assert.Equal(t, []byte{0xFF}, v)
+	})
+
+	t.Run("empty bytes field is present but empty", func(t *testing.T) {
+		// tag=1 as bytes with zero-length payload
+		emptyData := []byte{
+			(1 << 3) | 2, 0x00, // tag=1, wt=length-delimited, length=0
+		}
+		edef := NewDef(1)
+		edec, err := NewDecoder(edef, WithMode(csproto.DecoderModeFast))
+		require.NoError(t, err)
+
+		eres, err := edec.Decode(emptyData)
+		require.NoError(t, err)
+		defer eres.Close()
+
+		fd, err := eres.GetFieldData(1)
+		require.NoError(t, err)
+		assert.True(t, fd.hasData(), "field should be present")
+		assert.Equal(t, 1, fd.entryCount())
+
+		v, err := eres.BytesValue(1)
+		require.NoError(t, err)
+		assert.NotNil(t, v, "empty bytes field should return non-nil slice")
+		assert.Len(t, v, 0)
 	})
 }
 
@@ -472,6 +891,19 @@ func TestDecodeResultFieldData(t *testing.T) {
 		vs, err := fd.UInt32Values()
 		assert.Nil(t, vs, "slice method should return nil")
 		assert.ErrorIs(t, err, ErrTagNotFound)
+
+		// Non-varint methods also return ErrTagNotFound, not a WireTypeMismatchError:
+		// hasData() is checked before the wire type.
+		s, err := fd.StringValue()
+		assert.Empty(t, s)
+		assert.ErrorIs(t, err, ErrTagNotFound)
+		var wtErr *WireTypeMismatchError
+		assert.NotErrorAs(t, err, &wtErr)
+
+		f64s, err := fd.Fixed64Values()
+		assert.Nil(t, f64s)
+		assert.ErrorIs(t, err, ErrTagNotFound)
+		assert.NotErrorAs(t, err, &wtErr)
 	})
 }
 
@@ -2287,6 +2719,415 @@ A2 06 ; tag=100 (WrappedMessagePayload extension), length-delimited
 	assert.Error(t, err, "expected error from Decode() when data is corrupted")
 }
 
+// buildMessage builds a protobuf-encoded message with nFields fields of mixed
+// wire types (varint, fixed32, fixed64, and length-delimited) using realistic,
+// non-sequential tag numbers in a shuffled encoding order. The output is
+// deterministic for a given nFields because the PRNG is seeded with nFields.
+func buildMessage(nFields int) (data []byte, tags []int) {
+	rng := rand.New(rand.NewPCG(13, uint64(nFields)))
+
+	// Generate non-sequential tag numbers with random gaps of 1-5.
+	tags = make([]int, nFields)
+	tag := 1
+	for i := range tags {
+		tags[i] = tag
+		tag += 1 + rng.IntN(5)
+	}
+
+	// Assign a wire type to each field: varint(0), fixed64(1),
+	// length-delimited(2), fixed32(5). Weighted toward varint since that
+	// dominates real messages.
+	type fieldSpec struct {
+		tag      int
+		wireType csproto.WireType
+	}
+	wireTypes := []csproto.WireType{
+		csproto.WireTypeVarint,
+		csproto.WireTypeVarint,
+		csproto.WireTypeVarint,
+		csproto.WireTypeFixed64,
+		csproto.WireTypeLengthDelimited,
+		csproto.WireTypeFixed32,
+	}
+	specs := make([]fieldSpec, nFields)
+	for i, t := range tags {
+		specs[i] = fieldSpec{tag: t, wireType: wireTypes[rng.IntN(len(wireTypes))]}
+	}
+
+	// Shuffle so fields appear out of tag order, matching real-world messages
+	// where serialization order is not guaranteed.
+	rng.Shuffle(len(specs), func(i, j int) { specs[i], specs[j] = specs[j], specs[i] })
+
+	// Pre-compute the encoded size.
+	var sz int
+	for _, s := range specs {
+		tagSz := csproto.SizeOfTagKey(s.tag)
+		switch s.wireType {
+		case csproto.WireTypeVarint:
+			sz += tagSz + csproto.SizeOfVarint(uint64(s.tag*7))
+		case csproto.WireTypeFixed64:
+			sz += tagSz + 8
+		case csproto.WireTypeLengthDelimited:
+			str := fmt.Sprintf("f%d", s.tag)
+			sz += tagSz + csproto.SizeOfVarint(uint64(len(str))) + len(str)
+		case csproto.WireTypeFixed32:
+			sz += tagSz + 4
+		}
+	}
+
+	buf := make([]byte, sz)
+	enc := csproto.NewEncoder(buf)
+	for _, s := range specs {
+		switch s.wireType {
+		case csproto.WireTypeVarint:
+			enc.EncodeUInt64(s.tag, uint64(s.tag*7))
+		case csproto.WireTypeFixed64:
+			enc.EncodeFixed64(s.tag, uint64(s.tag*13))
+		case csproto.WireTypeLengthDelimited:
+			enc.EncodeString(s.tag, fmt.Sprintf("f%d", s.tag))
+		case csproto.WireTypeFixed32:
+			enc.EncodeFixed32(s.tag, uint32(s.tag*11))
+		}
+	}
+	return buf, tags
+}
+
+func BenchmarkDecode(b *testing.B) {
+	// Batch-decode to create realistic L1 cache pressure.
+	//
+	// With a single decode+close cycle the pool returns the same DecodeResult
+	// every time, so FieldData stays warm in L1 and struct layout has no
+	// measurable impact. In production, many concurrent DecodeResults compete
+	// for L1 space, making each FieldData access a potential cache miss.
+	//
+	// This benchmark decodes a batch of messages before closing any of them.
+	// With batchSize=256 and 64 fields, the live FieldData slabs total ~3.8 MB
+	// — well over L1 (128 KB on Apple M-series cores). Each decode therefore
+	// fetches its FieldData from L2+, where the number of cache lines touched
+	// per field (1 vs 2) is directly visible in wall time.
+	const batchSize = 256
+
+	for _, nFields := range []int{8, 18, 32, 64} {
+		data, tags := buildMessage(nFields)
+
+		b.Run(fmt.Sprintf("fields=%d", nFields), func(b *testing.B) {
+			// Pin goroutine to one OS thread so the scheduler doesn't
+			// migrate it between P-cores and E-cores mid-benchmark on
+			// heterogeneous CPUs (Apple Silicon, big.LITTLE, etc.).
+			runtime.LockOSThread()
+			defer runtime.UnlockOSThread()
+
+			dec, err := NewDecoder(NewDef(tags...), WithMode(csproto.DecoderModeFast))
+			if err != nil {
+				b.Fatal(err)
+			}
+
+			results := make([]*DecodeResult, batchSize)
+
+			// warm the pool so clone cost is not measured
+			for i := range results {
+				r, err := dec.Decode(data)
+				if err != nil {
+					b.Fatal(err)
+				}
+				results[i] = r
+			}
+			for i := range results {
+				results[i].Close()
+			}
+
+			// Flush warmup garbage and disable GC so the sync.Pool is not
+			// drained between b.N iterations. Without this, some iterations
+			// hit the pool (fast) and others miss (slow clone + allocs),
+			// producing highly inconsistent measurements.
+			runtime.GC()
+			prev := debug.SetGCPercent(-1)
+			defer debug.SetGCPercent(prev)
+
+			b.SetBytes(int64(len(data)) * batchSize)
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				for j := 0; j < batchSize; j++ {
+					res, err := dec.Decode(data)
+					if err != nil {
+						b.Fatal(err)
+					}
+					results[j] = res
+				}
+				for j := 0; j < batchSize; j++ {
+					results[j].Close()
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkDecodeGCPressure(b *testing.B) {
+	// Measures decode+close under active GC marking, where write barriers
+	// fire as full function calls (~30+ cycles each) rather than untaken
+	// branches (~5 cycles). A 1 MB allocation per iteration keeps the GC
+	// marking phase active throughout the measured window.
+	const batchSize = 64
+
+	for _, nFields := range []int{8, 64} {
+		data, tags := buildMessage(nFields)
+
+		b.Run(fmt.Sprintf("fields=%d", nFields), func(b *testing.B) {
+			runtime.LockOSThread()
+			defer runtime.UnlockOSThread()
+
+			dec, err := NewDecoder(NewDef(tags...), WithMode(csproto.DecoderModeFast))
+			if err != nil {
+				b.Fatal(err)
+			}
+
+			results := make([]*DecodeResult, batchSize)
+
+			// warm the pool
+			for i := range results {
+				r, err := dec.Decode(data)
+				if err != nil {
+					b.Fatal(err)
+				}
+				results[i] = r
+			}
+			for i := range results {
+				results[i].Close()
+			}
+
+			runtime.GC()
+
+			b.SetBytes(int64(len(data)) * batchSize)
+			b.ReportAllocs()
+			b.ResetTimer()
+
+			var sink []byte
+			for i := 0; i < b.N; i++ {
+				// Allocate garbage to keep the GC mark phase (and write
+				// barriers) active throughout the decode+close cycle.
+				sink = make([]byte, 1<<20)
+
+				for j := 0; j < batchSize; j++ {
+					res, err := dec.Decode(data)
+					if err != nil {
+						b.Fatal(err)
+					}
+					results[j] = res
+				}
+				for j := 0; j < batchSize; j++ {
+					results[j].Close()
+				}
+			}
+			runtime.KeepAlive(sink)
+		})
+	}
+}
+
+func BenchmarkDecodeRealistic(b *testing.B) {
+	// Measures decode+close with default GC and no synthetic garbage — the
+	// closest approximation to a production hot path where the GC runs at its
+	// normal cadence and sync.Pool drains happen naturally between cycles.
+	const batchSize = 256
+
+	for _, nFields := range []int{8, 18, 32, 64} {
+		data, tags := buildMessage(nFields)
+
+		b.Run(fmt.Sprintf("fields=%d", nFields), func(b *testing.B) {
+			runtime.LockOSThread()
+			defer runtime.UnlockOSThread()
+
+			dec, err := NewDecoder(NewDef(tags...), WithMode(csproto.DecoderModeFast))
+			if err != nil {
+				b.Fatal(err)
+			}
+
+			results := make([]*DecodeResult, batchSize)
+
+			// warm the pool
+			for i := range results {
+				r, err := dec.Decode(data)
+				if err != nil {
+					b.Fatal(err)
+				}
+				results[i] = r
+			}
+			for i := range results {
+				results[i].Close()
+			}
+
+			b.SetBytes(int64(len(data)) * batchSize)
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				for j := 0; j < batchSize; j++ {
+					res, err := dec.Decode(data)
+					if err != nil {
+						b.Fatal(err)
+					}
+					results[j] = res
+				}
+				for j := 0; j < batchSize; j++ {
+					results[j].Close()
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkDecodeStringValues(b *testing.B) {
+	// Like BenchmarkDecodeRealistic (fast mode, default GC, pool reuse), but
+	// each result also reads string fields with StringValues before Close —
+	// the pattern used by example/proto{2,3} benchmarks. In fast mode
+	// StringValues caches unsafe.String values that alias the input, so this
+	// exercises the alias-release path in Close.
+	//   strings=one: read the first string field only
+	//   strings=all: read every string field
+	const batchSize = 256
+
+	for _, nFields := range []int{8, 64} {
+		data, tags := buildMessage(nFields)
+
+		// Find the length-delimited (string) fields: StringValues succeeds
+		// only for them.
+		probe, err := NewDecoder(NewDef(tags...), WithMode(csproto.DecoderModeFast))
+		if err != nil {
+			b.Fatal(err)
+		}
+		res, err := probe.Decode(data)
+		if err != nil {
+			b.Fatal(err)
+		}
+		var strTags []int
+		for _, tag := range tags {
+			if _, err := res.StringValues(tag); err == nil {
+				strTags = append(strTags, tag)
+			}
+		}
+		res.Close()
+		if len(strTags) == 0 {
+			b.Fatalf("fields=%d: message has no string fields", nFields)
+		}
+
+		for _, mode := range []struct {
+			name string
+			tags []int
+		}{
+			{"one", strTags[:1]},
+			{"all", strTags},
+		} {
+			b.Run(fmt.Sprintf("fields=%d/strings=%s", nFields, mode.name), func(b *testing.B) {
+				runtime.LockOSThread()
+				defer runtime.UnlockOSThread()
+
+				dec, err := NewDecoder(NewDef(tags...), WithMode(csproto.DecoderModeFast))
+				if err != nil {
+					b.Fatal(err)
+				}
+
+				results := make([]*DecodeResult, batchSize)
+				read := func(r *DecodeResult) {
+					for _, tag := range mode.tags {
+						if _, err := r.StringValues(tag); err != nil {
+							b.Fatal(err)
+						}
+					}
+				}
+
+				// warm the pool and the per-field caches
+				for i := range results {
+					r, err := dec.Decode(data)
+					if err != nil {
+						b.Fatal(err)
+					}
+					read(r)
+					results[i] = r
+				}
+				for i := range results {
+					results[i].Close()
+				}
+
+				b.SetBytes(int64(len(data)) * batchSize)
+				b.ReportAllocs()
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					for j := 0; j < batchSize; j++ {
+						res, err := dec.Decode(data)
+						if err != nil {
+							b.Fatal(err)
+						}
+						read(res)
+						results[j] = res
+					}
+					for j := 0; j < batchSize; j++ {
+						results[j].Close()
+					}
+				}
+			})
+		}
+	}
+}
+
+func BenchmarkDecodeRealisticOptions(b *testing.B) {
+	// BenchmarkDecodeRealistic (fast mode, 64 fields) with the buffer-limiting
+	// options, which make Close enforce a capacity limit on pooled results.
+	const batchSize = 256
+	data, tags := buildMessage(64)
+
+	for _, opt := range []struct {
+		name string
+		opt  Option
+	}{
+		{"maxbuffer", WithMaxBufferSize(1024)},
+		{"filter", WithBufferFilterFunc(func(c int) int {
+			if c > 1024 {
+				return 1024
+			}
+			return -1
+		})},
+	} {
+		b.Run(fmt.Sprintf("fields=64/%s", opt.name), func(b *testing.B) {
+			runtime.LockOSThread()
+			defer runtime.UnlockOSThread()
+
+			dec, err := NewDecoder(NewDef(tags...), WithMode(csproto.DecoderModeFast), opt.opt)
+			if err != nil {
+				b.Fatal(err)
+			}
+
+			results := make([]*DecodeResult, batchSize)
+			for i := range results {
+				r, err := dec.Decode(data)
+				if err != nil {
+					b.Fatal(err)
+				}
+				results[i] = r
+			}
+			for i := range results {
+				results[i].Close()
+			}
+
+			b.SetBytes(int64(len(data)) * batchSize)
+			b.ReportAllocs()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				for j := 0; j < batchSize; j++ {
+					res, err := dec.Decode(data)
+					if err != nil {
+						b.Fatal(err)
+					}
+					results[j] = res
+				}
+				for j := 0; j < batchSize; j++ {
+					results[j].Close()
+				}
+			}
+		})
+	}
+}
+
+var cloneSink *DecodeResult
+
 func BenchmarkCloneAllocs(b *testing.B) {
 	def := NewDef(sampleTags[:]...)
 	dec, err := NewDecoder(def)
@@ -2300,7 +3141,322 @@ func BenchmarkCloneAllocs(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		r := base.clone()
-		_ = r
+		cloneSink = base.clone(false)
+	}
+}
+
+// TestDecodeOneByteValueFastPath checks the decode loop's inline handling of
+// 1-byte varint values and 1-byte length prefixes against the cursor's
+// PeekVarint/PeekBytes, which the loop falls back to otherwise. For every
+// first value byte, and every payload length from 0 up past the declared
+// length, Decode must succeed exactly when Peek* does and return the same
+// value bytes; on failure it must return what Peek* would (bare EOF here).
+// The boundary payload length == declared length is the off-by-one case.
+func TestDecodeOneByteValueFastPath(t *testing.T) {
+	t.Parallel()
+
+	dec, err := NewDecoder(NewDef(1), WithMode(csproto.DecoderModeFast))
+	require.NoError(t, err)
+
+	for _, wt := range []csproto.WireType{csproto.WireTypeVarint, csproto.WireTypeLengthDelimited} {
+		for b := range 256 {
+			for tail := 0; tail <= 0x81; tail++ {
+				data := append([]byte{byte(1<<3) | byte(wt), byte(b)}, make([]byte, tail)...)
+
+				c, err := wire.NewCursor(data)
+				require.NoError(t, err)
+				c, _, _ = c.NextShortTag()
+				var off, sz int
+				if wt == csproto.WireTypeVarint {
+					off, sz, err = c.PeekVarint()
+				} else {
+					off, sz, err = c.PeekBytes()
+				}
+				// Decode only succeeds if the rest of the buffer after this
+				// field also parses; restrict to inputs where it ends exactly.
+				if err == nil && off+sz != len(data) {
+					continue
+				}
+
+				res, derr := dec.Decode(data)
+				if err != nil {
+					assert.Equal(t, c.RefineErr(err), derr, "wt=%v b=%#x tail=%d", wt, b, tail)
+					continue
+				}
+				require.NoError(t, derr, "wt=%v b=%#x tail=%d", wt, b, tail)
+				// Compare the raw entry; BytesValue would reject the varint wire type.
+				fd, err := res.GetFieldData(1)
+				require.NoError(t, err)
+				assert.Equal(t, data[off:off+sz], fd.root.bytes(fd.cold.baseBuf()), "wt=%v b=%#x tail=%d", wt, b, tail)
+				require.NoError(t, res.Close())
+			}
+		}
+	}
+}
+
+// TestDecodeTruncatedReturnsBareEOF verifies that truncated input yields an
+// unwrapped io.ErrUnexpectedEOF, so callers using err == io.ErrUnexpectedEOF
+// (as worked with the previous csproto.Decoder-based implementation) still
+// detect partial/streamed input. Errors other than truncation stay wrapped.
+func TestDecodeTruncatedReturnsBareEOF(t *testing.T) {
+	t.Parallel()
+
+	cases := map[string][]byte{
+		// Cases where the previous implementation also returned a bare EOF.
+		"tag is last byte (varint)":       {(1 << 3) | 0},
+		"tag is last byte (length-delim)": {(1 << 3) | 2},
+		"tag is last byte (fixed32)":      {(1 << 3) | 5},
+		"payload shorter than length":     {(1 << 3) | 2, 0x05, 0x01, 0x02},
+		"fixed32 truncated":               {(1 << 3) | 5, 0x01, 0x02},
+		"fixed64 truncated":               {(1 << 3) | 1, 0x01, 0x02, 0x03, 0x04},
+		// Truncated varints: previously wrapped, now also bare (superset).
+		"truncated tag varint":               {0x80},
+		"truncated varint value":             {(1 << 3) | 0, 0x80, 0x80},
+		"truncated length prefix":            {(1 << 3) | 2, 0x80},
+		"second field truncated after first": {(1 << 3) | 0, 0x01, (1 << 3) | 2, 0x03, 0x01},
+	}
+	for name, data := range cases {
+		for _, mode := range []csproto.DecoderMode{csproto.DecoderModeSafe, csproto.DecoderModeFast} {
+			for _, def := range []Def{NewDef(1), NewDef(9)} { // tracked, untracked
+				dec, err := NewDecoder(def, WithMode(mode))
+				require.NoError(t, err)
+				_, err = dec.Decode(data)
+				assert.True(t, err == io.ErrUnexpectedEOF, //nolint:errorlint // testing bare sentinel on purpose
+					"%s (mode=%v def=%v): want bare io.ErrUnexpectedEOF, got %v", name, mode, def, err)
+			}
+		}
+	}
+
+	t.Run("non-truncation errors stay wrapped", func(t *testing.T) {
+		dec, err := NewDecoder(NewDef(1), WithMode(csproto.DecoderModeFast))
+		require.NoError(t, err)
+		_, err = dec.Decode([]byte{0x00, 0x00}) // tag 0
+		require.Error(t, err)
+		assert.ErrorIs(t, err, csproto.ErrInvalidFieldTag)
+		assert.NotSame(t, csproto.ErrInvalidFieldTag, err, "should carry tag/offset context")
+		assert.Contains(t, err.Error(), "fail tag decode at byte 0: invalid tag value (0)")
+	})
+}
+
+// TestDecodeFieldNumberZeroRejected pins the compatibility change documented on
+// Decoder.Decode: keys 0x01-0x07 (field number 0, non-zero wire type) used to be
+// accepted as tag 0 and skipped, and are now rejected like key 0x00.
+func TestDecodeFieldNumberZeroRejected(t *testing.T) {
+	t.Parallel()
+	for key := byte(0x00); key <= 0x07; key++ {
+		// key, a value that is well-formed for every wire type we support
+		// (empty length-delimited / varint 0), then field 1 = 1.
+		data := []byte{key, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, (1 << 3) | 0, 0x01}
+		for _, mode := range []csproto.DecoderMode{csproto.DecoderModeSafe, csproto.DecoderModeFast} {
+			dec, err := NewDecoder(NewDef(1), WithMode(mode))
+			require.NoError(t, err)
+			_, err = dec.Decode(data)
+			assert.ErrorIs(t, err, csproto.ErrInvalidFieldTag, "key 0x%02x mode=%v", key, mode)
+		}
+		_, err := Decode(data, NewDef(1))
+		assert.ErrorIs(t, err, csproto.ErrInvalidFieldTag, "deprecated Decode, key 0x%02x", key)
+	}
+
+	// The exact input from the compatibility note.
+	_, err := Decode([]byte{0x02, 0x00, 0x08, 0x01}, NewDef(1))
+	assert.ErrorIs(t, err, csproto.ErrInvalidFieldTag)
+}
+
+// TestDecodeZeroPaddedTag verifies that a valid but non-canonical (zero-padded)
+// 10-byte tag key decodes like its canonical form, matching csproto.Decoder.
+func TestDecodeZeroPaddedTag(t *testing.T) {
+	t.Parallel()
+
+	// tag=1, wt=varint (key 0x08) padded to 10 bytes, then varint value 42.
+	data := []byte{0x88, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x00, 42}
+	for _, mode := range []csproto.DecoderMode{csproto.DecoderModeSafe, csproto.DecoderModeFast} {
+		dec, err := NewDecoder(NewDef(1), WithMode(mode))
+		require.NoError(t, err)
+		res, err := dec.Decode(data)
+		require.NoError(t, err, "mode=%v", mode)
+		v, err := res.UInt32Value(1)
+		require.NoError(t, err, "mode=%v", mode)
+		assert.Equal(t, uint32(42), v, "mode=%v", mode)
+		require.NoError(t, res.Close())
+	}
+}
+
+// TestDecodeZeroPaddedTagZero verifies that tag 0 is rejected even when its key
+// is zero-padded to the full 10-byte varint window, and that the error is a
+// wrapped ErrInvalidFieldTag rather than a (bare) truncation error.
+func TestDecodeZeroPaddedTagZero(t *testing.T) {
+	t.Parallel()
+
+	for _, key := range []byte{0x00, 0x02} { // tag 0 with wt=varint, wt=length-delimited
+		// key padded to 10 bytes, then a value byte so input is not truncated.
+		data := []byte{key | 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x00, 0x01}
+		for _, mode := range []csproto.DecoderMode{csproto.DecoderModeSafe, csproto.DecoderModeFast} {
+			dec, err := NewDecoder(NewDef(1), WithMode(mode))
+			require.NoError(t, err)
+			_, err = dec.Decode(data)
+			require.Error(t, err, "key=%#x mode=%v", key, mode)
+			assert.ErrorIs(t, err, csproto.ErrInvalidFieldTag, "key=%#x mode=%v", key, mode)
+			assert.NotErrorIs(t, err, io.ErrUnexpectedEOF, "key=%#x mode=%v", key, mode)
+			assert.Contains(t, err.Error(), "fail tag decode at byte 0", "key=%#x mode=%v", key, mode)
+		}
+	}
+}
+
+// TestDecodeZeroPaddedLengthPrefix verifies that a valid but non-canonical
+// (zero-padded) 10-byte length prefix decodes like its canonical form,
+// matching csproto.Decoder.DecodeBytes, for tracked and untracked fields.
+func TestDecodeZeroPaddedLengthPrefix(t *testing.T) {
+	t.Parallel()
+
+	data := []byte{
+		(1 << 3) | 2,                                               // tag=1, length-delimited
+		0x83, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x00, // length 3, padded to 10 bytes
+		'a', 'b', 'c',
+		(2 << 3) | 0, 42, // tag=2, varint 42 (proves the cursor landed on the next field)
+	}
+	for _, mode := range []csproto.DecoderMode{csproto.DecoderModeSafe, csproto.DecoderModeFast} {
+		dec, err := NewDecoder(NewDef(1, 2), WithMode(mode))
+		require.NoError(t, err)
+		res, err := dec.Decode(data)
+		require.NoError(t, err, "mode=%v", mode)
+		s, err := res.StringValue(1)
+		require.NoError(t, err, "mode=%v", mode)
+		assert.Equal(t, "abc", s, "mode=%v", mode)
+		v, err := res.UInt32Value(2)
+		require.NoError(t, err, "mode=%v", mode)
+		assert.Equal(t, uint32(42), v, "mode=%v", mode)
+		require.NoError(t, res.Close())
+
+		// Untracked tag 1 must be skipped correctly too.
+		dec, err = NewDecoder(NewDef(2), WithMode(mode))
+		require.NoError(t, err)
+		res, err = dec.Decode(data)
+		require.NoError(t, err, "mode=%v untracked", mode)
+		v, err = res.UInt32Value(2)
+		require.NoError(t, err, "mode=%v untracked", mode)
+		assert.Equal(t, uint32(42), v, "mode=%v untracked", mode)
+		require.NoError(t, res.Close())
+	}
+}
+
+// TestDecodeRejectsBufferOver2GiB verifies the protobuf 2 GiB message limit
+// is enforced at decode entry and classifies as csproto.ErrLenOverflow, the
+// same as an oversized length-delimited field.
+func TestDecodeRejectsBufferOver2GiB(t *testing.T) {
+	if testing.Short() {
+		t.Skip("allocates a 2 GiB buffer; skipped with -short")
+	}
+	if strconv.IntSize < 64 {
+		t.Skip("a buffer over math.MaxInt32 bytes cannot exist on 32-bit platforms")
+	}
+	// Not parallel: keep at most one 2 GiB reservation alive at a time.
+	// Fast mode avoids the safe-mode copy, so the pages are never touched.
+	// int64 so the size is not an int constant (which would not compile on
+	// 32-bit, where this test is skipped above).
+	size := int64(math.MaxInt32) + 1
+	big := make([]byte, size)
+
+	dec, err := NewDecoder(NewDef(1), WithMode(csproto.DecoderModeFast))
+	require.NoError(t, err)
+	res, err := dec.Decode(big)
+	require.Error(t, err)
+	assert.Nil(t, res)
+	assert.ErrorIs(t, err, csproto.ErrLenOverflow)
+	assert.Contains(t, err.Error(), "input buffer too large")
+
+	// The deprecated Decode checks the size before building any nested
+	// decoders or result slabs, and before copying, so the pages stay untouched.
+	nestedDef := NewDef()
+	nestedDef.NestedTag(1).Tags(2)
+	legacy, err := Decode(big, nestedDef)
+	require.Error(t, err)
+	assert.Equal(t, emptyResult, legacy)
+	assert.ErrorIs(t, err, csproto.ErrLenOverflow)
+	assert.Contains(t, err.Error(), "input buffer too large")
+}
+
+// TestDecodeWireTypeErrorSentinels verifies that unsupported and mixed wire
+// types are classifiable with errors.Is, for every unsupported wire type, for
+// tracked and untracked tags, and through nested results.
+func TestDecodeWireTypeErrorSentinels(t *testing.T) {
+	t.Parallel()
+
+	t.Run("every unsupported wire type, tracked and untracked", func(t *testing.T) {
+		for _, wt := range []byte{3, 4, 6, 7} {
+			// Trailing bytes so the wire type is not the last byte of the input.
+			data := []byte{(1 << 3) | wt, 0x00, 0x00}
+			for _, def := range []Def{NewDef(1), NewDef(9)} {
+				dec, err := NewDecoder(def, WithMode(csproto.DecoderModeFast))
+				require.NoError(t, err)
+				_, err = dec.Decode(data)
+				assert.ErrorIs(t, err, ErrUnsupportedWireType, "wt=%d def=%v", wt, def)
+				assert.NotErrorIs(t, err, ErrMixedWireTypes, "wt=%d def=%v", wt, def)
+			}
+		}
+	})
+
+	t.Run("unsupported wire type in the last byte is not reported as truncation", func(t *testing.T) {
+		// Difference E vs. main: main's csproto.Decoder.Skip checked for end of
+		// buffer before the wire type and returned io.ErrUnexpectedEOF for an
+		// untracked field, so a streaming caller would wait for more data that
+		// could never make the message valid.
+		data := []byte{(5 << 3) | 4} // tag=5 (untracked), wt=4 (end group)
+		dec, err := NewDecoder(NewDef(1), WithMode(csproto.DecoderModeFast))
+		require.NoError(t, err)
+		_, err = dec.Decode(data)
+		assert.ErrorIs(t, err, ErrUnsupportedWireType)
+		assert.NotErrorIs(t, err, io.ErrUnexpectedEOF)
+	})
+
+	t.Run("mixed wire types for a tracked field", func(t *testing.T) {
+		data := []byte{
+			(1 << 3) | 0, 0x01, // tag=1 varint
+			(1 << 3) | 5, 0x01, 0x02, 0x03, 0x04, // tag=1 fixed32
+		}
+		dec, err := NewDecoder(NewDef(1), WithMode(csproto.DecoderModeFast))
+		require.NoError(t, err)
+		_, err = dec.Decode(data)
+		assert.ErrorIs(t, err, ErrMixedWireTypes)
+		assert.NotErrorIs(t, err, ErrUnsupportedWireType)
+		assert.Contains(t, err.Error(), "tag 1")
+	})
+
+	t.Run("mixed wire types for an untracked field are allowed", func(t *testing.T) {
+		data := []byte{
+			(2 << 3) | 0, 0x01, // tag=2 varint (untracked)
+			(2 << 3) | 5, 0x01, 0x02, 0x03, 0x04, // tag=2 fixed32 (untracked)
+		}
+		dec, err := NewDecoder(NewDef(1), WithMode(csproto.DecoderModeFast))
+		require.NoError(t, err)
+		res, err := dec.Decode(data)
+		require.NoError(t, err)
+		require.NoError(t, res.Close())
+	})
+
+	t.Run("sentinels propagate through NestedResult", func(t *testing.T) {
+		inner := []byte{(1 << 3) | 7, 0x00} // nested message with wt=7
+		outer := append([]byte{(1 << 3) | 2, byte(len(inner))}, inner...)
+		def := NewDef()
+		_ = def.NestedTag(1, 1)
+		dec, err := NewDecoder(def, WithMode(csproto.DecoderModeFast))
+		require.NoError(t, err)
+		res, err := dec.Decode(outer)
+		require.NoError(t, err)
+		defer func() { require.NoError(t, res.Close()) }()
+		_, err = res.NestedResult(1)
+		assert.ErrorIs(t, err, ErrUnsupportedWireType)
+	})
+}
+
+func TestDecodeZeroValueDecoder(t *testing.T) {
+	data := []byte{0x08, 0x01} // field 1 = 1
+	for _, dec := range []*Decoder{new(Decoder), {mode: csproto.DecoderModeFast}} {
+		var (
+			res *DecodeResult
+			err error
+		)
+		require.NotPanics(t, func() { res, err = dec.Decode(data) })
+		require.ErrorIs(t, err, errInvalidDecoder)
+		assert.Nil(t, res)
 	}
 }
