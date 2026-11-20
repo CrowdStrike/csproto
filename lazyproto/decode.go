@@ -32,6 +32,10 @@ var (
 	// (length-delimited) and unpacked in the same message. The protobuf spec allows mixing packed
 	// and unpacked entries, but lazyproto does not support it.
 	ErrMixedWireTypes = errors.New("repeated tag with different wire types")
+	// ErrBufferTooLarge is returned (wrapped) by Decode when the input exceeds the 2 GiB
+	// (math.MaxInt32 bytes) protobuf message limit. It wraps [csproto.ErrLenOverflow], so
+	// errors.Is matches either.
+	ErrBufferTooLarge = wire.ErrBufferTooLarge
 )
 
 var emptyResult DecodeResult
@@ -94,7 +98,7 @@ func cloneInput(data []byte) ([]byte, error) {
 	return slices.Clone(data), nil
 }
 
-// bufferTooLargeErr wraps wire.ErrBufferTooLarge with the input size.
+// bufferTooLargeErr wraps ErrBufferTooLarge with the input size.
 func bufferTooLargeErr(n int, err error) error {
 	return fmt.Errorf("input buffer too large (%d bytes): %w", n, err)
 }
