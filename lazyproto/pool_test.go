@@ -326,6 +326,29 @@ func TestCloseReleasesFastModeAliases(t *testing.T) {
 	}
 }
 
+func TestFastModeEmptyStringDoesNotAlias(t *testing.T) {
+	// In DecoderModeFast, a zero-length string entry must come back as a
+	// plain "" from both StringValue and StringValues, not an empty
+	// unsafe.String whose data pointer still points into the input.
+	msg := []byte{(1 << 3) | 2, 0x00}
+
+	dec, err := NewDecoder(NewDef(1), WithMode(csproto.DecoderModeFast))
+	require.NoError(t, err)
+	res, err := dec.Decode(msg)
+	require.NoError(t, err)
+	defer func() { _ = res.Close() }()
+
+	s, err := res.StringValue(1)
+	require.NoError(t, err)
+	assert.Equal(t, "", s)
+	assert.Nil(t, unsafe.StringData(s), "StringValue aliases the input for an empty string")
+
+	ss, err := res.StringValues(1)
+	require.NoError(t, err)
+	require.Equal(t, []string{""}, ss)
+	assert.Nil(t, unsafe.StringData(ss[0]), "StringValues aliases the input for an empty string")
+}
+
 func TestCloseAliasedFlag(t *testing.T) {
 	// flagAliased marks exactly the fields whose fast-mode
 	// StringValues/BytesValues caches alias the input; close() follows

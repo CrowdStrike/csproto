@@ -31,7 +31,7 @@ import (
 // ErrBufferTooLarge is returned by [NewCursor] when the buffer exceeds
 // math.MaxInt32 bytes. It wraps [csproto.ErrLenOverflow], so oversized
 // buffers and oversized fields classify the same way with errors.Is.
-var ErrBufferTooLarge = fmt.Errorf("wire: buffer exceeds the 2 GiB protobuf message limit: %w", csproto.ErrLenOverflow)
+var ErrBufferTooLarge = fmt.Errorf("buffer exceeds the 2 GiB protobuf message limit: %w", csproto.ErrLenOverflow)
 
 // Internal sentinels returned by the hot-path methods instead of classifying
 // a failure inline (no varint terminator within the scan window, or a decoded

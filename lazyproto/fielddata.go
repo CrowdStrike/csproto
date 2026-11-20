@@ -281,12 +281,14 @@ func (fd *FieldData) BoolValues() ([]bool, error) {
 //
 // See the [FieldData] docs for more specific details about interpreting lazily-decoded data.
 func (fd *FieldData) StringValue() (string, error) {
-	return scalarValue(fd, csproto.WireTypeLengthDelimited, func(data []byte) (string, error) {
-		if fd.cold.unsafeAlias() {
-			return unsafe.String(unsafe.SliceData(data), len(data)), nil
-		}
-		return string(data), nil
-	})
+	data, err := fd.lengthDelimitedValue()
+	if err != nil || len(data) == 0 {
+		return "", err // don't alias the input for an empty string
+	}
+	if fd.cold.unsafeAlias() {
+		return unsafe.String(unsafe.SliceData(data), len(data)), nil
+	}
+	return string(data), nil
 }
 
 // StringValues converts the lazily-decoded field data into a []string.
@@ -305,33 +307,72 @@ func (fd *FieldData) StringValues() ([]string, error) {
 		return nil, ErrTagNotFound
 	}
 	alias := fd.cold.unsafeAlias()
+	// Pick a top-level converter rather than a closure capturing alias; see
+	// lengthDelimitedValue for why accessor closures must not capture.
+	conv := copyString
+	if alias {
+		conv = aliasString
+	}
 	// wt is LengthDelimited, so sliceValue treats each entry as exactly one
 	// string (strings are never packed), including zero-length entries.
-	s, err := sliceValue(fd, csproto.WireTypeLengthDelimited, stringBuf, func(data []byte) (string, int, error) {
-		if len(data) == 0 {
-			return "", 0, nil // don't alias the input for an empty string
-		}
-		if alias {
-			return unsafe.String(unsafe.SliceData(data), len(data)), len(data), nil
-		}
-		return string(data), len(data), nil
-	})
+	s, err := sliceValue(fd, csproto.WireTypeLengthDelimited, stringBuf, conv)
 	if alias {
 		fd.flags |= flagAliased // elements alias the input; see flagAliased
 	}
 	return s, err
 }
 
+// aliasString is the StringValues converter for DecoderModeFast: the result
+// aliases data. Empty entries return "" so they don't alias the input.
+func aliasString(data []byte) (string, int, error) {
+	if len(data) == 0 {
+		return "", 0, nil
+	}
+	return unsafe.String(unsafe.SliceData(data), len(data)), len(data), nil
+}
+
+// copyString is the StringValues converter for the safe modes: the result is
+// a copy of data.
+func copyString(data []byte) (string, int, error) {
+	if len(data) == 0 {
+		return "", 0, nil
+	}
+	return string(data), len(data), nil
+}
+
 // BytesValue converts the lazily-decoded field data into a []byte.
 //
 // See the [FieldData] docs for more specific details about interpreting lazily-decoded data.
 func (fd *FieldData) BytesValue() ([]byte, error) {
-	return scalarValue(fd, csproto.WireTypeLengthDelimited, func(data []byte) ([]byte, error) {
-		if fd.cold.unsafeAlias() {
-			return data, nil
-		}
-		return slices.Clone(data), nil
-	})
+	data, err := fd.lengthDelimitedValue()
+	if err != nil {
+		return nil, err
+	}
+	if fd.cold.unsafeAlias() {
+		return data, nil
+	}
+	return slices.Clone(data), nil
+}
+
+// lengthDelimitedValue returns the raw bytes of the last length-delimited entry,
+// with the same checks and errors as scalarValue.
+//
+// StringValue and BytesValue use this instead of scalarValue because their
+// conversion depends on fd, which would mean passing scalarValue a closure that
+// captures fd. Under profile-guided optimization the accessors get inlined into
+// hot callers, the capturing closure escapes, and every call heap-allocates it.
+// The same rule applies to every convertFn passed to scalarValue or sliceValue:
+// it must not capture anything (StringValues picks a top-level function for
+// this reason). No test enforces this; to check it, `go build -gcflags=-m=2
+// ./lazyproto` must report no "capturing by value" lines for this file.
+func (fd *FieldData) lengthDelimitedValue() ([]byte, error) {
+	if !fd.hasData() {
+		return nil, ErrTagNotFound
+	}
+	if fd.wireType() != csproto.WireTypeLengthDelimited {
+		return nil, wireTypeMismatchError(fd.wireType(), csproto.WireTypeLengthDelimited)
+	}
+	return fd.lastEntry().bytes(fd.cold.baseBuf()), nil
 }
 
 // BytesValues converts the lazily-decoded field data into a [][]byte.

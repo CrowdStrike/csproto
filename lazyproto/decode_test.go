@@ -3340,8 +3340,9 @@ func TestDecodeZeroPaddedLengthPrefix(t *testing.T) {
 }
 
 // TestDecodeRejectsBufferOver2GiB verifies the protobuf 2 GiB message limit
-// is enforced at decode entry and classifies as csproto.ErrLenOverflow, the
-// same as an oversized length-delimited field.
+// is enforced at decode entry and returns ErrBufferTooLarge, which also
+// classifies as csproto.ErrLenOverflow (the same as an oversized
+// length-delimited field).
 func TestDecodeRejectsBufferOver2GiB(t *testing.T) {
 	if testing.Short() {
 		t.Skip("allocates a 2 GiB buffer; skipped with -short")
@@ -3361,8 +3362,10 @@ func TestDecodeRejectsBufferOver2GiB(t *testing.T) {
 	res, err := dec.Decode(big)
 	require.Error(t, err)
 	assert.Nil(t, res)
+	assert.ErrorIs(t, err, ErrBufferTooLarge)
 	assert.ErrorIs(t, err, csproto.ErrLenOverflow)
 	assert.Contains(t, err.Error(), "input buffer too large")
+	assert.NotContains(t, err.Error(), "wire:", "error text must not expose the internal package name")
 
 	// The deprecated Decode checks the size before building any nested
 	// decoders or result slabs, and before copying, so the pages stay untouched.
@@ -3371,8 +3374,10 @@ func TestDecodeRejectsBufferOver2GiB(t *testing.T) {
 	legacy, err := Decode(big, nestedDef)
 	require.Error(t, err)
 	assert.Equal(t, emptyResult, legacy)
+	assert.ErrorIs(t, err, ErrBufferTooLarge)
 	assert.ErrorIs(t, err, csproto.ErrLenOverflow)
 	assert.Contains(t, err.Error(), "input buffer too large")
+	assert.NotContains(t, err.Error(), "wire:", "error text must not expose the internal package name")
 }
 
 // TestDecodeWireTypeErrorSentinels verifies that unsupported and mixed wire
