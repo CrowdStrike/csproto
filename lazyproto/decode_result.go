@@ -472,9 +472,7 @@ func (r *DecodeResult) NestedResult(tag int) (*DecodeResult, error) {
 	}
 
 	// get the raw []byte slice for this tag
-	b, err := scalarValue(&r.slab[flatIdx], csproto.WireTypeLengthDelimited, func(b []byte) ([]byte, error) {
-		return b, nil
-	})
+	b, err := r.slab[flatIdx].lengthDelimitedValue()
 	if err != nil {
 		return nil, err
 	}
